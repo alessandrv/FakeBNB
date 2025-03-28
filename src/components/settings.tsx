@@ -58,6 +58,35 @@ export const Settings = () => {
   const [selectedTab, setSelectedTab] = React.useState("profile");
   const [selectedTenant, setSelectedTenant] = React.useState<Tenant | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  
+  // Notification settings dialog state
+  const { 
+    isOpen: isNotificationDialogOpen, 
+    onOpen: openNotificationDialog, 
+    onClose: closeNotificationDialog 
+  } = useDisclosure();
+  const [notificationType, setNotificationType] = React.useState<string>("");
+  const [notificationSettings, setNotificationSettings] = React.useState({
+    email: {
+      newPayment: true,
+      paymentReminder: true,
+      newTenant: true,
+      maintenanceRequest: true
+    },
+    sms: {
+      newPayment: false,
+      paymentReminder: true,
+      newTenant: false,
+      maintenanceRequest: true
+    },
+    push: {
+      newPayment: true,
+      paymentReminder: true,
+      newTenant: true,
+      maintenanceRequest: false
+    }
+  });
+
   const [houses] = React.useState<House[]>([
     {
       id: "1",
@@ -265,6 +294,25 @@ export const Settings = () => {
     }
   };
 
+  // Handler to open notification settings dialog
+  const handleConfigureNotification = (type: string) => {
+    setNotificationType(type);
+    openNotificationDialog();
+  };
+
+  // Handler to toggle notification setting
+  const toggleNotificationSetting = (key: string) => {
+    if (notificationType) {
+      setNotificationSettings(prev => ({
+        ...prev,
+        [notificationType]: {
+          ...prev[notificationType as keyof typeof prev],
+          [key]: !prev[notificationType as keyof typeof prev][key as keyof typeof prev[keyof typeof prev]]
+        }
+      }));
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-0">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
@@ -347,6 +395,84 @@ export const Settings = () => {
               <ModalFooter>
                 <Button color="danger" variant="light" onPress={onClose}>
                   Close
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* Notification Settings Modal */}
+      <Modal isOpen={isNotificationDialogOpen} onClose={closeNotificationDialog} size="md">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                <h3 className="text-lg font-semibold capitalize">
+                  Configure {notificationType} Notifications
+                </h3>
+              </ModalHeader>
+              <ModalBody>
+                <div className="space-y-4">
+                  {notificationType && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <p>New Payment</p>
+                        <Button 
+                          color={notificationSettings[notificationType as keyof typeof notificationSettings]?.newPayment ? "success" : "default"} 
+                          size="sm"
+                          variant="flat"
+                          onPress={() => toggleNotificationSetting("newPayment")}
+                        >
+                          {notificationSettings[notificationType as keyof typeof notificationSettings]?.newPayment ? "On" : "Off"}
+                        </Button>
+                      </div>
+                      <Divider />
+                      <div className="flex justify-between items-center">
+                        <p>Payment Reminder</p>
+                        <Button 
+                          color={notificationSettings[notificationType as keyof typeof notificationSettings]?.paymentReminder ? "success" : "default"} 
+                          size="sm"
+                          variant="flat"
+                          onPress={() => toggleNotificationSetting("paymentReminder")}
+                        >
+                          {notificationSettings[notificationType as keyof typeof notificationSettings]?.paymentReminder ? "On" : "Off"}
+                        </Button>
+                      </div>
+                      <Divider />
+                      <div className="flex justify-between items-center">
+                        <p>New Tenant</p>
+                        <Button 
+                          color={notificationSettings[notificationType as keyof typeof notificationSettings]?.newTenant ? "success" : "default"} 
+                          size="sm"
+                          variant="flat"
+                          onPress={() => toggleNotificationSetting("newTenant")}
+                        >
+                          {notificationSettings[notificationType as keyof typeof notificationSettings]?.newTenant ? "On" : "Off"}
+                        </Button>
+                      </div>
+                      <Divider />
+                      <div className="flex justify-between items-center">
+                        <p>Maintenance Request</p>
+                        <Button 
+                          color={notificationSettings[notificationType as keyof typeof notificationSettings]?.maintenanceRequest ? "success" : "default"} 
+                          size="sm"
+                          variant="flat"
+                          onPress={() => toggleNotificationSetting("maintenanceRequest")}
+                        >
+                          {notificationSettings[notificationType as keyof typeof notificationSettings]?.maintenanceRequest ? "On" : "Off"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button color="danger" variant="light" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="primary" onPress={onClose}>
+                  Save Changes
                 </Button>
               </ModalFooter>
             </>
@@ -591,7 +717,7 @@ export const Settings = () => {
                       Receive updates about your properties
                     </p>
                   </div>
-                  <Button variant="flat">Configure</Button>
+                  <Button variant="flat" onPress={() => handleConfigureNotification("email")}>Configure</Button>
                 </div>
 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -601,7 +727,7 @@ export const Settings = () => {
                       Get instant alerts on your phone
                     </p>
                   </div>
-                  <Button variant="flat">Configure</Button>
+                  <Button variant="flat" onPress={() => handleConfigureNotification("sms")}>Configure</Button>
                 </div>
 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -611,7 +737,7 @@ export const Settings = () => {
                       Browser notifications for important updates
                     </p>
                   </div>
-                  <Button variant="flat">Configure</Button>
+                  <Button variant="flat" onPress={() => handleConfigureNotification("push")}>Configure</Button>
                 </div>
               </div>
             </CardBody>
