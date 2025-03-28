@@ -53,7 +53,7 @@ export default function App() {
         {/* Map */}
         <div 
           className={`
-            relative w-full md:w-3/5 h-screen
+            relative w-full md:w-3/4 h-screen
             ${showMap ? 'block' : 'hidden md:block'}
           `}
         >
