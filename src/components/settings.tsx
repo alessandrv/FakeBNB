@@ -288,7 +288,7 @@ export const Settings = () => {
               <ModalBody>
                 {selectedTenant && (
                   <>
-                    <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                       <div>
                         <p className="text-small text-default-500">Since</p>
                         <p>{new Date(selectedTenant.moveInDate).toLocaleDateString()}</p>
@@ -314,31 +314,33 @@ export const Settings = () => {
                     
                     <h4 className="text-medium font-semibold mb-3">Payment History</h4>
                     
-                    <Table aria-label="Payment History Table">
-                      <TableHeader>
-                        <TableColumn>DATE</TableColumn>
-                        <TableColumn>AMOUNT</TableColumn>
-                        <TableColumn>STATUS</TableColumn>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedTenant.paymentHistory.map((payment, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
-                            <TableCell>${payment.amount}</TableCell>
-                            <TableCell>
-                              <Chip
-                                className="capitalize"
-                                color={getPaymentHistoryStatusColor(payment.status)}
-                                size="sm"
-                                variant="flat"
-                              >
-                                {payment.status}
-                              </Chip>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <div className="overflow-x-auto w-full">
+                      <Table aria-label="Payment History Table" className="min-w-full">
+                        <TableHeader>
+                          <TableColumn>DATE</TableColumn>
+                          <TableColumn>AMOUNT</TableColumn>
+                          <TableColumn>STATUS</TableColumn>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedTenant.paymentHistory.map((payment, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="whitespace-nowrap">{new Date(payment.date).toLocaleDateString()}</TableCell>
+                              <TableCell className="whitespace-nowrap">${payment.amount}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  className="capitalize text-xs"
+                                  color={getPaymentHistoryStatusColor(payment.status)}
+                                  size="sm"
+                                  variant="flat"
+                                >
+                                  {payment.status}
+                                </Chip>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </>
                 )}
               </ModalBody>
@@ -487,7 +489,7 @@ export const Settings = () => {
                                       </div>
                                     </div>
                                     
-                                    <div className="grid grid-cols-3 gap-2 mt-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
                                       <div>
                                         <p className="text-small text-default-500">Since</p>
                                         <p>{new Date(tenant.moveInDate).toLocaleDateString()}</p>
@@ -498,10 +500,10 @@ export const Settings = () => {
                                       </div>
                                       <div>
                                         <p className="text-small text-default-500">Last Payment</p>
-                                        <div className="flex items-center gap-2">
-                                          <p>{new Date(tenant.lastPaymentDate).toLocaleDateString()}</p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <p className="text-sm">{new Date(tenant.lastPaymentDate).toLocaleDateString()}</p>
                                           <Chip
-                                            className="capitalize"
+                                            className="capitalize text-xs"
                                             color={getPaymentStatusColor(tenant.paymentStatus)}
                                             size="sm"
                                             variant="flat"
