@@ -14,6 +14,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Faq } from './pages/Faq';
 import { Contact } from './pages/Contact';
 import { CreateHouse } from './pages/CreateHouse';
+import { VerifyEmail } from './pages/VerifyEmail';
+
 function App() {
   return (
     <AuthProvider>
@@ -27,6 +29,7 @@ function App() {
           <Route path="faq" element={<Faq />} />
           <Route path="contact" element={<Contact />} />
           <Route path='create-house' element={<CreateHouse />} />
+          <Route path="verify-email" element={<VerifyEmail />} />
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
             path="login" 
