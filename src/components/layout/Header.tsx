@@ -4,7 +4,7 @@ import { Button, Avatar, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem }
 import { Icon } from '@iconify/react';
 import { useAuth } from '../../context/AuthContext';
 
-export const Navbar = () => {
+export const Header = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);

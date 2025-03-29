@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navbar } from './Navbar';
+import { Header } from './Header';
 import { Footer } from './Footer';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
@@ -13,7 +13,7 @@ const isActive = (path: string, currentPath: string) => {
   return false;
 };
 
-export const Layout = () => {
+export const MobileNavbar = () => {
   const location = useLocation();
   const { isAuthenticated, user } = useAuth();
   const path = location.pathname;
@@ -28,7 +28,7 @@ export const Layout = () => {
     <div className="flex flex-col min-h-screen bg-background">
       {/* Header with Navbar - visibility controlled by CSS variables */}
       <div className="site-header">
-        <Navbar />
+        <Header />
       </div>
       
       <main className={`flex-grow ${isMapPage ? 'pb-0' : 'pb-16 md:pb-0'}`}>

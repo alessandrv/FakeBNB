@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Layout } from './components/layout/Layout';
+import { MobileNavbar } from './components/layout/MobileNavbar';
 import { Home } from './pages/Home';
 import { Login } from './components/auth/login';
 import { Register } from './components/auth/register';
@@ -11,18 +11,22 @@ import { BookingHistory } from './pages/BookingHistory';
 import { Dashboard } from './pages/Dashboard';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-
+import { Faq } from './pages/Faq';
+import { Contact } from './pages/Contact';
+import { CreateHouse } from './pages/CreateHouse';
 function App() {
   return (
     <AuthProvider>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<MobileNavbar />}>
           <Route index element={<Home />} />
           <Route path="properties/:id" element={<PropertyDetails />} />
           <Route path="search" element={<SearchResults />} />
           <Route path="map" element={<Dashboard />} />
-          
+          <Route path="faq" element={<Faq />} />
+          <Route path="contact" element={<Contact />} />
+          <Route path='create-house' element={<CreateHouse />} />
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
             path="login" 
