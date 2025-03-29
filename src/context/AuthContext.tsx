@@ -17,6 +17,7 @@ interface User {
   phone_number?: string;
   created_at: string;
   is_verified: boolean;
+  profilePic?: string; // Added for profile picture URL
 }
 
 // Auth context interface
