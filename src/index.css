@@ -2,10 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --hide-header-mobile: block;
+  --hide-header-desktop: block;
+}
+
+/* Header visibility control */
+.site-header {
+  display: var(--hide-header-desktop);
+}
+
+@media (max-width: 768px) {
+  .site-header {
+    display: var(--hide-header-mobile);
+  }
+}
+
+/* Improve mobile viewport handling */
+html {
+  height: -webkit-fill-available;
+}
+
+body {
+  min-height: 100vh;
+  /* mobile viewport fix */
+  min-height: -webkit-fill-available;
+}
+
+/* Desktop search bar positioning */
+.sticky-search {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background-color: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Mobile UI wrapper - contains search bar and bottom sheet */
+.mobile-ui-wrapper {
+  height: 100vh; /* Use viewport height */
+  height: -webkit-fill-available; /* Better iOS support */
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  contain: layout size style;
+  transition: transform 0.2s ease;
+}
+
+/* Dashboard content adjustments */
+.dashboard-content {
+  --header-height: 64px; /* Height of main site header */
+}
+
+/* When site header is visible, adjust dashboard layout on desktop */
+@media (min-width: 768px) {
+  .dashboard-content {
+    height: calc(100vh - var(--header-height) - 56px) !important; /* Viewport minus header and searchbar */
+  }
+}
+
+/* Add leaflet map styling */
 .leaflet-container {
-  width: 100%;
   height: 100%;
-  z-index: 1;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+
+/* Fix Leaflet marker icons */
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* Always keep the search bar at the top when scrolling */
+.sticky {
+  position: sticky !important;
+  top: 0;
+  z-index: 50 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+/* When sheet is expanded, remove search bar shadow */
+body.sheet-expanded .sticky,
+.mobile-ui-wrapper .sticky {
+  box-shadow: none !important;
+}
+
+/* Special handling for sheet in wrapper */
+.mobile-ui-wrapper .draggable-sheet.sheet-full {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Ensure mobile search bar is compact */
+@media (max-width: 768px) {
+  .search-bar-compact {
+    padding: 8px 12px;
+  }
 }
 
 /* Fix for mobile map rendering */
@@ -23,4 +121,70 @@
 .leaflet-popup-content {
   margin: 8px;
   min-width: 200px;
+}
+
+/* Fix for Leaflet markers not showing up */
+.leaflet-container .leaflet-marker-pane img,
+.leaflet-container .leaflet-shadow-pane img {
+  max-width: none !important;
+}
+
+/* Improve Leaflet popup style */
+.leaflet-popup-content-wrapper {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+/* Improve autocomplete dropdown */
+.nextui-autocomplete-popover {
+  z-index: 9999 !important;
+}
+
+/* Fix map container in layout */
+.map-parent {
+  position: relative !important;
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Bottom sheet styling */
+.draggable-sheet {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 30 !important; /* Below search bar (50) but above map (10) */
+  transition: border-radius 0.3s ease, height 0.3s ease, transform 0.3s ease;
+  overflow: hidden;
+  will-change: height;
+  contain: content;
+}
+
+/* Fix positioning for in-wrapper sheet */
+.draggable-sheet.in-wrapper {
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+/* Remove rounded corners when sheet is fully expanded */
+body.sheet-expanded .draggable-sheet {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Ensure content has consistent bottom padding */
+.draggable-sheet .overflow-y-auto {
+  padding-bottom: 1rem; /* 16px bottom padding */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+/* Ensure last card in list has margin before bottom navbar */
+.draggable-sheet .overflow-y-auto > :last-child {
+  margin-bottom: 1rem;
+}
+
+/* Hide scrollbar when dragging */
+.draggable-sheet.dragging .overflow-y-auto {
+  overflow: hidden;
 }

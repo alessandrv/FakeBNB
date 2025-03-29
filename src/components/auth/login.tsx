@@ -1,15 +1,240 @@
-import React from 'react';
-import { Card, CardBody, Input, Button, Link } from '@heroui/react';
+import React, { useState, useEffect } from 'react';
+import { Card, CardBody, Input, Button, Link, Spinner } from '@heroui/react';
 import { Icon } from '@iconify/react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+
+// Define API URL with a fallback
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// Rate limiting constants
+const MAX_LOGIN_ATTEMPTS = 5;
+const RATE_LIMIT_RESET_TIME = 60; // seconds
+
+// Helper to check rate limiting
+const checkRateLimit = (): { canLogin: boolean, remainingTime: number } => {
+  try {
+    const now = Date.now();
+    const storedData = localStorage.getItem('loginRateLimit');
+    
+    if (!storedData) {
+      // No rate limit data, initialize it
+      localStorage.setItem('loginRateLimit', JSON.stringify({
+        attempts: 0,
+        resetTime: now + (RATE_LIMIT_RESET_TIME * 1000)
+      }));
+      return { canLogin: true, remainingTime: 0 };
+    }
+    
+    const rateData = JSON.parse(storedData);
+    
+    // Check if reset time has passed
+    if (now > rateData.resetTime) {
+      // Reset the counter
+      localStorage.setItem('loginRateLimit', JSON.stringify({
+        attempts: 0,
+        resetTime: now + (RATE_LIMIT_RESET_TIME * 1000)
+      }));
+      return { canLogin: true, remainingTime: 0 };
+    }
+    
+    // Check if max attempts reached
+    if (rateData.attempts >= MAX_LOGIN_ATTEMPTS) {
+      const remainingTime = Math.ceil((rateData.resetTime - now) / 1000);
+      return { canLogin: false, remainingTime };
+    }
+    
+    // Can login, return remaining attempts
+    return { canLogin: true, remainingTime: 0 };
+  } catch (err) {
+    // In case of any errors with localStorage, allow login
+    console.error('Error checking rate limit:', err);
+    return { canLogin: true, remainingTime: 0 };
+  }
+};
+
+// Helper to increment login attempt counter
+const incrementLoginAttempt = (): void => {
+  try {
+    const storedData = localStorage.getItem('loginRateLimit');
+    
+    if (!storedData) {
+      const now = Date.now();
+      localStorage.setItem('loginRateLimit', JSON.stringify({
+        attempts: 1,
+        resetTime: now + (RATE_LIMIT_RESET_TIME * 1000)
+      }));
+      return;
+    }
+    
+    const rateData = JSON.parse(storedData);
+    rateData.attempts += 1;
+    localStorage.setItem('loginRateLimit', JSON.stringify(rateData));
+  } catch (err) {
+    console.error('Error incrementing login attempts:', err);
+  }
+};
 
 export const Login = () => {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loginDisabled, setLoginDisabled] = useState(false);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
+  
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check if there's a message in the location state (e.g., from email verification)
+  const locationMessage = location.state?.message;
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Check rate limiting on component mount
+  useEffect(() => {
+    const rateLimit = checkRateLimit();
+    if (!rateLimit.canLogin) {
+      setLoginDisabled(true);
+      setRetryAfter(rateLimit.remainingTime);
+      setError(`Too many login attempts. Please try again in ${rateLimit.remainingTime} seconds.`);
+    }
+  }, []);
+
+  // Countdown timer for rate limiting
+  useEffect(() => {
+    if (retryAfter === null || retryAfter <= 0) {
+      setLoginDisabled(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setRetryAfter(prev => prev !== null ? prev - 1 : null);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [retryAfter]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Add login logic here
+    
+    if (!email || !password) {
+      setError('Email and password are required');
+      return;
+    }
+    
+    // Check client-side rate limiting
+    const rateLimit = checkRateLimit();
+    if (!rateLimit.canLogin) {
+      setLoginDisabled(true);
+      setRetryAfter(rateLimit.remainingTime);
+      setError(`Too many login attempts. Please try again in ${rateLimit.remainingTime} seconds.`);
+      return;
+    }
+
+    if (loginDisabled) {
+      setError(`Too many login attempts. Please try again in ${retryAfter} seconds.`);
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    // Increment login attempt before trying
+    incrementLoginAttempt();
+    
+    try {
+      await login(email, password);
+      
+      // Redirect to home page or previous page
+      const from = (location.state as any)?.from?.pathname || '/';
+      navigate(from);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      
+      // Handle rate limiting (429 error)
+      if (err.response?.status === 429) {
+        const retrySeconds = err.response.headers['retry-after'] 
+          ? parseInt(err.response.headers['retry-after'], 10) 
+          : 30; // Default to 30 seconds if header is missing
+        
+        setLoginDisabled(true);
+        setRetryAfter(retrySeconds);
+        setError(`Too many login attempts. Please try again in ${retrySeconds} seconds.`);
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.response?.status === 401) {
+        setError('Invalid email or password');
+      } else {
+        setError('An error occurred during login. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // OAuth handlers
+  const handleGoogleSignIn = () => {
+    // Check rate limiting before redirecting
+    const rateLimit = checkRateLimit();
+    if (!rateLimit.canLogin) {
+      setLoginDisabled(true);
+      setRetryAfter(rateLimit.remainingTime);
+      setError(`Too many login attempts. Please try again in ${rateLimit.remainingTime} seconds.`);
+      return;
+    }
+    
+    window.location.href = `${API_URL}/api/auth/google`;
+  };
+
+  const handleAppleSignIn = () => {
+    // Check rate limiting before redirecting
+    const rateLimit = checkRateLimit();
+    if (!rateLimit.canLogin) {
+      setLoginDisabled(true);
+      setRetryAfter(rateLimit.remainingTime);
+      setError(`Too many login attempts. Please try again in ${rateLimit.remainingTime} seconds.`);
+      return;
+    }
+    
+    window.location.href = `${API_URL}/api/auth/apple`;
+  };
+
+  // For development/testing - simulates a successful login
+  const handleDemoLogin = async () => {
+    if (loginDisabled) {
+      setError(`Too many login attempts. Please try again in ${retryAfter} seconds.`);
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Create a mock user for demonstration purposes
+      const mockUser = {
+        id: 1,
+        email: 'demo@example.com',
+        first_name: 'Demo',
+        last_name: 'User',
+        phone_number: '+1234567890',
+        created_at: new Date().toISOString(),
+        is_verified: true
+      };
+      
+      // Store dummy tokens in localStorage
+      localStorage.setItem('accessToken', 'demo-access-token');
+      localStorage.setItem('refreshToken', 'demo-refresh-token');
+      
+      // Add a small delay to simulate API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Manually update the auth context by reloading the page
+      // In a real application with a proper backend, the login function would do this
+      window.location.href = '/';
+    } catch (error) {
+      setError('An error occurred during login. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -22,6 +247,27 @@ export const Login = () => {
             <p className="text-default-500">Sign in to manage your properties</p>
           </div>
 
+          {/* Success message from verification */}
+          {locationMessage && (
+            <div className="p-3 bg-success-100 border border-success text-success rounded-md">
+              {locationMessage}
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div className="p-3 bg-danger-100 border border-danger text-danger rounded-md">
+              {error}
+            </div>
+          )}
+
+          {/* Rate limit warning */}
+          {loginDisabled && retryAfter && retryAfter > 0 && (
+            <div className="p-3 bg-warning-100 border border-warning text-warning rounded-md">
+              Login temporarily disabled. You can try again in {retryAfter} seconds.
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-4">
             <Input
               label="Email"
@@ -30,6 +276,7 @@ export const Login = () => {
               onValueChange={setEmail}
               variant="bordered"
               startContent={<Icon icon="lucide:mail" />}
+              isDisabled={isLoading || loginDisabled}
             />
             <Input
               label="Password"
@@ -38,14 +285,31 @@ export const Login = () => {
               onValueChange={setPassword}
               variant="bordered"
               startContent={<Icon icon="lucide:lock" />}
+              isDisabled={isLoading || loginDisabled}
             />
             
             <div className="flex justify-between items-center">
-              <Link href="#" size="sm">Forgot password?</Link>
+              <Link as={RouterLink} to="/forgot-password" size="sm">Forgot password?</Link>
             </div>
 
-            <Button type="submit" color="primary" fullWidth>
-              Sign In
+            <Button 
+              type="submit" 
+              color="primary" 
+              fullWidth
+              disabled={isLoading || loginDisabled}
+            >
+              {isLoading ? <Spinner size="sm" color="white" /> : 'Sign In'}
+            </Button>
+            
+            {/* Development/demo mode button */}
+            <Button 
+              type="button" 
+              color="success" 
+              fullWidth
+              disabled={isLoading || loginDisabled}
+              onClick={handleDemoLogin}
+            >
+              {isLoading ? <Spinner size="sm" color="white" /> : 'Demo Login (No Backend)'}
             </Button>
           </form>
 
@@ -59,10 +323,20 @@ export const Login = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="bordered" startContent={<Icon icon="logos:google-icon" />}>
+            <Button 
+              variant="bordered" 
+              startContent={<Icon icon="logos:google-icon" />}
+              onClick={handleGoogleSignIn}
+              disabled={isLoading || loginDisabled}
+            >
               Google
             </Button>
-            <Button variant="bordered" startContent={<Icon icon="logos:apple" />}>
+            <Button 
+              variant="bordered" 
+              startContent={<Icon icon="logos:apple" />}
+              onClick={handleAppleSignIn}
+              disabled={isLoading || loginDisabled}
+            >
               Apple
             </Button>
           </div>
