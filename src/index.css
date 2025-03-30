@@ -421,7 +421,3 @@ body.sheet-expanded .draggable-sheet {
   }
 }
 
-/* Desktop footer visibility control */
-.footer-desktop {
-  display: var(--hide-footer-desktop, block);
-}

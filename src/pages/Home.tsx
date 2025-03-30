@@ -236,6 +236,7 @@ export const Home = () => {
           </Button>
         </div>
       </section>
+      
     </div>
   );
 }; 
