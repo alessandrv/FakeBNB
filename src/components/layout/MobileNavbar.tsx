@@ -25,7 +25,7 @@ export const MobileNavbar = () => {
   const userInitials = user ? `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase() : '';
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className=" flex flex-col min-h-screen bg-background">
       {/* Header with Navbar - visibility controlled by CSS variables */}
       <div className="site-header">
         <Header />

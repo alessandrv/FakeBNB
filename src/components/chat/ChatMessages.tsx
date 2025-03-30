@@ -166,7 +166,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                     </span>
                   )}
                   
-                  <div className={`px-4 py-2 ${bubbleStyle}`}>
+                  <div className={`px-4 py-2 max-w-[calc(100vw-100px)] ${bubbleStyle}`}>
                     {message.content}
                   </div>
                   

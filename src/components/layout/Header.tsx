@@ -66,6 +66,12 @@ export const Header = () => {
                     <span>Profile</span>
                   </Link>
                 </DropdownItem>
+                <DropdownItem key="chat" textValue="Chat">
+                  <Link to="/chat" className="flex items-center gap-2">
+                    <Icon icon="lucide:message-circle" />
+                    <span>Chat</span>
+                  </Link>
+                </DropdownItem>
                 <DropdownItem key="bookings" textValue="Bookings">
                   <Link to="/bookings" className="flex items-center gap-2">
                     <Icon icon="lucide:calendar" />
