@@ -379,7 +379,7 @@ export const Profile = () => {
           </Card>
           
           {/* Mobile Tabs */}
-          <div className="flex md:hidden overflow-x-auto mb-4 border-b border-default-200">
+          <div className="flex md:hidden justify-center overflow-x-auto mb-4 border-b border-default-200">
             <button 
               onClick={() => handleTabChange('account')}
               className={`flex-shrink-0 py-3 px-4 border-b-2 ${activeTab === 'account' ? 'border-primary text-primary' : 'border-transparent text-default-500'}`}
