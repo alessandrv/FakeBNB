@@ -13,12 +13,15 @@
   "dependencies": {
     "@heroui/react": "2.7.5",
     "@iconify/react": "latest",
+    "cors": "^2.8.5",
     "framer-motion": "^11.18.2",
     "leaflet": "^1.9.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
-    "react-router-dom": "^7.4.0"
+    "react-router-dom": "^7.4.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.8",

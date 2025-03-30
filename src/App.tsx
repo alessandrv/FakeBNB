@@ -15,6 +15,7 @@ import { Faq } from './pages/Faq';
 import { Contact } from './pages/Contact';
 import { CreateHouse } from './pages/CreateHouse';
 import { VerifyEmail } from './pages/VerifyEmail';
+import { Chat } from './pages/Chat';
 
 function App() {
   return (
@@ -62,6 +63,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <BookingHistory />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="chat" 
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="chat/:conversationId" 
+            element={
+              <ProtectedRoute>
+                <Chat />
               </ProtectedRoute>
             } 
           />

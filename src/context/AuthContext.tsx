@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { initializeSocket, disconnectSocket } from '../services/socketService';
 
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -102,6 +103,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   );
 
+  // Initialize socket when user is authenticated
+  useEffect(() => {
+    if (user && localStorage.getItem('accessToken')) {
+      // Initialize Socket.IO connection
+      initializeSocket(localStorage.getItem('accessToken') || '');
+    }
+    
+    return () => {
+      // Clean up socket on unmount
+      disconnectSocket();
+    };
+  }, [user]);
+
   // Refresh token function
   const refreshToken = async (): Promise<boolean> => {
     try {
@@ -172,6 +186,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async (): Promise<void> => {
     try {
+      // Disconnect from Socket.IO
+      disconnectSocket();
+      
       // Call logout endpoint if it exists
       const token = localStorage.getItem('refreshToken');
       if (token) {
