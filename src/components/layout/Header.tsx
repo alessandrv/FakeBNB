@@ -32,20 +32,7 @@ export const Header = () => {
           <span className="font-bold text-xl">FakeBNB</span>
         </Link>
 
-        {/* Search Bar - Desktop */}
-        <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
-          <div className="relative w-full">
-            <input
-              type="text"
-              placeholder="Search for properties..."
-              className="w-full pl-10 pr-4 py-2 rounded-full border border-default-300 focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <Icon 
-              icon="lucide:search" 
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-default-500"
-            />
-          </div>
-        </div>
+       
 
        
 
