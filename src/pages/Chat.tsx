@@ -552,7 +552,7 @@ export const Chat: React.FC = () => {
           ) : (
             <>
               {/* Fixed conversation header */}
-              <div className="chat-header p-3 border-b border-default-200 flex items-center">
+              <div className="fixed w-full p-3 bg-white z-50 border-b border-default-200 flex items-center">
                 <Button 
                   className="mr-2" 
                   isIconOnly 
@@ -595,7 +595,7 @@ export const Chat: React.FC = () => {
               </div>
               
               {/* Scrollable messages area with padding for input field */}
-              <div className="chat-messages">
+              <div className="chat-messages mt-14">
                 {loading ? (
                   <div className="flex justify-center items-center h-full">
                     <Spinner size="lg" />
