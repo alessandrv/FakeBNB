@@ -423,7 +423,7 @@ export const Chat: React.FC = () => {
   return (
     <div 
       ref={chatContainerRef}
-      className="flex fixed bg-default-50 w-full h-[100vh] max-h-screen"
+      className="flex  bg-default-50 w-full h-screen max-h-screen"
     >
       {/* Mobile layout: show either chat list or chat view */}
       <div className={`w-full md:w-80 flex-shrink-0 bg-white h-full fixed md:relative left-0 top-0 z-10 ${

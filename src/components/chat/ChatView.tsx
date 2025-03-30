@@ -115,7 +115,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       );
     };
   return (
-    <Card className="w-full h-full">
+    <Card className="relative rounded-none w-full h-full">
     <div className="flex items-center gap-3 p-4 border-b border-divider">
       <Button
         isIconOnly
@@ -144,7 +144,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     </div>
 
     <ScrollShadow ref={scrollRef} className="flex-1 h-[calc(100vh-180px)]">
-      <div className="flex flex-col gap-2 p-4 w-screen">
+      <div className="flex flex-col gap-2 p-4 w-full">
         {messages.map((message, index) => {
           const isMine = message.senderId === currentUser.id;
           const showAvatar = !isConsecutive(message, index);
