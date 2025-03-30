@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardBody, CardFooter, Button, Input } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -67,6 +67,10 @@ export const Home = () => {
   const [checkInOut, setCheckInOut] = useState('');
   const [guests, setGuests] = useState('');
 
+   useEffect(() => {
+    document.documentElement.style.setProperty('--hide-header-mobile', 'None');
+   
+  }, []);
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     

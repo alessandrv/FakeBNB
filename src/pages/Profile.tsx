@@ -63,7 +63,10 @@ export const Profile = () => {
       search: `?tab=${tab}`
     }, { replace: true });
   };
-  
+  useEffect(() => {
+    document.documentElement.style.setProperty('--hide-header-mobile', 'None');
+   
+  }, []);
   // Listen for URL changes
   useEffect(() => {
     setActiveTab(getInitialTab());
