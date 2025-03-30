@@ -31,7 +31,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSend = () => {
     if (newMessage.trim()) {
-      onSendMessage(newMessage);
+      onSendMessage(newMessage.trim());
       setNewMessage("");
       
       // Clear typing timeout and stop typing indicator
@@ -91,9 +91,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
     : "";
 
   return (
-    <div className="flex flex-col h-full bg-white relative">
-      {/* Header - keep it fixed but adjust content area accordingly */}
-      <div className="sticky top-0 z-30 flex items-center gap-3 p-4 border-b border-default-200 bg-white shadow-sm">
+    <div className="flex flex-col h-screen bg-white w-full">
+      {/* Header */}
+      <div className="flex-none flex items-center gap-3 p-4 border-b border-default-200 bg-white">
         <Button
           isIconOnly
           variant="light"
@@ -120,21 +120,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       </div>
 
-      {/* Scrollable Content Area between header and footer */}
-      <div 
-        ref={contentRef} 
-        className="flex-1 overflow-y-auto h-[calc(100vh-130px)]"
-      >
-        <ChatMessages 
-          messages={messages} 
-          currentUser={currentUser} 
-          otherUser={otherUser} 
-          isLoading={isLoading} 
-        />
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto">
+        <div ref={contentRef}>
+          <ChatMessages 
+            messages={messages} 
+            currentUser={currentUser} 
+            otherUser={otherUser} 
+            isLoading={isLoading} 
+          />
+        </div>
       </div>
 
-      {/* Footer Message Input - keep it sticky at bottom */}
-      <div className="sticky bottom-0 z-30 p-4 border-t border-default-200 bg-white shadow-md">
+      {/* Input Area */}
+      <div className="flex-none border-t border-default-200 bg-white p-4">
         <div className="flex gap-2">
           <Textarea
             placeholder="Type a message..."

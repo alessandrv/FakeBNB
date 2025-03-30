@@ -101,7 +101,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   return (
     <div 
       ref={containerRef} 
-      className="p-4 w-full ChatMessages"
+      className="flex flex-col justify-end min-h-full p-4 w-full ChatMessages"
     >
       {messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center mt-20 text-center text-default-500">
@@ -182,6 +182,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
               </div>
             );
           })}
+          <div ref={messagesEndRef} className="h-0" />
         </>
       )}
     </div>

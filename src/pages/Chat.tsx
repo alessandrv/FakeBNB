@@ -159,19 +159,17 @@ export const Chat: React.FC = () => {
           setLoading(false);
           
           // Force scroll to bottom after loading messages
-          // Use multiple attempts with delays to ensure it works across different devices
           const scrollToBottom = () => {
-            const messagesEnd = document.querySelector('.ChatMessages .h-32');
-            if (messagesEnd) {
-              messagesEnd.scrollIntoView({ behavior: 'auto' });
+            const messagesContainer = document.querySelector('.ChatMessages');
+            if (messagesContainer) {
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
           };
           
           // Attempt multiple scrolls with increasing delays
-          setTimeout(scrollToBottom, 10);
+          scrollToBottom();
           setTimeout(scrollToBottom, 100);
           setTimeout(scrollToBottom, 300);
-          setTimeout(scrollToBottom, 600);
         } catch (error) {
           console.error('Error fetching conversation and messages:', error);
           setError('Failed to load conversation');
@@ -204,8 +202,15 @@ export const Chat: React.FC = () => {
     // Listen for new messages
     const handleNewMessage = (message: any) => {
       if (message.conversation_id === parseInt(conversationId || '0')) {
-        const mappedMessage = mapMessage(message);
-        setMessages(prev => [...prev, mappedMessage]);
+        // Only add the message if it's not already in the list
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === message.id);
+          if (!exists) {
+            const mappedMessage = mapMessage(message);
+            return [...prev, mappedMessage];
+          }
+          return prev;
+        });
         
         // If the message is from someone else, mark as read
         if (message.sender_id !== user?.id) {
@@ -332,18 +337,21 @@ export const Chat: React.FC = () => {
     try {
       setSendingMessage(true);
       
-      // Create optimistic message
-      const optimisticMessage: Message = {
-        id: -1,
+      // Send via API first to get the actual message ID
+      const sentMessage = await chatService.sendMessage(parseInt(conversationId), content.trim());
+      
+      // Create message with the actual ID from the server
+      const newMessage: Message = {
+        id: sentMessage.id,
         conversationId: parseInt(conversationId),
         senderId: user.id,
-        content: content,
-        timestamp: new Date(),
+        content: content.trim(),
+        timestamp: new Date(sentMessage.created_at || new Date()),
         isRead: false
       };
       
-      // Add to UI immediately (optimistic update)
-      setMessages(prev => [...prev, optimisticMessage]);
+      // Add to UI
+      setMessages(prev => [...prev, newMessage]);
       
       // Reset input
       setMessageText('');
@@ -363,9 +371,6 @@ export const Chat: React.FC = () => {
       scrollToBottom();
       setTimeout(scrollToBottom, 50);
       setTimeout(scrollToBottom, 200);
-      
-      // Send via API
-      await chatService.sendMessage(parseInt(conversationId), content);
       
       setSendingMessage(false);
     } catch (error) {
@@ -436,7 +441,7 @@ export const Chat: React.FC = () => {
       {/* Chat view */}
       <div className={`flex-1 h-full ${
         !conversationId && !isDesktop ? 'hidden' : 'block'
-      } ${isDesktop && conversationId ? 'ml-80' : ''}`}>
+      }`}>
         {!conversationId ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center">
             <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-default-300 mb-4">
