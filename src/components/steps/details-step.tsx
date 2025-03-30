@@ -20,7 +20,7 @@ function Counter({ label, value, icon, onChange, min = 1 }: CounterProps) {
   return (
     <Card>
       <CardBody className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-5">
           <Icon icon={icon} className="text-2xl text-default-400" />
           <span className="font-medium">{label}</span>
         </div>
