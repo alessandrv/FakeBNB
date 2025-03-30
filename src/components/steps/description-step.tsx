@@ -62,7 +62,7 @@ export function DescriptionStep({ data, updateData }: DescriptionStepProps) {
         minRows={4}
       />
 
-      <div className="space-y-2">
+      <div className="space-y-2 pb-32">
         <label className="text-small font-medium">Property Tags</label>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
           {SUGGESTED_TAGS.map((tag) => (

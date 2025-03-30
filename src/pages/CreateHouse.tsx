@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { Button } from "@heroui/react";
+import { useNavigate } from "react-router-dom";
 import { AddressStep } from "../components/steps/address-step";
 import { DetailsStep } from "../components/steps/details-step";
 import { AmenitiesStep } from "../components/steps/amenities-step";
@@ -49,6 +50,7 @@ const INITIAL_DATA: ListingData = {
 export function ListingForm() {
   const [currentStep, setCurrentStep] = React.useState(0);
   const [formData, setFormData] = React.useState<ListingData>(INITIAL_DATA);
+  const navigate = useNavigate();
 
   // Hide header, footer, and navbar for both desktop and mobile
   useEffect(() => {
@@ -108,17 +110,25 @@ export function ListingForm() {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
+  const handleBack = () => {
+    if (currentStep === 0) {
+      navigate('/profile?tab=houses');
+    } else {
+      prev();
+    }
+  };
+
   const handleSubmit = () => {
     console.log("Form submitted:", formData);
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex  flex-col min-h-screen bg-background">
       <div className="flex-1 p-4 md:p-6 pt-6 md:pt-8">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl md:text-3xl font-bold mb-6">List Your Property</h1>
           <FormStepper steps={steps} currentStep={currentStep} />
-          <div className="mt-8 pb-32">
+          <div className="mt-8">
             {steps[currentStep].component}
           </div>
         </div>
@@ -127,11 +137,10 @@ export function ListingForm() {
         <div className="flex justify-between gap-4 max-w-6xl mx-auto">
           <Button
             variant="flat"
-            onPress={prev}
-            isDisabled={currentStep === 0}
+            onPress={handleBack}
             className="flex-1 md:flex-none"
           >
-            Back
+            {currentStep === 0 ? 'Cancel' : 'Back'}
           </Button>
           {currentStep === steps.length - 1 ? (
             <Button color="primary" onPress={handleSubmit} className="flex-1 md:flex-none">

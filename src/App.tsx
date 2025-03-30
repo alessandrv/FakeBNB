@@ -29,7 +29,6 @@ function App() {
           <Route path="map" element={<Map />} />
           <Route path="faq" element={<Faq />} />
           <Route path="contact" element={<Contact />} />
-          <Route path='create-house' element={<ListingForm />} />
           <Route path="verify-email" element={<VerifyEmail />} />
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
@@ -40,6 +39,12 @@ function App() {
               </ProtectedRoute>
             } 
           />
+                    <Route path='create-house' element={
+                      <ProtectedRoute>
+                        <ListingForm />
+                      </ProtectedRoute>
+                      } />
+
           <Route 
             path="register" 
             element={

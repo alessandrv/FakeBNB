@@ -141,7 +141,7 @@ export function AddressStep({ data, updateData }: AddressStepProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="pb-0 space-y-6 ">
       <Input
         label="Property Address"
         placeholder="Enter your property's address"
@@ -151,23 +151,9 @@ export function AddressStep({ data, updateData }: AddressStepProps) {
         startContent={isLoading ? <Spinner size="sm" /> : null}
       />
       
-      {suggestedLocations.length > 0 && (
-        <div className="mt-2 mb-4 border rounded-lg overflow-hidden">
-          <ul className="bg-white">
-            {suggestedLocations.map(location => (
-              <li 
-                key={location.place_id} 
-                className="p-3 hover:bg-default-100 cursor-pointer border-b last:border-b-0"
-                onClick={() => handleLocationSelect(location.place_id.toString())}
-              >
-                {location.display_name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+     
       
-      <div className="h-[400px] w-full rounded-lg overflow-hidden">
+      <div className="aspect-square w-full rounded-lg overflow-hidden">
         <MapContainer
           center={initialMapCenter}
           zoom={initialZoom}

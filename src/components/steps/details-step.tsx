@@ -59,7 +59,7 @@ export function DetailsStep({ data, updateData }: DetailsStepProps) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col pb-32 gap-4">
       <Counter
         label="Bedrooms"
         value={data.details.bedrooms}
