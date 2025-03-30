@@ -32,7 +32,7 @@ interface House {
 }
 
 export const Profile = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -41,6 +41,11 @@ export const Profile = () => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
     return tab && ['account', 'houses', 'security', 'preferences'].includes(tab) ? tab : 'account';
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
   
   const [activeTab, setActiveTab] = useState(getInitialTab());
@@ -54,6 +59,7 @@ export const Profile = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isLogoutOpen, onOpen: onLogoutOpen, onClose: onLogoutClose } = useDisclosure();
 
   // Update URL when tab changes
   const handleTabChange = (tab: string) => {
@@ -237,7 +243,41 @@ export const Profile = () => {
 
   return (
     <div className="container mx-auto pb-24 py-8 px-4">
-      <h1 className="text-2xl font-bold mb-8">Your Profile</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Your Profile</h1>
+        <Button 
+          color="danger" 
+          variant="flat"
+          startContent={<Icon icon="lucide:log-out" />}
+          onClick={onLogoutOpen}
+        >
+          Logout
+        </Button>
+      </div>
+      
+      {/* Logout Confirmation Modal */}
+      <Modal isOpen={isLogoutOpen} onClose={onLogoutClose}>
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">
+                Confirm Logout
+              </ModalHeader>
+              <ModalBody>
+                <p>Are you sure you want to logout?</p>
+              </ModalBody>
+              <ModalFooter>
+                <Button color="default" variant="light" onPress={onClose}>
+                  Cancel
+                </Button>
+                <Button color="danger" onPress={handleLogout}>
+                  Logout
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
       
       {/* Tenant Payment History Modal */}
       <Modal isOpen={isOpen} onClose={onClose} size="lg">

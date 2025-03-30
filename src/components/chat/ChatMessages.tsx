@@ -149,17 +149,15 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                   isCurrentUser ? "flex-row-reverse" : "flex-row"
                 } ${!isFirst ? "mt-1" : "mt-4"}`}
               >
-                {showAvatar ? (
-                  <div className={`${isCurrentUser ? "ml-2" : "mr-2"} flex-shrink-0`}>
+                <div className={`w-8 h-8 flex-shrink-0 ${isCurrentUser ? "ml-2" : "mr-2"}`}>
+                  {showAvatar && (
                     <Avatar
                       size="sm"
                       src={isCurrentUser ? currentUser.avatar : otherUser.avatar}
                       name={isCurrentUser ? currentUser.firstName : otherUser.firstName}
                     />
-                  </div>
-                ) : (
-                  <div className="w-8 h-8 flex-shrink-0" /> // Spacer for alignment
-                )}
+                  )}
+                </div>
                 
                 <div className="flex flex-col max-w-[70%]">
                   {isFirst && !isCurrentUser && (
