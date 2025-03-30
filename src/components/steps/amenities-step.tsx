@@ -39,15 +39,12 @@ export function AmenitiesStep({ data, updateData }: AmenitiesStepProps) {
           isPressable
           isHoverable
           onPress={() => handleChange(amenity.id, !data.amenities.includes(amenity.id))}
-          className={data.amenities.includes(amenity.id) ? "border-2 border-primary" : ""}
+          className={`h-[80px] box-border ${data.amenities.includes(amenity.id) ? "border-2 border-primary" : "border-2 border-transparent"}`}
         >
-          <CardBody className="flex items-center gap-3">
-            <Icon icon={amenity.icon} className="text-2xl text-default-500" />
-            <span className="flex-grow">{amenity.label}</span>
-            <Checkbox
-              isSelected={data.amenities.includes(amenity.id)}
-              onValueChange={(isSelected) => handleChange(amenity.id, isSelected)}
-            />
+          <CardBody className="flex items-center gap-3 p-4 overflow-visible">
+            <Icon icon={amenity.icon} className="text-2xl text-default-500 flex-shrink-0" />
+            <span className="flex-grow whitespace-normal">{amenity.label}</span>
+            
           </CardBody>
         </Card>
       ))}
