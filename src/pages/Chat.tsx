@@ -1,11 +1,7 @@
-import React, { useState, useEffect, useRef, ChangeEvent, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
-  Card, CardBody, Button, Input, Avatar, Divider,
-  Badge as BadgeUI, Spinner, Textarea
-} from '@heroui/react';
-import { Icon } from '@iconify/react';
+import { Spinner } from '@heroui/react';
 import * as chatService from '../services/chatService';
 import { 
   getSocket, 
@@ -15,15 +11,18 @@ import {
   startTyping,
   stopTyping
 } from '../services/socketService';
-import { Conversation, Message, User } from '../services/chatService';
+import { Message, User, Chat as ChatType } from '../types/chat';
+import { mapConversation, mapMessage } from '../types/chat';
+import { ChatList } from '../components/chat/ChatList';
+import { ChatView } from '../components/chat/ChatView';
 
 export const Chat: React.FC = () => {
   const { user } = useAuth();
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
   
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
+  const [chats, setChats] = useState<ChatType[]>([]);
+  const [activeChat, setActiveChat] = useState<ChatType | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
@@ -32,9 +31,65 @@ export const Chat: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [creatingChat, setCreatingChat] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Effect for responsive layout
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+      setViewportHeight(window.innerHeight);
+      
+      // Apply the viewport height to the chat container
+      if (chatContainerRef.current) {
+        chatContainerRef.current.style.height = `${window.innerHeight}px`;
+      }
+    };
+    
+    // Initial setup
+    handleResize();
+    
+    // Handle browser events that might change the viewport
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    
+    // Special handling for mobile chrome address bar
+    if (navigator.userAgent.includes('Android')) {
+      window.addEventListener('scroll', handleResize);
+      document.addEventListener('visibilitychange', handleResize);
+      
+      // Force a resize when focusing on inputs (may trigger keyboard and address bar changes)
+      const inputs = document.querySelectorAll('input, textarea');
+      inputs.forEach(input => {
+        input.addEventListener('focus', () => setTimeout(handleResize, 300));
+        input.addEventListener('blur', () => setTimeout(handleResize, 300));
+      });
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      
+      if (navigator.userAgent.includes('Android')) {
+        window.removeEventListener('scroll', handleResize);
+        document.removeEventListener('visibilitychange', handleResize);
+      }
+    };
+  }, []);
+  
+  // Current user in our frontend format
+  const currentUser: User = user ? {
+    id: user.id,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    avatar: user.profilePic,
+    isOnline: true
+  } : {
+    id: 0,
+    firstName: 'Guest',
+    lastName: 'User',
+    isOnline: true
+  };
   
   // Effect to fetch conversations
   useEffect(() => {
@@ -42,7 +97,9 @@ export const Chat: React.FC = () => {
     const fetchConversations = async () => {
       try {
         const data = await chatService.getConversations();
-        setConversations(data);
+        // Map to our frontend format
+        const mappedChats = data.map(mapConversation);
+        setChats(mappedChats);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching conversations:', error);
@@ -54,15 +111,21 @@ export const Chat: React.FC = () => {
     fetchConversations();
   }, []);
   
-  // Effect to handle conversation change
+  // Effect to handle conversation change and toggle mobile navbar visibility
   useEffect(() => {
     // Clear previous conversation
-    if (activeConversation) {
-      leaveConversation(activeConversation.id);
+    if (activeChat) {
+      leaveConversation(activeChat.id);
     }
     
     // Reset messages when conversation changes
     setMessages([]);
+    
+    // Toggle mobile navbar visibility based on whether we're in a conversation
+    if (!isDesktop) {
+      // Set CSS variable to hide mobile navbar when viewing a conversation
+      document.documentElement.style.setProperty('--hide-navbar-mobile', conversationId ? 'none' : 'grid');
+    }
     
     if (conversationId) {
       const fetchConversationAndMessages = async () => {
@@ -71,11 +134,13 @@ export const Chat: React.FC = () => {
           
           // Fetch conversation details
           const conversation = await chatService.getConversation(parseInt(conversationId));
-          setActiveConversation(conversation);
+          const mappedChat = mapConversation(conversation);
+          setActiveChat(mappedChat);
           
           // Fetch messages
-          const messages = await chatService.getMessages(parseInt(conversationId));
-          setMessages(messages.reverse()); // API returns newest first, reverse for display
+          const messagesData = await chatService.getMessages(parseInt(conversationId));
+          const mappedMessages = messagesData.map(mapMessage).reverse(); // API returns newest first, reverse for display
+          setMessages(mappedMessages);
           
           // Join the conversation room via socket
           joinConversation(parseInt(conversationId));
@@ -85,13 +150,28 @@ export const Chat: React.FC = () => {
           await chatService.markConversationAsRead(parseInt(conversationId));
           
           // Update unread count in conversations list
-          setConversations(prevConversations => 
-            prevConversations.map(c => 
-              c.id === parseInt(conversationId) ? { ...c, unread_count: 0 } : c
+          setChats(prevChats => 
+            prevChats.map(c => 
+              c.id === parseInt(conversationId) ? { ...c, unreadCount: 0 } : c
             )
           );
           
           setLoading(false);
+          
+          // Force scroll to bottom after loading messages
+          // Use multiple attempts with delays to ensure it works across different devices
+          const scrollToBottom = () => {
+            const messagesEnd = document.querySelector('.ChatMessages .h-32');
+            if (messagesEnd) {
+              messagesEnd.scrollIntoView({ behavior: 'auto' });
+            }
+          };
+          
+          // Attempt multiple scrolls with increasing delays
+          setTimeout(scrollToBottom, 10);
+          setTimeout(scrollToBottom, 100);
+          setTimeout(scrollToBottom, 300);
+          setTimeout(scrollToBottom, 600);
         } catch (error) {
           console.error('Error fetching conversation and messages:', error);
           setError('Failed to load conversation');
@@ -107,8 +187,13 @@ export const Chat: React.FC = () => {
       if (conversationId) {
         leaveConversation(parseInt(conversationId));
       }
+      
+      // Restore mobile navbar visibility
+      if (!isDesktop) {
+        document.documentElement.style.setProperty('--hide-navbar-mobile', 'grid');
+      }
     };
-  }, [conversationId]);
+  }, [conversationId, isDesktop]);
   
   // Socket event listeners
   useEffect(() => {
@@ -117,9 +202,10 @@ export const Chat: React.FC = () => {
     if (!socket) return;
     
     // Listen for new messages
-    const handleNewMessage = (message: Message) => {
+    const handleNewMessage = (message: any) => {
       if (message.conversation_id === parseInt(conversationId || '0')) {
-        setMessages(prev => [...prev, message]);
+        const mappedMessage = mapMessage(message);
+        setMessages(prev => [...prev, mappedMessage]);
         
         // If the message is from someone else, mark as read
         if (message.sender_id !== user?.id) {
@@ -135,28 +221,33 @@ export const Chat: React.FC = () => {
         });
       }
       
-      // Update conversation list (last message, unread count)
-      setConversations(prev => 
-        prev.map(c => {
+      // Update conversation list
+      setChats(prev => {
+        const updatedChats = prev.map(c => {
           if (c.id === message.conversation_id) {
             // If active conversation, mark as read
             const newUnreadCount = parseInt(conversationId || '0') === c.id 
               ? 0 
-              : c.unread_count + (message.sender_id !== user?.id ? 1 : 0);
+              : c.unreadCount + (message.sender_id !== user?.id ? 1 : 0);
             
             return {
               ...c,
-              last_message: message.content,
-              last_message_at: message.created_at,
-              unread_count: newUnreadCount
+              lastMessage: {
+                content: message.content,
+                timestamp: message.created_at
+              },
+              lastMessageAt: message.created_at,
+              unreadCount: newUnreadCount
             };
           }
           return c;
-        }).sort((a, b) => 
-          // Sort by last message date, newest first
-          new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-        )
-      );
+        });
+
+        // Sort by last message date, newest first
+        return updatedChats.sort((a, b) => 
+          new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+        );
+      });
     };
     
     // Listen for typing indicators
@@ -165,12 +256,15 @@ export const Chat: React.FC = () => {
       
       if (data.conversationId === parseInt(conversationId || '0')) {
         // Find user name from participants
-        const typingUser = activeConversation?.participants.find(p => p.id === data.userId);
-        if (typingUser) {
-          setTypingUsers(prev => ({
-            ...prev,
-            [data.userId]: `${typingUser.first_name} ${typingUser.last_name}`
-          }));
+        const conversation = chats.find(c => c.id === data.conversationId);
+        if (conversation) {
+          const typingUser = conversation.participants.find(p => p.id === data.userId);
+          if (typingUser) {
+            setTypingUsers(prev => ({
+              ...prev,
+              [data.userId]: `${typingUser.firstName} ${typingUser.lastName}`
+            }));
+          }
         }
       }
     };
@@ -202,49 +296,7 @@ export const Chat: React.FC = () => {
       socket.off('typing:stop', handleTypingStop);
       socket.off('conversation:read', handleConversationRead);
     };
-  }, [conversationId, activeConversation, user?.id]);
-  
-  // Helper function to determine if a message is the last in a sequence from the same sender
-  const isLastConsecutiveMessage = (index: number, messages: Message[]): boolean => {
-    return index === messages.length - 1 || 
-      messages[index + 1].sender_id !== messages[index].sender_id;
-  };
-  
-  // Improved auto-scroll to bottom when messages change or conversation changes
-  useEffect(() => {
-    if (messagesEndRef.current && messages.length > 0) {
-      // Use a small timeout to ensure DOM has updated
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  }, [messages, conversationId]);
-  
-  // Always scroll to bottom when a conversation is first loaded or when new messages arrive
-  useLayoutEffect(() => {
-    if (messagesEndRef.current && messages.length > 0) {
-      messagesEndRef.current.scrollIntoView();
-    }
-  }, [messages, conversationId]);
-  
-  // When messages are loaded, scroll to bottom immediately
-  useEffect(() => {
-    if (!loading && messages.length > 0 && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView();
-    }
-  }, [loading, messages.length]);
-  
-  // Handle window resize for responsive design
-  useEffect(() => {
-    const handleResize = () => {
-      setIsDesktop(window.innerWidth >= 768);
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+  }, [conversationId, chats, user?.id]);
   
   // Create new chat with user ID 2
   const createNewChat = async () => {
@@ -255,10 +307,10 @@ export const Chat: React.FC = () => {
       const conversation = await chatService.getOrCreateDirectConversation(userId);
       
       // Add to conversations list if it's not already there
-      setConversations(prev => {
+      setChats(prev => {
         const exists = prev.some(c => c.id === conversation.id);
         if (!exists) {
-          return [conversation, ...prev];
+          return [mapConversation(conversation), ...prev];
         }
         return prev;
       });
@@ -273,55 +325,21 @@ export const Chat: React.FC = () => {
     }
   };
   
-  // Handle message typing
-  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessageText(e.target.value);
-    
-    if (!conversationId) return;
-    
-    // Send typing indicator
-    if (e.target.value.length > 0) {
-      startTyping(parseInt(conversationId));
-      
-      // Clear previous timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      
-      // Set new timeout
-      typingTimeoutRef.current = setTimeout(() => {
-        stopTyping(parseInt(conversationId));
-      }, 3000);
-    } else {
-      // If message is empty, stop typing
-      stopTyping(parseInt(conversationId));
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    }
-  };
-  
-  // Send message
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !conversationId || !user) return;
+  // Send message handler for the ChatView component
+  const handleSendMessage = async (content: string) => {
+    if (!content.trim() || !conversationId || !user) return;
     
     try {
       setSendingMessage(true);
       
-      // Temporary optimistic message
+      // Create optimistic message
       const optimisticMessage: Message = {
-        id: -1, // Temporary ID
-        conversation_id: parseInt(conversationId),
-        sender_id: user.id,
-        content: messageText,
-        created_at: new Date().toISOString(),
-        is_read: false,
-        sender: {
-          id: user.id,
-          first_name: user.first_name,
-          last_name: user.last_name,
-          profile_picture: user.profilePic
-        }
+        id: -1,
+        conversationId: parseInt(conversationId),
+        senderId: user.id,
+        content: content,
+        timestamp: new Date(),
+        isRead: false
       };
       
       // Add to UI immediately (optimistic update)
@@ -332,62 +350,40 @@ export const Chat: React.FC = () => {
       
       // Stop typing indicator
       stopTyping(parseInt(conversationId));
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
       
-      // Send via API (the Socket handler will broadcast to all users)
-      await chatService.sendMessage(parseInt(conversationId), messageText);
+      // Scroll to bottom immediately and after a short delay
+      const scrollToBottom = () => {
+        const messagesEnd = document.querySelector('.ChatMessages .h-32');
+        if (messagesEnd) {
+          messagesEnd.scrollIntoView({ behavior: 'auto' });
+        }
+      };
+      
+      // Multiple scroll attempts to ensure it works
+      scrollToBottom();
+      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 200);
+      
+      // Send via API
+      await chatService.sendMessage(parseInt(conversationId), content);
       
       setSendingMessage(false);
     } catch (error) {
       console.error('Error sending message:', error);
       setSendingMessage(false);
-      // Could show an error toast here
     }
   };
   
-  // Get participant names for conversation title
-  const getConversationTitle = (conversation: Conversation): string => {
-    if (conversation.title) return conversation.title;
-    
-    // For direct conversations, show the other person's name
-    if (!conversation.is_group) {
-      const otherParticipant = conversation.participants.find(p => p.id !== user?.id);
-      if (otherParticipant) {
-        return `${otherParticipant.first_name} ${otherParticipant.last_name}`;
-      }
-    }
-    
-    // Fallback
-    return `Conversation #${conversation.id}`;
+  // Handler for when user starts typing
+  const handleStartTyping = () => {
+    if (!conversationId) return;
+    startTyping(parseInt(conversationId));
   };
   
-  // Handle conversation click
-  const handleConversationClick = (conversationId: number) => {
-    // Force push to new page to ensure proper state update
-    window.location.href = `/chat/${conversationId}`;
-  };
-  
-  // Format date for display
-  const formatMessageDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    
-    // Today - show time only
-    if (diff < 24 * 60 * 60 * 1000 && date.getDate() === now.getDate()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    
-    // Within a week - show day and time
-    if (diff < 7 * 24 * 60 * 60 * 1000) {
-      return date.toLocaleDateString([], { weekday: 'short' }) + ' ' + 
-             date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    
-    // Older - show date
-    return date.toLocaleDateString();
+  // Handler for when user stops typing
+  const handleStopTyping = () => {
+    if (!conversationId) return;
+    stopTyping(parseInt(conversationId));
   };
   
   // Clean up the header visibility setting when unmounting
@@ -404,319 +400,83 @@ export const Chat: React.FC = () => {
       clearTimeout(timeoutId);
       // Restore header visibility when leaving the chat page
       document.documentElement.style.setProperty('--hide-header-mobile', 'block');
+      // Also ensure navbar visibility is restored
+      document.documentElement.style.setProperty('--hide-navbar-mobile', 'grid');
     };
   }, []);
   
+  // If no user is logged in, we should redirect to login
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Spinner size="lg" />
+        <p className="ml-2">Redirecting to login...</p>
+      </div>
+    );
+  }
+  
   return (
-    <div className="chat-container bg-default-100">
-      <div className="flex flex-1 h-full overflow-hidden">
-        {/* Conversations sidebar - full width on mobile when no conversation is selected */}
-        <div className={`w-full md:w-80 flex-shrink-0 border-r border-default-200 bg-white chat-conversation-list ${
-          conversationId ? 'hidden md:flex' : 'flex'
-        }`}>
-          {/* Fixed header for conversations list */}
-          <div className="chat-header p-4 border-b border-default-200 flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Messages</h2>
-            <Button 
-              isIconOnly
-              size="sm"
-              variant="flat"
-              aria-label="New conversation"
-              onClick={createNewChat}
-              isLoading={creatingChat}
-            >
-              <Icon icon="lucide:plus" />
-            </Button>
-          </div>
-          
-          {/* Scrollable conversations list */}
-          <div className="flex-1 overflow-y-auto">
-            {loading && !conversationId ? (
-              <div className="flex justify-center items-center h-full">
-                <Spinner size="lg" />
-              </div>
-            ) : error ? (
-              <div className="p-4 text-center text-danger">
-                <p>{error}</p>
-                <Button 
-                  size="sm" 
-                  color="primary" 
-                  className="mt-2"
-                  onClick={() => window.location.reload()}
-                >
-                  Retry
-                </Button>
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="p-4 text-center text-default-500">
-                <p>No conversations yet</p>
-                <Button
-                  size="sm"
-                  color="primary"
-                  className="mt-2"
-                  onClick={createNewChat}
-                  isLoading={creatingChat}
-                >
-                  Start a chat with User #2
-                </Button>
-              </div>
-            ) : (
-              conversations.map(conversation => (
-                <div 
-                  key={conversation.id}
-                  className={`p-3 border-b border-default-200 cursor-pointer hover:bg-default-100 transition-colors ${
-                    parseInt(conversationId || '0') === conversation.id ? 'bg-primary-100' : ''
-                  }`}
-                  onClick={() => handleConversationClick(conversation.id)}
-                >
-                  <div className="flex items-center">
-                    {conversation.is_group ? (
-                      <Avatar
-                        size="md"
-                        icon={<Icon icon="lucide:users" />}
-                        className="bg-primary-200 text-primary"
-                      />
-                    ) : (
-                      <Avatar
-                        size="md"
-                        src={conversation.participants.find(p => p.id !== user?.id)?.profile_picture}
-                        name={getConversationTitle(conversation).substring(0, 2)}
-                      />
-                    )}
-                    
-                    <div className="ml-3 flex-1 min-w-0">
-                      <div className="flex justify-between">
-                        <h3 className="font-medium text-default-900 truncate">
-                          {getConversationTitle(conversation)}
-                        </h3>
-                        <span className="text-xs text-default-500">
-                          {formatMessageDate(conversation.last_message_at)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center mt-1">
-                        <p className="text-sm text-default-500 truncate mr-2">
-                          {conversation.last_message || 'No messages yet'}
-                        </p>
-                        
-                        {conversation.unread_count > 0 && (
-                          <BadgeUI color="primary">
-                            {conversation.unread_count}
-                          </BadgeUI>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          
-          {/* Mobile floating action button to create new chat */}
-          <div className="md:hidden fixed bottom-20 right-4 z-20">
-            <Button
-              color="primary"
-              isIconOnly
-              size="lg"
-              className="rounded-full shadow-lg"
-              onClick={createNewChat}
-              isLoading={creatingChat}
-            >
-              <Icon icon="lucide:plus" width={24} height={24} />
-            </Button>
-          </div>
-        </div>
-        
-        {/* Chat/messages area - full width on mobile when conversation is selected */}
-        <div className={`w-full flex-1 flex flex-col h-full relative ${
-          conversationId ? 'flex' : 'hidden md:flex'
-        }`}>
-          {!conversationId ? (
-            <div className="flex-1 flex justify-center items-center">
-              <div className="text-center p-4">
-                <Icon icon="lucide:message-circle" className="text-6xl text-default-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Your Messages</h3>
-                <p className="text-default-500 max-w-md">
-                  Select a conversation to view your messages or start a new one.
-                </p>
-                <Button
-                  color="primary"
-                  className="mt-4"
-                  onClick={createNewChat}
-                  isLoading={creatingChat}
-                >
-                  Start a chat with User #2
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Fixed conversation header */}
-              <div className="fixed w-full p-3 bg-white z-50 border-b border-default-200 flex items-center">
-                <Button 
-                  className="mr-2" 
-                  isIconOnly 
-                  variant="flat" 
-                  size="sm"
-                  onClick={() => navigate('/chat')}
-                >
-                  <Icon icon="lucide:arrow-left" />
-                </Button>
-                
-                {activeConversation && (
-                  <>
-                    {activeConversation.is_group ? (
-                      <Avatar
-                        size="sm"
-                        icon={<Icon icon="lucide:users" />}
-                        className="bg-primary-200 text-primary"
-                      />
-                    ) : (
-                      <Avatar
-                        size="sm"
-                        src={activeConversation.participants.find(p => p.id !== user?.id)?.profile_picture}
-                        name={getConversationTitle(activeConversation).substring(0, 2)}
-                      />
-                    )}
-                    
-                    <div className="ml-3 flex-1 truncate">
-                      <h3 className="font-medium truncate">
-                        {getConversationTitle(activeConversation)}
-                      </h3>
-                      
-                      {Object.keys(typingUsers).length > 0 && (
-                        <p className="text-xs text-default-500 truncate">
-                          {Object.values(typingUsers).join(', ')} typing...
-                        </p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              {/* Scrollable messages area with padding for input field */}
-              <div className="chat-messages mt-14">
-                {loading ? (
-                  <div className="flex justify-center items-center h-full">
-                    <Spinner size="lg" />
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="flex justify-center items-center h-full text-center">
-                    <div>
-                      <Icon icon="lucide:message-circle" className="text-4xl text-default-300 mx-auto mb-2" />
-                      <p className="text-default-500">No messages yet</p>
-                      <p className="text-sm text-default-400">Send a message to start the conversation</p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {messages.map((message, index) => {
-                      const isFromCurrentUser = message.sender_id === user?.id;
-                      const isLast = isLastConsecutiveMessage(index, messages);
-                      const isFirst = index === 0 || messages[index - 1].sender_id !== message.sender_id;
-                      
-                      return (
-                        <div 
-                          key={message.id} 
-                          className={`message-group ${isFromCurrentUser ? 'justify-end' : 'justify-start'}`}
-                        >
-                          {/* Show avatar for other user's last message in a sequence */}
-                          {!isFromCurrentUser && isLast && (
-                            <Avatar
-                              size="sm"
-                              src={message.sender.profile_picture}
-                              name={`${message.sender.first_name} ${message.sender.last_name}`.substring(0, 2)}
-                              className="message-avatar mr-2"
-                            />
-                          )}
-                          
-                          {/* Show avatar placeholder for consistent spacing for all but the last message in a sequence */}
-                          {!isFromCurrentUser && !isLast && (
-                            <div className="message-avatar-placeholder"></div>
-                          )}
-                          
-                          <div className={`${isFromCurrentUser ? 'mr-2' : 'ml-2'} max-w-[70%]`}>
-                            {/* Show sender name only for first message in sequence from other users */}
-                            {!isFromCurrentUser && isFirst && (
-                              <p className="text-xs text-default-500 mb-1 ml-1">
-                                {message.sender.first_name} {message.sender.last_name}
-                              </p>
-                            )}
-                            
-                            <div className={`message-bubble ${
-                              isFromCurrentUser 
-                                ? 'bg-primary' 
-                                : 'bg-white'
-                            }`}>
-                              <p>{message.content}</p>
-                            </div>
-                            
-                            <div className="message-timestamp">
-                              {formatMessageDate(message.created_at)}
-                            </div>
-                          </div>
-                          
-                          {/* Show avatar only for current user's last message in a sequence */}
-                          {isFromCurrentUser && isLast && (
-                            <Avatar
-                              size="sm"
-                              src={user?.profilePic}
-                              name={`${user?.first_name} ${user?.last_name}`.substring(0, 2)}
-                              className="message-avatar ml-2"
-                            />
-                          )}
-                          
-                          {/* Show avatar placeholder for consistent spacing for all but the last message in a sequence */}
-                          {isFromCurrentUser && !isLast && (
-                            <div className="message-avatar-placeholder"></div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    
-                    <div ref={messagesEndRef} className="h-px"></div>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+    <div 
+      ref={chatContainerRef}
+      className="flex overflow-hidden bg-default-50 w-full h-[100vh] max-h-[100vh]"
+    >
+      {/* Mobile layout: show either chat list or chat view */}
+      <div className={`w-full md:w-80 flex-shrink-0 bg-white h-full fixed md:relative left-0 top-0 z-10 ${
+        conversationId && !isDesktop ? 'hidden' : 'block'
+      }`}>
+        <ChatList 
+          chats={chats}
+          activeChat={conversationId ? parseInt(conversationId) : undefined}
+          onChatSelect={(chatId) => navigate(`/chat/${chatId}`)}
+          onNewChat={createNewChat}
+          isLoading={loading && !conversationId}
+        />
       </div>
 
-      {/* Sticky message input - always at bottom above navbar */}
-      {conversationId && (
-        <div className={`chat-input-container ${isDesktop ? 'desktop' : ''}`}>
-          <div className="flex items-end chat-input-wrapper">
-            <Textarea
-              value={messageText}
-              onChange={(e: any) => handleMessageChange(e)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Type your message..."
-              minRows={1}
-              maxRows={3}
-              className="flex-1 resize-none"
-              disabled={sendingMessage}
-              autoFocus
-            />
-            
-            <Button
-              color="primary"
-              className="ml-2 mb-1"
-              isIconOnly
-              onClick={handleSendMessage}
-              isLoading={sendingMessage}
-              disabled={!messageText.trim()}
+      {/* Chat view */}
+      <div className={`flex-1 h-full ${
+        !conversationId && !isDesktop ? 'hidden' : 'block'
+      } ${isDesktop && conversationId ? 'ml-80' : ''}`}>
+        {!conversationId ? (
+          <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-default-300 mb-4">
+              <path d="M21 11.5C21.0034 12.8199 20.6951 14.1219 20.1 15.3C19.3944 16.7118 18.3098 17.8992 16.9674 18.7293C15.6251 19.5594 14.0782 19.9994 12.5 20C11.1801 20.0035 9.87812 19.6951 8.7 19.1L3 21L4.9 15.3C4.30493 14.1219 3.99656 12.8199 4 11.5C4.00061 9.92179 4.44061 8.37488 5.27072 7.03258C6.10083 5.69028 7.28825 4.6056 8.7 3.90003C9.87812 3.30496 11.1801 2.99659 12.5 3.00003H13C15.0843 3.11502 17.053 3.99479 18.5291 5.47089C20.0052 6.94699 20.885 8.91568 21 11V11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <h3 className="text-xl font-semibold mb-2">Your Messages</h3>
+            <p className="text-default-500 max-w-md mb-4">
+              Select a conversation to view your messages or start a new one.
+            </p>
+            <button 
+              onClick={createNewChat}
+              className="bg-primary text-white px-4 py-2 rounded-md"
+              disabled={creatingChat}
             >
-              <Icon icon="lucide:send" />
-            </Button>
+              {creatingChat ? (
+                <>
+                  <Spinner size="sm" color="white" className="mr-2" />
+                  Creating chat...
+                </>
+              ) : (
+                "Start a new conversation"
+              )}
+            </button>
           </div>
-        </div>
-      )}
+        ) : activeChat ? (
+          <ChatView 
+            chat={activeChat}
+            messages={messages}
+            currentUser={currentUser}
+            onBack={() => navigate('/chat')}
+            onSendMessage={handleSendMessage}
+            isLoading={loading}
+            typingUsers={typingUsers}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <Spinner size="lg" />
+          </div>
+        )}
+      </div>
     </div>
   );
 }; 

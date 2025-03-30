@@ -5,6 +5,8 @@
 :root {
   --hide-header-mobile: block;
   --hide-header-desktop: block;
+  --hide-navbar-mobile: grid;
+  --hide-footer-desktop: block;
 }
 
 /* Header visibility control */
@@ -18,6 +20,15 @@
   }
 }
 
+/* Mobile navbar visibility control */
+.mobile-navbar {
+  display: block;
+}
+
+.mobile-navbar > div {
+  display: var(--hide-navbar-mobile, grid);
+}
+
 /* Improve mobile viewport handling */
 html {
   height: -webkit-fill-available;
@@ -26,6 +37,7 @@ html {
 body {
   min-height: 100vh;
   /* mobile viewport fix */
+
   min-height: -webkit-fill-available;
 }
 
@@ -65,9 +77,7 @@ body {
 .leaflet-container {
   height: 100%;
   width: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
+
   z-index: 10;
 }
 
@@ -368,4 +378,50 @@ body.sheet-expanded .draggable-sheet {
   border-top: 1px solid var(--default-200, #e5e7eb);
   padding: 0.75rem;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Map and marker styling */
+.searched-location-pulse {
+  animation: none; /* Disable the continuous animation */
+}
+
+/* Custom pulse animation for searched location marker */
+.leaflet-marker-pane .search-marker {
+  animation: none; /* Disable the continuous animation */
+}
+
+/* Keep the keyframe definitions for reference but they won't be used */
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+}
+
+@keyframes marker-pulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+}
+
+/* Desktop footer visibility control */
+.footer-desktop {
+  display: var(--hide-footer-desktop, block);
 }

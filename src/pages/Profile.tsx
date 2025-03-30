@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardBody, CardHeader, Input, Button, Tabs, Tab, Avatar, Spinner, Badge, Divider, User, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../context/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 
 // Define interfaces for house management
 interface Tenant {
@@ -236,7 +236,7 @@ export const Profile = () => {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto pb-24 py-8 px-4">
       <h1 className="text-2xl font-bold mb-8">Your Profile</h1>
       
       {/* Tenant Payment History Modal */}
@@ -440,13 +440,16 @@ export const Profile = () => {
                 </Button>
               )}
               {activeTab === 'houses' && (
+                 <Link to="/create-house" className="flex items-center gap-2">
+                
                 <Button 
                   variant="light" 
                   color="primary" 
                   startContent={<Icon icon="lucide:plus" />}
                 >
-                  Add Property
-                </Button>
+                  <span>Add Property</span>
+                </Button>               </Link>
+
               )}
             </CardHeader>
             <CardBody className="p-6">

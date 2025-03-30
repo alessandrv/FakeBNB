@@ -8,14 +8,14 @@ import { NotFound } from './pages/NotFound';
 import { SearchResults } from './pages/SearchResults';
 import { PropertyDetails } from './pages/PropertyDetails';
 import { BookingHistory } from './pages/BookingHistory';
-import { Dashboard } from './pages/Dashboard';
+import { Map } from './pages/Map';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Faq } from './pages/Faq';
 import { Contact } from './pages/Contact';
-import { CreateHouse } from './pages/CreateHouse';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Chat } from './pages/Chat';
+import { ListingForm } from './pages/CreateHouse';
 
 function App() {
   return (
@@ -26,10 +26,10 @@ function App() {
           <Route index element={<Home />} />
           <Route path="properties/:id" element={<PropertyDetails />} />
           <Route path="search" element={<SearchResults />} />
-          <Route path="map" element={<Dashboard />} />
+          <Route path="map" element={<Map />} />
           <Route path="faq" element={<Faq />} />
           <Route path="contact" element={<Contact />} />
-          <Route path='create-house' element={<CreateHouse />} />
+          <Route path='create-house' element={<ListingForm />} />
           <Route path="verify-email" element={<VerifyEmail />} />
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
@@ -82,6 +82,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+         
           
           {/* 404 Page */}
           <Route path="*" element={<NotFound />} />

@@ -31,15 +31,15 @@ export const MobileNavbar = () => {
         <Header />
       </div>
       
-      <main className={`flex-grow ${isMapPage ? 'pb-0' : 'pb-16 md:pb-0'}`}>
+      <main className={`flex-grow pb-0`}>
         <Outlet />
       </main>
       
       <Footer className="hidden md:block" />
       
-      {/* Mobile bottom tabs */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-default-200 z-40">
-        <div className={`grid ${isAuthenticated ? 'grid-cols-4' : 'grid-cols-3'} h-16`}>
+      {/* Mobile bottom tabs - visibility controlled by --hide-navbar-mobile CSS variable */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-default-200 z-40 mobile-navbar">
+        <div className={`grid ${isAuthenticated ? 'grid-cols-4' : 'grid-cols-3'} h-16`} style={{ display: 'var(--hide-navbar-mobile, grid)' }}>
           {/* Home tab - always visible */}
           <Link
             to="/"

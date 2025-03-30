@@ -1,7 +1,7 @@
-import React, { useState, useRef, FormEvent, useEffect, useCallback } from 'react';
+import React, { useState, useRef, FormEvent, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, CardBody, CardFooter, Input, Divider, Popover, PopoverTrigger, PopoverContent, Autocomplete, AutocompleteItem } from '@heroui/react';
 import { Icon } from '@iconify/react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { DraggableBottomSheet } from '../components/DraggableBottomSheet';
@@ -42,14 +42,22 @@ interface NominatimResult {
   importance: number;
 }
 
-// Search for locations using OpenStreetMap Nominatim API
+// Enhanced Search for locations using OpenStreetMap Nominatim API
 const searchLocations = async (query: string): Promise<NominatimResult[]> => {
   if (!query || query.length < 3) return [];
   
   try {
-    // Use OpenStreetMap's Nominatim API for geocoding
+    // Use OpenStreetMap's Nominatim API for geocoding with improved parameters
+    // Add featureType to filter for cities and countries only
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&country=US`
+      `https://nominatim.openstreetmap.org/search?` + 
+      `format=json&` +
+      `q=${encodeURIComponent(query)}&` +
+      `limit=5&` +
+      `addressdetails=1&` +
+      `accept-language=en&` + // Prefer English results
+      `dedupe=1&` + // Remove duplicate results
+      `featuretype=city,country,state,county,region,district` // Limit to administrative boundaries
     );
     
     if (!response.ok) {
@@ -57,15 +65,39 @@ const searchLocations = async (query: string): Promise<NominatimResult[]> => {
     }
     
     const data: NominatimResult[] = await response.json();
-    return data;
+    
+    // Filter results to only include places that are cities or countries
+    // This is an additional check as the API's featuretype parameter might not be 100% reliable
+    const filteredData = data.filter(item => {
+      const lowerClass = item.class.toLowerCase();
+      const lowerType = item.type.toLowerCase();
+      
+      // Check if the result is a city, country, state, or administrative boundary
+      return (
+        lowerClass === 'boundary' || 
+        lowerClass === 'place' || 
+        lowerType.includes('city') || 
+        lowerType.includes('town') || 
+        lowerType.includes('country') || 
+        lowerType.includes('state') || 
+        lowerType.includes('region') ||
+        lowerType === 'administrative'
+      );
+    });
+    
+    // Sort results by importance for better suggestions
+    return filteredData.sort((a, b) => b.importance - a.importance);
   } catch (error) {
     console.error('Error fetching location suggestions:', error);
     return [];
   }
 };
 
-// SearchBar component
-const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?: [number, number]) => void }) => {
+// Enhanced SearchBar component
+const SearchBar = ({ onSearch, isSearching = false }: { 
+  onSearch: (params: SearchParams, coordinates?: [number, number]) => void;
+  isSearching?: boolean;
+}) => {
   const [location, setLocation] = useState('');
   const [suggestedLocations, setSuggestedLocations] = useState<NominatimResult[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<NominatimResult | null>(null);
@@ -73,9 +105,17 @@ const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?
   const [checkOut, setCheckOut] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchAttempted, setSearchAttempted] = useState(false);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
+    setSearchAttempted(true);
+    
+    // Close the virtual keyboard on mobile
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    
     if (selectedLocation) {
       onSearch(
         { location, checkIn, checkOut }, 
@@ -87,7 +127,7 @@ const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?
     }
   };
 
-  // Debounce function for location search
+  // Debounce function for location search with improved timing
   const debouncedSearch = useCallback(
     debounce(async (query: string) => {
       if (query.length >= 3) {
@@ -98,13 +138,18 @@ const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?
       } else {
         setSuggestedLocations([]);
       }
-    }, 300),
+    }, 350), // Slightly longer debounce for better UX
     []
   );
 
   useEffect(() => {
     debouncedSearch(location);
-  }, [location, debouncedSearch]);
+    
+    // Reset search attempted state when user types new input
+    if (searchAttempted) {
+      setSearchAttempted(false);
+    }
+  }, [location, debouncedSearch, searchAttempted]);
 
   // Handle direct input changes
   const handleInputChange = (value: string) => {
@@ -115,6 +160,36 @@ const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?
       setSelectedLocation(null);
     }
   };
+
+  // Format display name for better readability
+  const formatLocationName = (displayName: string): string => {
+    const parts = displayName.split(',');
+    if (parts.length > 2) {
+      return `${parts[0].trim()}, ${parts[parts.length - 2].trim()}`;
+    }
+    return parts[0].trim();
+  };
+
+  // Create a combined array that includes a "no results" item when appropriate
+  const autocompleteItems = useMemo(() => {
+    if (location.length >= 3 && suggestedLocations.length === 0 && !isLoading) {
+      return [{ 
+        place_id: -1, 
+        display_name: "No results found",
+        lat: "0",
+        lon: "0",
+        // Add other required properties with default values
+        licence: "",
+        osm_type: "",
+        osm_id: 0,
+        boundingbox: [],
+        class: "",
+        type: "",
+        importance: 0
+      }];
+    }
+    return suggestedLocations;
+  }, [location, suggestedLocations, isLoading]);
 
   return (
     <div className="bg-white shadow-md px-2 py-2 md:px-4 md:py-3 sticky top-0 z-50">
@@ -130,30 +205,70 @@ const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?
                   loc => loc.place_id.toString() === key
                 );
                 if (selected) {
+                  // Use a more descriptive location name for display
+                  // Extract just the city/country name for cleaner display
+                  const displayName = selected.display_name;
+                  const mainLocationName = displayName.split(',')[0].trim();
+                  
                   setSelectedLocation(selected);
-                  setLocation(selected.display_name.split(',')[0]);
+                  setLocation(mainLocationName);
+                  
+                  // Close the virtual keyboard on mobile
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
                   
                   // Auto-search when location is selected
                   onSearch(
-                    { location: selected.display_name.split(',')[0], checkIn, checkOut },
+                    { location: mainLocationName, checkIn, checkOut },
                     [parseFloat(selected.lat), parseFloat(selected.lon)] as [number, number]
                   );
                 }
               }
             }}
             startContent={<Icon icon="lucide:map-pin" className="text-default-400" />}
-            endContent={isLoading ? <Icon icon="lucide:loader-2" className="animate-spin text-default-400" /> : null}
+            endContent={
+              isLoading ? (
+                <Icon icon="lucide:loader-2" className="animate-spin text-default-400" />
+              ) : location && !selectedLocation && searchAttempted ? (
+                <Icon icon="lucide:alert-circle" className="text-danger" />
+              ) : null
+            }
             className="w-full"
             listboxProps={{
               className: "max-h-[200px] overflow-y-auto",
             }}
+            errorMessage={
+              location && !selectedLocation && searchAttempted ? 
+              "Select a location from the dropdown for more accurate results" : undefined
+            }
+            items={autocompleteItems}
           >
-            {suggestedLocations.map((loc) => (
-              <AutocompleteItem key={loc.place_id.toString()} textValue={loc.display_name}>
-                {loc.display_name.split(',')[0]}
-                <div className="text-small text-default-400 truncate">{loc.display_name}</div>
-              </AutocompleteItem>
-            ))}
+            {(item: NominatimResult) => {
+              // Special rendering for no results item
+              if (item.place_id === -1) {
+                return (
+                  <AutocompleteItem key="no-results" textValue="No results found" isReadOnly>
+                    <div className="text-default-400 italic">No locations found</div>
+                  </AutocompleteItem>
+                );
+              }
+              
+              // Normal location item rendering
+              return (
+                <AutocompleteItem key={item.place_id.toString()} textValue={item.display_name}>
+                  <div className="flex items-start">
+                    <Icon icon="lucide:map-pin" className="mt-0.5 mr-2 text-default-400" />
+                    <div>
+                      <div className="font-medium">{item.display_name.split(',')[0]}</div>
+                      <div className="text-small text-default-400 truncate">
+                        {formatLocationName(item.display_name.substring(item.display_name.indexOf(',') + 1))}
+                      </div>
+                    </div>
+                  </div>
+                </AutocompleteItem>
+              );
+            }}
           </Autocomplete>
         </div>
         
@@ -219,9 +334,10 @@ const SearchBar = ({ onSearch }: { onSearch: (params: SearchParams, coordinates?
           color="primary"
           className="min-w-0 px-3 md:px-8"
           isIconOnly
+          isLoading={isSearching}
           startContent={null}
         >
-          <Icon icon="lucide:search" />
+          {isSearching ? null : <Icon icon="lucide:search" />}
         </Button>
       </form>
     </div>
@@ -241,21 +357,33 @@ function debounce<F extends (...args: any[]) => any>(func: F, wait: number) {
   };
 }
 
-// Component for map center updating
-const SetMapCenter = ({ center }: { center: [number, number] }) => {
+// Improved Component for map center updating with better animation and zoom control
+const SetMapCenter = ({ center, searchedLocation = false }: { center: [number, number], searchedLocation?: boolean }) => {
   const map = useMap();
   
   useEffect(() => {
     if (center && map) {
       // Use a small timeout to ensure the map has fully initialized
       setTimeout(() => {
-        map.setView(center, 13);
+        // Use a higher zoom level for searched locations to provide better context
+        const zoomLevel = searchedLocation ? 14 : 13;
+        
+        // Use flyTo for smooth animation when moving to a searched location
+        if (searchedLocation) {
+          map.flyTo(center, zoomLevel, {
+            duration: 1.5, // Animation duration in seconds
+            easeLinearity: 0.25
+          });
+        } else {
+          // Standard setView for other center changes
+          map.setView(center, zoomLevel);
+        }
         
         // Force a map redraw to ensure changes take effect
         map.invalidateSize();
       }, 100);
     }
-  }, [center, map]);
+  }, [center, map, searchedLocation]);
   
   return null;
 };
@@ -307,18 +435,18 @@ interface House {
   baths: number;
 }
 
-// Geocoding service using OpenStreetMap Nominatim API
-const geocodeLocation = async (query: string): Promise<[number, number]> => {
+// Enhanced geocoding service using OpenStreetMap Nominatim API with better error handling
+const geocodeLocation = async (query: string): Promise<[number, number] | null> => {
   try {
     const results = await searchLocations(query);
     if (results && results.length > 0) {
+      console.log("Geocoding results for:", query, results);
       return [parseFloat(results[0].lat), parseFloat(results[0].lon)] as [number, number];
     }
-    // Default to New York if no match
-    return [40.7128, -74.0060] as [number, number];
+    return null; // Return null instead of default to better handle no results
   } catch (error) {
     console.error("Error geocoding location:", error);
-    return [40.7128, -74.0060] as [number, number]; // Default to NYC
+    return null;
   }
 };
 
@@ -454,14 +582,70 @@ const HouseCard = ({ house }: { house: House }) => (
   </Card>
 );
 
-export const Dashboard = () => {
+// Component to display a highlighted marker for searched locations
+const SearchedLocationMarker = ({ position }: { position: [number, number] }) => {
+  // Create a more subtle effect for the search point
+  return (
+    <>
+      {/* Single external highlight circle */}
+      <CircleMarker 
+        center={position} 
+        pathOptions={{ 
+          color: '#3b82f6', 
+          fillColor: '#3b82f6',
+          fillOpacity: 0.2,
+          weight: 1.5,
+          opacity: 0.8
+        }}
+        radius={25}
+      />
+      
+      {/* Core dot */}
+      <CircleMarker 
+        center={position} 
+        pathOptions={{ 
+          color: '#2563eb', 
+          fillColor: '#2563eb',
+          fillOpacity: 0.8,
+          weight: 1.5
+        }}
+        radius={6}
+      />
+      
+      {/* Add a marker with a label */}
+      <Marker 
+        position={position}
+        icon={L.divIcon({
+          html: '<div class="flex justify-center items-center w-full h-full"><div class="w-4 h-4 bg-primary rounded-full shadow-lg"></div></div>',
+          className: 'custom-marker-icon',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        })}
+      >
+        <Popup closeButton={false}>
+          <div className="text-center">
+            <p className="font-medium">Search Location</p>
+            <p className="text-small text-default-500">
+              {position[0].toFixed(4)}, {position[1].toFixed(4)}
+            </p>
+          </div>
+        </Popup>
+      </Marker>
+    </>
+  );
+};
+
+export const Map = () => {
   const [visibleHouses, setVisibleHouses] = useState<House[]>(sampleHouses);
   const [mapCenter, setMapCenter] = useState<[number, number]>([40.7128, -74.0060]); // Default: NYC
   const [selectedHouseId, setSelectedHouseId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useState<SearchParams>({ location: '', checkIn: '', checkOut: '' });
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [isSearchedLocation, setIsSearchedLocation] = useState(false);
   const location = useLocation();
   const [mapReady, setMapReady] = useState(false);
+  const [searchedCoordinates, setSearchedCoordinates] = useState<[number, number] | null>(null);
   
   // Make sure the map is rendered client-side only
   useEffect(() => {
@@ -480,41 +664,80 @@ export const Dashboard = () => {
     setSelectedHouseId(houseId);
   };
 
+  // Enhanced handle search with better error handling and user feedback
   const handleSearch = async (params: SearchParams, coordinates?: [number, number]) => {
     setSearchParams(params);
     setIsSearching(true);
+    setSearchError(null);
     
     try {
       if (coordinates) {
         // If we have direct coordinates from selected location
         console.log("Setting map center to:", coordinates);
         setMapCenter(coordinates);
+        setSearchedCoordinates(coordinates);
+        setIsSearchedLocation(true);
         
         // Filter houses based on proximity to the search location
         const filteredByLocation = sampleHouses.filter(house => {
           const [lat, lng] = house.location;
           const [searchLat, searchLng] = coordinates;
           
-          // Calculate approximate distance using Euclidean distance
-          // For a real app, use a proper geodesic distance calculation
-          const distance = Math.sqrt(
-            Math.pow(lat - searchLat, 2) + 
-            Math.pow(lng - searchLng, 2)
-          );
+          // Calculate approximate distance using Haversine formula for better accuracy
+          // This is a more accurate way to calculate distances on a sphere (Earth)
+          const R = 6371; // Earth's radius in km
+          const dLat = (lat - searchLat) * Math.PI / 180;
+          const dLon = (lng - searchLng) * Math.PI / 180;
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(searchLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distance = R * c;
           
-          // Show houses within approximately a 0.1 degree radius
-          return distance < 0.1;
+          // Show houses within approximately 5km radius
+          return distance < 5;
         });
         
         setVisibleHouses(filteredByLocation.length > 0 ? filteredByLocation : sampleHouses);
       } else if (params.location) {
         // Otherwise geocode the location
         const coords = await geocodeLocation(params.location);
-        console.log("Geocoded coordinates:", coords);
-        setMapCenter(coords);
+        if (coords) {
+          console.log("Geocoded coordinates:", coords);
+          setMapCenter(coords);
+          setSearchedCoordinates(coords);
+          setIsSearchedLocation(true);
+          
+          // Filter houses as above with the geocoded coordinates
+          const [searchLat, searchLng] = coords;
+          const filteredByLocation = sampleHouses.filter(house => {
+            const [lat, lng] = house.location;
+            
+            // Use the same Haversine formula
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat - searchLat) * Math.PI / 180;
+            const dLon = (lng - searchLng) * Math.PI / 180;
+            const a = 
+              Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(searchLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = R * c;
+            
+            return distance < 5; // 5km radius
+          });
+          
+          setVisibleHouses(filteredByLocation.length > 0 ? filteredByLocation : sampleHouses);
+        } else {
+          // No results found
+          setSearchError(`No locations found for "${params.location}"`);
+          // Keep showing all houses but don't move the map
+        }
       }
     } catch (error) {
       console.error('Error setting map location:', error);
+      setSearchError('Failed to search location. Please try again.');
     } finally {
       setIsSearching(false);
     }
@@ -545,7 +768,7 @@ export const Dashboard = () => {
     <>
       {/* Desktop view - Search bar below main header */}
       <div className="hidden md:block sticky-search">
-        <SearchBar onSearch={handleSearch} />
+        <SearchBar onSearch={handleSearch} isSearching={isSearching} />
       </div>
 
       <div style={{ height: contentHeight }} className="relative dashboard-content">
@@ -555,6 +778,11 @@ export const Dashboard = () => {
             <div className="mb-4">
               <h2 className="text-xl font-bold">Available Houses</h2>
               <p className="text-default-500">{visibleHouses.length} properties in view</p>
+              {searchError && (
+                <div className="mt-2 p-2 bg-danger-50 text-danger rounded">
+                  <p>{searchError}</p>
+                </div>
+              )}
             </div>
             {visibleHouses.map(house => (
               <HouseCard key={house.id} house={house} />
@@ -565,7 +793,6 @@ export const Dashboard = () => {
           <div className="relative h-full map-parent">
             {mapReady && (
               <MapContainer
-                key={`map-${mapCenter.join(',')}`}
                 center={mapCenter}
                 zoom={13}
                 className="h-full w-full map-container"
@@ -574,7 +801,11 @@ export const Dashboard = () => {
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
-                <SetMapCenter center={mapCenter} />
+                <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
+                
+                {/* Show visual marker for searched location */}
+                {searchedCoordinates && <SearchedLocationMarker position={searchedCoordinates} />}
+                
                 {sampleHouses.map(house => (
                   <Marker 
                     key={house.id} 
@@ -611,7 +842,6 @@ export const Dashboard = () => {
           <div className="h-full w-full map-parent">
             {mapReady && (
               <MapContainer
-                key={`mobile-map-${mapCenter.join(',')}`}
                 center={mapCenter}
                 zoom={13}
                 className="h-full w-full map-container"
@@ -620,7 +850,11 @@ export const Dashboard = () => {
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
-                <SetMapCenter center={mapCenter} />
+                <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
+                
+                {/* Show visual marker for searched location */}
+                {searchedCoordinates && <SearchedLocationMarker position={searchedCoordinates} />}
+                
                 {sampleHouses.map(house => (
                   <Marker 
                     key={house.id} 
@@ -648,13 +882,20 @@ export const Dashboard = () => {
                 <ZoomControls />
               </MapContainer>
             )}
+            
+            {/* Show search error on mobile */}
+            {searchError && (
+              <div className="absolute top-16 left-2 right-2 z-40 p-2 bg-danger-50 text-danger rounded shadow-md">
+                <p className="text-sm">{searchError}</p>
+              </div>
+            )}
           </div>
           
           {/* Integrated search and sheet wrapper - this will keep both components aligned */}
           <div className="mobile-ui-wrapper fixed top-0 left-0 right-0 bottom-16 z-30 flex flex-col pointer-events-none">
             {/* Search bar for mobile - now part of the same container as the sheet */}
             <div className="pointer-events-auto">
-              <SearchBar onSearch={handleSearch} />
+              <SearchBar onSearch={handleSearch} isSearching={isSearching} />
             </div>
             
             {/* Spacer to push sheet to bottom - will adjust automatically with viewport changes */}
