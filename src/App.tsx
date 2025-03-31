@@ -30,6 +30,7 @@ function App() {
           <Route path="faq" element={<Faq />} />
           <Route path="contact" element={<Contact />} />
           <Route path="verify-email" element={<VerifyEmail />} />
+          <Route path="property" element={<PropertyDetails />} />
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
             path="login" 
