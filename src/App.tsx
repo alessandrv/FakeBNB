@@ -12,7 +12,7 @@ import { Map } from './pages/Map';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Faq } from './pages/Faq';
-import { Contact } from './pages/Contact';
+import { Contact } from './pages/contact';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Chat } from './pages/Chat';
 import { ListingForm } from './pages/CreateHouse';

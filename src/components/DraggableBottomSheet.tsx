@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import { Button, Card, CardBody, Badge, Chip } from '@heroui/react';
@@ -12,11 +12,18 @@ interface House {
   baths?: number;
   rating?: number;
   reviews?: number;
+  location?: [number, number];
+}
+
+// Define the ref interface
+export interface DraggableBottomSheetHandle {
+  collapseSheet: () => void;
 }
 
 interface DraggableBottomSheetProps {
   houses: House[];
   onViewDetails?: (houseId: string) => void;
+  onFindOnMap?: (location: [number, number]) => void;
   topOffset?: number;
   inWrapper?: boolean; // New prop to indicate if sheet is in a wrapper
 }
@@ -25,12 +32,13 @@ interface DraggableBottomSheetProps {
 const COLLAPSED_HEIGHT = 60; // Reduced height to only show the count and "View All" button
 const SNAP_THRESHOLD = 100; // Threshold for snapping decision
 
-export const DraggableBottomSheet: React.FC<DraggableBottomSheetProps> = ({ 
+export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, DraggableBottomSheetProps>(({ 
   houses, 
   onViewDetails,
+  onFindOnMap,
   topOffset = 64, // Default to 64px if not provided
   inWrapper = false // Default to false for backward compatibility
-}) => {
+}, ref) => {
   // Get the exact searchbar height to ensure we don't go past it
   const searchBarRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -43,6 +51,15 @@ export const DraggableBottomSheet: React.FC<DraggableBottomSheetProps> = ({
   const [startHeight, setStartHeight] = useState<number | string>(COLLAPSED_HEIGHT);
   // Track the current available height
   const [maxHeight, setMaxHeight] = useState(0);
+  
+  // Expose the collapseSheet method to the parent component
+  useImperativeHandle(ref, () => ({
+    collapseSheet: () => {
+      setSheetState('collapsed');
+      setHeight(COLLAPSED_HEIGHT);
+      document.body.classList.remove('sheet-expanded');
+    }
+  }));
   
   // Define strict limits for the sheet's maximum height
   const calculateMaxHeight = useCallback(() => {
@@ -321,46 +338,72 @@ export const DraggableBottomSheet: React.FC<DraggableBottomSheetProps> = ({
             {houses.map((house) => (
               <Card key={house.id} className="mb-4">
                 <CardBody className="p-0">
-                  <Link 
-                    to={`/property/${house.id}`} 
-                    className="block"
-                    onClick={() => onViewDetails?.(house.id)}
-                  >
-                    <div className="relative">
-                      <img
-                        src={house.image}
-                        alt={house.address}
-                        className="w-full h-48 object-cover rounded-t-lg"
-                      />
-                      <Button
-                        isIconOnly
-                        className="absolute top-2 right-2"
-                        variant="flat"
-                        color="default"
+                  <div className="relative">
+                    <img
+                      src={house.image}
+                      alt={house.address}
+                      className="w-full h-48 object-cover rounded-t-lg"
+                    />
+                    <Button
+                      isIconOnly
+                      className="absolute top-2 right-2"
+                      variant="flat"
+                      color="default"
+                      size="sm"
+                    >
+                      <Icon icon="lucide:heart" />
+                    </Button>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-semibold">{house.address}</h3>
+                      <div className="flex items-center">
+                        <Icon icon="lucide:star" className="text-warning" />
+                        <span className="ml-1">{house.rating}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-small text-default-500 mt-2">
+                      <span>{house.beds} beds</span>
+                      <span>•</span>
+                      <span>{house.baths} baths</span>
+                    </div>
+                    <div className="mt-2 flex justify-between items-center">
+                      <span className="font-semibold">${house.price}/night</span>
+                      <span className="text-small text-default-500">{house.reviews} reviews</span>
+                    </div>
+                  </div>
+                  <div className="px-4 pb-4 flex flex-col gap-2">
+                    <Link 
+                      to={`/property/${house.id}`} 
+                      className="w-full"
+                      onClick={() => onViewDetails?.(house.id)}
+                    >
+                      <Button 
                         size="sm"
+                        variant="solid" 
+                        color="primary"
+                        className="w-full"
                       >
-                        <Icon icon="lucide:heart" />
+                        View details
                       </Button>
-                    </div>
-                    <div className="p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-semibold">{house.address}</h3>
-                        <div className="flex items-center">
-                          <Icon icon="lucide:star" className="text-warning" />
-                          <span className="ml-1">{house.rating}</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 text-small text-default-500 mt-2">
-                        <span>{house.beds} beds</span>
-                        <span>•</span>
-                        <span>{house.baths} baths</span>
-                      </div>
-                      <div className="mt-2 flex justify-between items-center">
-                        <span className="font-semibold">${house.price}/night</span>
-                        <span className="text-small text-default-500">{house.reviews} reviews</span>
-                      </div>
-                    </div>
-                  </Link>
+                    </Link>
+                    {onFindOnMap && house.location && (
+                      <Button 
+                        size="sm"
+                        variant="flat" 
+                        color="primary"
+                        startContent={<Icon icon="lucide:map-pin" />}
+                        onClick={() => {
+                          onFindOnMap(house.location!);
+                          onViewDetails?.(house.id);
+                          setSheetState('collapsed');
+                        }}
+                        className="w-full"
+                      >
+                        Find on map
+                      </Button>
+                    )}
+                  </div>
                 </CardBody>
               </Card>
             ))}
@@ -371,4 +414,4 @@ export const DraggableBottomSheet: React.FC<DraggableBottomSheetProps> = ({
       </div>
     </div>
   );
-}; 
+}); 

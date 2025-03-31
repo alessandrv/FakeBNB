@@ -30,6 +30,9 @@ export default {
 							700: "#388E3C",
 							800: "#2E7D32",
 							900: "#1B5E20",
+						},
+						focus: {
+							DEFAULT: "#4CAF50", // Your custom primary color (green)
 						}
 					}
 				},

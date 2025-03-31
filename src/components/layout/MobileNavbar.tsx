@@ -1,6 +1,5 @@
 import React from 'react';
-import { Header } from './Header';
-import { Footer } from './Footer';
+
 import { Icon } from '@iconify/react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -27,15 +26,12 @@ export const MobileNavbar = () => {
   return (
     <div className=" flex flex-col min-h-screen bg-background">
       {/* Header with Navbar - visibility controlled by CSS variables */}
-      <div className="site-header">
-        <Header />
-      </div>
+    
       
       <main className={`flex-grow pb-0`}>
         <Outlet />
       </main>
       
-      <Footer className="hidden md:block" />
       
       {/* Mobile bottom tabs - visibility controlled by --hide-navbar-mobile CSS variable */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-default-200 z-40 mobile-navbar">
