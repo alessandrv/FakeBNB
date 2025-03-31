@@ -11,7 +11,7 @@ import { BookingHistory } from './pages/BookingHistory';
 import { Map } from './pages/Map';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Faq } from './pages/Faq';
+import { Faq } from './pages/faq';
 import { Contact } from './pages/contact';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Chat } from './pages/Chat';
