@@ -280,7 +280,7 @@ const SearchBar = ({ onSearch, isSearching = false }: {
   );
 
   return (
-    <div className="bg-white shadow-md px-2 py-2 md:px-4 md:py-3 sticky top-0 z-50">
+    <div className="fixed top-3 left-2 right-2 bg-white rounded-xl shadow-lg px-2 py-2 md:px-4 md:py-3 z-50">
       <form onSubmit={handleSearch} className="flex items-center gap-1 md:gap-2">
         <div className="flex-1">
           <Autocomplete
@@ -720,7 +720,7 @@ const MapUpdater = ({ houses, onBoundsChange }: { houses: House[], onBoundsChang
 // New component for the floating Load Properties button
 const LoadPropertiesButton = ({ onClick, isLoading }: { onClick: () => void, isLoading?: boolean }) => {
   return (
-    <div className="fixed bottom-36 left-1/2 transform -translate-x-1/2 z-10">
+    <div className="fixed bottom-44 left-1/2 transform -translate-x-1/2 z-10">
       <Button 
         color="primary"
         className="shadow-lg rounded-full"
@@ -1351,7 +1351,7 @@ export const Map = () => {
   const searchBarHeight = 56; // Fixed height for searchbar
   
   // Adjust height for content - mobile only
-  const contentHeight = `calc(100vh - ${searchBarHeight}px)`;
+  const contentHeight = `calc(100vh`;
 
   // useEffect for handling CSS variable for hiding header
   useEffect(() => {
@@ -1374,7 +1374,7 @@ export const Map = () => {
         <Header />
       </div>
       {/* Desktop view - Search bar below main header */}
-      <div className="hidden md:block sticky-search">
+      <div className="hidden md:block">
         <SearchBar onSearch={handleSearch} isSearching={isSearching} />
       </div>
 
@@ -1471,6 +1471,10 @@ export const Map = () => {
         <div className="md:hidden h-full">
           {/* Full-screen map */}
           <div className="h-full w-full map-parent">
+            
+            {/* Floating Search Bar for mobile */}
+            <SearchBar onSearch={handleSearch} isSearching={isSearching} />
+            
             {mapReady && (
               <MapContainer
                 center={mapCenter}
@@ -1512,27 +1516,16 @@ export const Map = () => {
             )}
           </div>
           
-          {/* Integrated search and sheet wrapper - this will keep both components aligned */}
-          <div className="mobile-ui-wrapper fixed top-0 left-0 right-0 bottom-16 z-30 flex flex-col pointer-events-none">
-            {/* Search bar for mobile - now part of the same container as the sheet */}
-            <div className="pointer-events-auto">
-              <SearchBar onSearch={handleSearch} isSearching={isSearching} />
-            </div>
-            
-            {/* Spacer to push sheet to bottom - will adjust automatically with viewport changes */}
-            <div className="flex-grow"></div>
-            
-            {/* Draggable sheet - now in the same container as search bar */}
-            <div className="pointer-events-auto">
-              <DraggableBottomSheet 
-                ref={bottomSheetRef}
-                houses={visibleHouses.map(convertHouseForSheet)} 
-                onViewDetails={handleMarkerClick}
-                onFindOnMap={handleFindOnMap}
-                topOffset={searchBarHeight}
-                inWrapper={true}
-              />
-            </div>
+          {/* Draggable Bottom Sheet */}
+          <div className="pointer-events-auto fixed w-full px-4 bottom-[96px] z-10">
+            <DraggableBottomSheet 
+              ref={bottomSheetRef}
+              houses={visibleHouses.map(convertHouseForSheet)} 
+              onViewDetails={handleMarkerClick}
+              onFindOnMap={handleFindOnMap}
+              topOffset={searchBarHeight + 12} // Add 12px for the top-3 spacing
+              inWrapper={true}
+            />
           </div>
         </div>
       </div>

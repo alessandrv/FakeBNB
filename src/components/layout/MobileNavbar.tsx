@@ -35,7 +35,7 @@ export const MobileNavbar = () => {
       
       
       {/* Mobile bottom tabs - visibility controlled by --hide-navbar-mobile CSS variable */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 md:hidden z-40 w-full max-w-lg px-4">
+      <div className="fixed h-[92px] bottom-4 left-1/2 -translate-x-1/2 md:hidden z-40 w-full max-w-lg px-4">
       <div className="relative">
         {/* Dock Background with Glass Effect */}
         <div className="absolute inset-0 bg-background/60 backdrop-blur-md rounded-2xl border border-default-200/50 shadow-xl" />

@@ -29,7 +29,7 @@ interface DraggableBottomSheetProps {
 }
 
 // Constants for sheet heights - changed to only show header with count and button
-const COLLAPSED_HEIGHT = 60; // Reduced height to only show the count and "View All" button
+const COLLAPSED_HEIGHT = 80; // Reduced height to only show the count and "View All" button
 const SNAP_THRESHOLD = 100; // Threshold for snapping decision
 
 export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, DraggableBottomSheetProps>(({ 
@@ -66,14 +66,18 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
     const viewportHeight = window.innerHeight;
     
     if (inWrapper) {
-      // When in wrapper, we only need to account for bottom navbar
-      // The wrapper handles positioning relative to search bar
-      return viewportHeight - 64; // just bottom navbar height
+      // When in wrapper, we need to account for search bar (56px) at the top
+      // and bottom navbar (64px) at the bottom
+      const searchBarHeight = 82; // Search bar height (56px) + top spacing (12px) + padding
+      const bottomNavHeight = 96;
+      
+      // Reserve space for search bar at top plus bottom navbar
+      return viewportHeight - searchBarHeight - bottomNavHeight;
     } else {
       // Get current search bar position
-      const searchBar = document.querySelector('.sticky') as HTMLElement;
-      const searchBarHeight = searchBar ? searchBar.offsetHeight : topOffset;
-      const bottomNavHeight = 64; // Height of bottom nav
+      const searchBar = document.querySelector('.fixed[class*="top-3"]') as HTMLElement; // Updated selector for floating search bar
+      const searchBarHeight = searchBar ? searchBar.offsetHeight + 12 : topOffset; // Add top-3 (12px) to the height
+      const bottomNavHeight = 96; // Height of bottom nav
       
       // Calculate height from bottom of search bar to top of bottom nav
       return viewportHeight - searchBarHeight - bottomNavHeight;
@@ -106,7 +110,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
     // Calculate new height based on drag
     if (typeof startHeight === 'number') {
       newHeight = Math.max(COLLAPSED_HEIGHT, startHeight - deltaY);
-      // Strict enforcement of maximum height
+      // Strict enforcement of maximum height - never exceed maxHeight
       newHeight = Math.min(newHeight, maxHeight);
     } else {
       // Convert string height to numeric
@@ -144,8 +148,8 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
       const shouldGoFull = height > COLLAPSED_HEIGHT + SNAP_THRESHOLD;
       if (shouldGoFull) {
         setSheetState('full');
-        // Explicitly set height to maxHeight
-        setHeight(maxHeight);
+        // Explicitly set height to maxHeight but never exceed it
+        setHeight(Math.min(maxHeight, maxHeight)); // Ensure we never exceed maxHeight
         document.body.classList.add('sheet-expanded');
       } else {
         setSheetState('collapsed');
@@ -154,7 +158,8 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
       }
     } else {
       setSheetState('full');
-      setHeight(maxHeight);
+      // Explicitly set height to maxHeight but never exceed it
+      setHeight(Math.min(maxHeight, maxHeight)); // Ensure we never exceed maxHeight
       document.body.classList.add('sheet-expanded');
     }
   };
@@ -251,7 +256,9 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
         position: 'relative' as const,
         bottom: 0,
         height: typeof height === 'number' ? `${height}px` : height,
-        maxHeight: `${maxHeight}px`,
+        maxHeight: `${maxHeight}px`, // Enforce the calculated maxHeight
+        // Add overflow handling to prevent content from going beyond maxHeight
+        overflow: 'hidden'
       };
     } else {
       // Standalone mode - position fixed to viewport
@@ -261,23 +268,26 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
         left: 0,
         right: 0,
         height: typeof height === 'number' ? `${height}px` : height,
-        maxHeight: `${maxHeight}px`,
+        maxHeight: `${maxHeight}px`, // Enforce the calculated maxHeight
         zIndex: 30,
+        // Add overflow handling to prevent content from going beyond maxHeight
+        overflow: 'hidden'
       };
     }
   };
 
   return (
+    
     <div
       ref={sheetRef}
-      className={`bg-white shadow-lg rounded-t-xl draggable-sheet ${
+      className={` shadow-lg rounded-t-xl draggable-sheet bottom-0 absolute   inset-0 bg-background/60 backdrop-blur-md  border border-default-200/50  ${
         isDragging ? 'dragging' : 'transition-all duration-300 ease-out'
       } ${sheetState === 'full' ? 'sheet-full' : ''} ${inWrapper ? 'in-wrapper' : 'fixed left-0 right-0'}`}
       style={getPositionStyle()}
     >
       {/* Drag handle */}
       <div
-        className="w-full h-6 flex items-center justify-center cursor-grab  top-0 bg-white z-10"
+        className="w-full h-6 flex items-center justify-center cursor-grab  top-0 "
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -290,7 +300,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
       </div>
 
       {/* Header with count badge and expand button - always visible */}
-      <div className="px-4 pb-2 flex justify-between items-center rounded-full" >
+      <div className="px-4 pb-2 flex justify-between items-center rounded-full  " >
         <div className="flex items-center px-0">
           <span className="inline-flex items-center justify-center h-6 px-2 rounded-full bg-primary-100 text-primary-700 text-xs font-medium ">
             {houses.length} {houses.length === 1 ? 'property' : 'properties'}
