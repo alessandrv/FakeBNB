@@ -29,7 +29,7 @@ interface DraggableBottomSheetProps {
 }
 
 // Constants for sheet heights - changed to only show header with count and button
-const COLLAPSED_HEIGHT = 80; // Reduced height to only show the count and "View All" button
+const COLLAPSED_HEIGHT = 70; // More compact height for collapsed state
 const SNAP_THRESHOLD = 100; // Threshold for snapping decision
 
 export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, DraggableBottomSheetProps>(({ 
@@ -285,9 +285,9 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
       } ${sheetState === 'full' ? 'sheet-full' : ''} ${inWrapper ? 'in-wrapper' : 'fixed left-0 right-0'}`}
       style={getPositionStyle()}
     >
-      {/* Drag handle */}
+      {/* Drag handle - smaller */}
       <div
-        className="w-full h-6 flex items-center justify-center cursor-grab  top-0 "
+        className="w-full h-4 flex items-center justify-center cursor-grab top-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -296,13 +296,13 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <div className="w-16 h-1.5 rounded-full bg-gray-300"></div>
+        <div className="w-12 h-1 rounded-full bg-gray-300"></div>
       </div>
 
-      {/* Header with count badge and expand button - always visible */}
-      <div className="px-4 pb-2 flex justify-between items-center rounded-full  " >
-        <div className="flex items-center px-0">
-          <span className="inline-flex items-center justify-center h-6 px-2 rounded-full bg-primary-100 text-primary-700 text-xs font-medium ">
+      {/* Header with count badge and expand button - more compact */}
+      <div className="px-3 pb-1 flex justify-between items-center" >
+        <div className="flex items-center">
+          <span className="inline-flex items-center justify-center h-5 px-2 rounded-full bg-primary-100 text-primary-700 text-xs font-medium">
             {houses.length} {houses.length === 1 ? 'property' : 'properties'}
           </span>
         </div>
@@ -312,8 +312,8 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
               color="primary" 
               variant="flat" 
               onClick={toggleSheetState}
-              className="font-medium"
-              startContent={<Icon icon="lucide:map" />}
+              className="font-medium text-xs h-7 px-2"
+              startContent={<Icon icon="lucide:map" className="text-xs" />}
             >
               Show Map
             </Button>
@@ -323,19 +323,19 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
           variant="light"
           size="sm"
           onClick={toggleSheetState}
-          className="text-xs px-0"
+          className="text-xs px-1 h-7"
         >
           {sheetState === 'collapsed' ? 'View All' : 'Collapse'}
-          <Icon icon={sheetState === 'collapsed' ? 'lucide:chevron-up' : 'lucide:chevron-down'} className="ml-1" />
+          <Icon icon={sheetState === 'collapsed' ? 'lucide:chevron-up' : 'lucide:chevron-down'} className="ml-1 text-xs" />
         </Button>
       </div>
 
       {/* Content - only visible when expanded */}
       <div 
-        className={`overflow-y-auto px-4 pb-4 ${
+        className={`overflow-y-auto px-2 pb-2 ${
           sheetState === 'collapsed' 
             ? 'hidden' // Hide completely when collapsed
-            : 'h-[calc(100%-70px)]'
+            : 'h-[calc(100%-55px)]' // Adjusted to the new more compact header
         }`}
       >
         {houses.length === 0 ? (
@@ -346,73 +346,84 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
         ) : (
           <>
             {houses.map((house) => (
-              <Card key={house.id} className="mb-4">
+              <Card key={house.id} className="mb-3">
                 <CardBody className="p-0">
-                  <div className="relative">
-                    <img
-                      src={house.image}
-                      alt={house.address}
-                      className="w-full h-48 object-cover rounded-t-lg"
-                    />
-                    <Button
-                      isIconOnly
-                      className="absolute top-2 right-2"
-                      variant="flat"
-                      color="default"
-                      size="sm"
-                    >
-                      <Icon icon="lucide:heart" />
-                    </Button>
-                  </div>
-                  <div className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold">{house.address}</h3>
-                      <div className="flex items-center">
-                        <Icon icon="lucide:star" className="text-warning" />
-                        <span className="ml-1">{house.rating}</span>
+                  <div className="flex flex-row">
+                    {/* Left: Smaller Image */}
+                    <div className="relative w-1/3">
+                      <img
+                        src={house.image}
+                        alt={house.address}
+                        className="h-full w-full object-cover rounded-l-lg"
+                      />
+                      <Button
+                        isIconOnly
+                        className="absolute top-1 right-1"
+                        variant="flat"
+                        color="default"
+                        size="sm"
+                      >
+                        <Icon icon="lucide:heart" className="text-xs" />
+                      </Button>
+                    </div>
+                    
+                    {/* Right: Content */}
+                    <div className="w-2/3 p-2">
+                      <div className="flex justify-between items-start mb-1">
+                        <h3 className="font-semibold text-sm truncate pr-2">{house.address}</h3>
+                        <div className="flex items-center">
+                          <Icon icon="lucide:star" className="text-warning text-xs" />
+                          <span className="ml-1 text-xs">{house.rating}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Amenities */}
+                      <div className="flex gap-1 text-xs text-default-500">
+                        <span>{house.beds} beds</span>
+                        <span>•</span>
+                        <span>{house.baths} baths</span>
+                      </div>
+                      
+                      {/* Price and Reviews */}
+                      <div className="mt-1 flex justify-between items-center">
+                        <span className="font-semibold text-sm">${house.price}/month</span>
+                        <span className="text-xs text-default-500">{house.reviews} reviews</span>
+                      </div>
+                      
+                      {/* Buttons in a row */}
+                      <div className="mt-2 flex gap-1 justify-between">
+                        <Link 
+                          to={`/property/${house.id}`} 
+                          className="flex-1"
+                          onClick={() => onViewDetails?.(house.id)}
+                        >
+                          <Button 
+                            size="sm"
+                            variant="solid" 
+                            color="primary"
+                            className="w-full text-xs h-8"
+                          >
+                            View details
+                          </Button>
+                        </Link>
+                        {onFindOnMap && house.location && (
+                          <Button 
+                            size="sm"
+                            variant="flat" 
+                            color="primary"
+                            className="flex-1 text-xs h-8"
+                            startContent={<Icon icon="lucide:map-pin" className="text-xs" />}
+                            onClick={() => {
+                              onFindOnMap(house.location!);
+                              onViewDetails?.(house.id);
+                              setSheetState('collapsed');
+                            }}
+                          >
+                            Find on map
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex gap-2 text-small text-default-500 mt-2">
-                      <span>{house.beds} beds</span>
-                      <span>•</span>
-                      <span>{house.baths} baths</span>
-                    </div>
-                    <div className="mt-2 flex justify-between items-center">
-                      <span className="font-semibold">${house.price}/night</span>
-                      <span className="text-small text-default-500">{house.reviews} reviews</span>
-                    </div>
-                  </div>
-                  <div className="px-4 pb-4 flex flex-col gap-2">
-                    <Link 
-                      to={`/property/${house.id}`} 
-                      className="w-full"
-                      onClick={() => onViewDetails?.(house.id)}
-                    >
-                      <Button 
-                        size="sm"
-                        variant="solid" 
-                        color="primary"
-                        className="w-full"
-                      >
-                        View details
-                      </Button>
-                    </Link>
-                    {onFindOnMap && house.location && (
-                      <Button 
-                        size="sm"
-                        variant="flat" 
-                        color="primary"
-                        startContent={<Icon icon="lucide:map-pin" />}
-                        onClick={() => {
-                          onFindOnMap(house.location!);
-                          onViewDetails?.(house.id);
-                          setSheetState('collapsed');
-                        }}
-                        className="w-full"
-                      >
-                        Find on map
-                      </Button>
-                    )}
                   </div>
                 </CardBody>
               </Card>

@@ -17,22 +17,22 @@ export default {
 				light: {
 					colors: {
 						primary: {
-							DEFAULT: "#4CAF50", // Your custom primary color (green)
+							DEFAULT: "#FFA000", // Your custom primary color (amber/orange)
 							foreground: "#FFFFFF", // Text color on primary backgrounds
 							// You can also define the full color palette (50-900)
-							50: "#E8F5E9",
-							100: "#C8E6C9",
-							200: "#A5D6A7",
-							300: "#81C784",
-							400: "#66BB6A",
-							500: "#4CAF50", // Your main primary color (green)
-							600: "#43A047",
-							700: "#388E3C",
-							800: "#2E7D32",
-							900: "#1B5E20",
+							50: "#FFF8E1",
+							100: "#FFECB3",
+							200: "#FFE082",
+							300: "#FFD54F",
+							400: "#FFCA28",
+							500: "#FFC107", // Amber
+							600: "#FFB300",
+							700: "#FFA000", // Your main primary color (amber/orange)
+							800: "#FF8F00",
+							900: "#FF6F00",
 						},
 						focus: {
-							DEFAULT: "#4CAF50", // Your custom primary color (green)
+							DEFAULT: "#FFA000", // Your custom primary color (amber/orange)
 						}
 					}
 				},
