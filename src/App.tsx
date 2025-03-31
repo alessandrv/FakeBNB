@@ -16,6 +16,7 @@ import { Contact } from './pages/contact';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Chat } from './pages/Chat';
 import { ListingForm } from './pages/CreateHouse';
+import { Spacer } from '@heroui/react';
 
 function App() {
 
@@ -98,9 +99,9 @@ function App() {
             </ProtectedRoute>
           } 
         />
-        
         {/* 404 Page */}
       </Routes>
+
     </AuthProvider>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody, CardHeader, Input, Button, Tabs, Tab, Avatar, Spinner, Badge, Divider, User, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip } from '@heroui/react';
+import { Card, CardBody, CardHeader, Input, Button, Tabs, Tab, Avatar, Spinner, Badge, Divider, User, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip, Spacer } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
@@ -723,6 +723,8 @@ export const Profile = () => {
               )}
             </CardBody>
           </Card>
+          <Spacer y={4} />
+
         </div>
       </div>
     </div>

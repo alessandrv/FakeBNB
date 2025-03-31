@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody, CardFooter, Button, Input } from '@heroui/react';
+import { Card, CardBody, CardFooter, Button, Input, Spacer } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Footer } from '../components/layout/Footer';
@@ -241,6 +241,7 @@ export const Home = () => {
         </div>
       </section>
       <Footer className="hidden md:block" />
+      <Spacer y={16} />
 
     </div>
   );
