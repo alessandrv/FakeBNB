@@ -18,11 +18,14 @@ import { Chat } from './pages/Chat';
 import { ListingForm } from './pages/CreateHouse';
 
 function App() {
+
   return (
     <AuthProvider>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<MobileNavbar />}>
+      
+      
+          <Route path="/" element={<MobileNavbar/>}>
           <Route index element={<Home />} />
           <Route path="properties/:id" element={<PropertyDetails />} />
           <Route path="search" element={<SearchResults />} />
