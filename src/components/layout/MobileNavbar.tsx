@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Avatar } from '@heroui/react';
+import { motion } from 'framer-motion';
 
 // Function to check if a path is active
 const isActive = (path: string, currentPath: string) => {
@@ -34,74 +35,96 @@ export const MobileNavbar = () => {
       
       
       {/* Mobile bottom tabs - visibility controlled by --hide-navbar-mobile CSS variable */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-default-200 z-40 mobile-navbar">
-        <div className={`grid ${isAuthenticated ? 'grid-cols-4' : 'grid-cols-3'} h-16`} style={{ display: 'var(--hide-navbar-mobile, grid)' }}>
-          {/* Home tab - always visible */}
-          <Link
-            to="/"
-            className={`flex flex-col items-center justify-center space-y-1 ${
-              isActive('/', path) ? 'text-primary' : 'text-default-500'
-            }`}
-          >
-            <Icon icon="lucide:home" className="text-xl" />
-            <span className="text-xs">Home</span>
-          </Link>
-          
-          {/* Map tab - always visible */}
-          <Link
-            to="/map"
-            className={`flex flex-col items-center justify-center space-y-1 ${
-              isActive('/map', path) || isActive('/dashboard', path) ? 'text-primary' : 'text-default-500'
-            }`}
-          >
-            <Icon icon="lucide:map" className="text-xl" />
-            <span className="text-xs">Map</span>
-          </Link>
-          
-          {/* Chat tab - only visible when logged in */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 md:hidden z-40 w-11/12 max-w-lg">
+      <div className="relative">
+        {/* Dock Background with Glass Effect */}
+        <div className="absolute inset-0 bg-background/60 backdrop-blur-md rounded-2xl border border-default-200/50 shadow-xl" />
+        
+        {/* Dock Items Container */}
+        <div className={`relative grid ${isAuthenticated ? 'grid-cols-4' : 'grid-cols-3'} gap-2 p-3`}>
+          {/* Home Icon */}
+          <motion.div whileHover={{ scale: 1.2 }} transition={{ type: "spring", stiffness: 400 }}>
+            <Link
+              to="/"
+              className={`flex flex-col items-center justify-center space-y-1 p-2 rounded-xl transition-colors ${
+                isActive('/', path) ? 'text-primary bg-primary/10' : 'text-default-500 hover:bg-default-100'
+              }`}
+            >
+              <Icon icon="lucide:home" className="text-2xl" />
+              <span className="text-xs font-medium">Home</span>
+            </Link>
+          </motion.div>
+
+          {/* Map Icon */}
+          <motion.div whileHover={{ scale: 1.2 }} transition={{ type: "spring", stiffness: 400 }}>
+            <Link
+              to="/map"
+              className={`flex flex-col items-center justify-center space-y-1 p-2 rounded-xl transition-colors ${
+                isActive('/map', path) || isActive('/dashboard', path) 
+                  ? 'text-primary bg-primary/10' 
+                  : 'text-default-500 hover:bg-default-100'
+              }`}
+            >
+              <Icon icon="lucide:map" className="text-2xl" />
+              <span className="text-xs font-medium">Map</span>
+            </Link>
+          </motion.div>
+
+          {/* Chat Icon - Only for authenticated users */}
           {isAuthenticated && (
-            <Link
-              to="/chat"
-              className={`flex flex-col items-center justify-center space-y-1 ${
-                isActive('/chat', path) ? 'text-primary' : 'text-default-500'
-              }`}
-            >
-              <Icon icon="lucide:message-circle" className="text-xl" />
-              <span className="text-xs">Chat</span>
-            </Link>
+            <motion.div whileHover={{ scale: 1.2 }} transition={{ type: "spring", stiffness: 400 }}>
+              <Link
+                to="/chat"
+                className={`flex flex-col items-center justify-center space-y-1 p-2 rounded-xl transition-colors ${
+                  isActive('/chat', path) 
+                    ? 'text-primary bg-primary/10' 
+                    : 'text-default-500 hover:bg-default-100'
+                }`}
+              >
+                <Icon icon="lucide:message-circle" className="text-2xl" />
+                <span className="text-xs font-medium">Chat</span>
+              </Link>
+            </motion.div>
           )}
-          
-          {/* Profile tab - show profile pic when logged in, or login icon */}
-          {isAuthenticated ? (
-            <Link
-              to="/profile"
-              className={`flex flex-col items-center justify-center space-y-1 ${
-                isActive('/profile', path) ? 'text-primary' : 'text-default-500'
-              }`}
-            >
-              <Avatar 
-                src={user?.profilePic} 
-                name={userInitials}
-                size="sm"
-                isBordered={isActive('/profile', path)}
-                color={isActive('/profile', path) ? "primary" : "default"}
-                className="text-tiny"
-              />
-              <span className="text-xs">Profile</span>
-            </Link>
-          ) : (
-            <Link
-              to="/login"
-              className={`flex flex-col items-center justify-center space-y-1 ${
-                isActive('/login', path) ? 'text-primary' : 'text-default-500'
-              }`}
-            >
-              <Icon icon="lucide:log-in" className="text-xl" />
-              <span className="text-xs">Login</span>
-            </Link>
-          )}
+
+          {/* Profile/Login Icon */}
+          <motion.div whileHover={{ scale: 1.2 }} transition={{ type: "spring", stiffness: 400 }}>
+            {isAuthenticated ? (
+              <Link
+                to="/profile"
+                className={`flex flex-col items-center justify-center space-y-1 p-2 rounded-xl transition-colors ${
+                  isActive('/profile', path) 
+                    ? 'text-primary bg-primary/10' 
+                    : 'text-default-500 hover:bg-default-100'
+                }`}
+              >
+                <Avatar 
+                  src={user?.profilePic} 
+                  name={userInitials}
+                  size="sm"
+                  isBordered={isActive('/profile', path)}
+                  color={isActive('/profile', path) ? "primary" : "default"}
+                  className="text-tiny"
+                />
+                <span className="text-xs font-medium">Profile</span>
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className={`flex flex-col items-center justify-center space-y-1 p-2 rounded-xl transition-colors ${
+                  isActive('/login', path) 
+                    ? 'text-primary bg-primary/10' 
+                    : 'text-default-500 hover:bg-default-100'
+                }`}
+              >
+                <Icon icon="lucide:log-in" className="text-2xl" />
+                <span className="text-xs font-medium">Login</span>
+              </Link>
+            )}
+          </motion.div>
         </div>
       </div>
+    </div>
     </div>
   );
 }; 
