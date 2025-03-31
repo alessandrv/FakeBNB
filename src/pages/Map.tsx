@@ -1047,24 +1047,15 @@ const MapOptions = () => {
 };
 
 // Map Provider component to make the map accessible via context
-const MapProvider: React.FC<{
-  children: React.ReactNode,
-  isDesktop?: boolean,
-  onMapReady?: (map: L.Map) => void
-}> = ({ children, isDesktop, onMapReady }) => {
+const MapProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const map = useMap();
   
   useEffect(() => {
     if (map) {
-      console.log(`🗺️ Map is now available in context${isDesktop ? ' (Desktop)' : ' (Mobile)'}`);
+      console.log("🗺️ Map is now available in context");
       (window as any).leafletMap = map;
-      
-      // If this is the desktop map and we have a callback, call it
-      if (isDesktop && onMapReady) {
-        onMapReady(map);
-      }
     }
-  }, [map, isDesktop, onMapReady]);
+  }, [map]);
   
   return (
     <MapContext.Provider value={map}>
@@ -1090,7 +1081,6 @@ export const Map = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [markersLoaded, setMarkersLoaded] = useState(false); // Track if markers have been loaded
   const bottomSheetRef = useRef<DraggableBottomSheetHandle>(null);
-  const desktopMapRef = useRef<L.Map | null>(null); // Direct reference to desktop map
   
   // Make sure the map is rendered client-side only
   useEffect(() => {
@@ -1185,25 +1175,19 @@ export const Map = () => {
     // Wait slightly longer to ensure popup is closed and any animations complete
     setTimeout(() => {
       try {
-        // First try to get the map from our direct desktop reference (most reliable)
-        let mapToUse = desktopMapRef.current;
+        // Get the live map instance to use for bounds checking
+        const leafletMap = (window as any).leafletMap;
         
-        // If that's not available, fall back to the global reference
-        if (!mapToUse) {
-          console.log("⚠️ Desktop map ref not available, trying global reference");
-          mapToUse = (window as any).leafletMap;
-        }
-        
-        // Check if we have a valid map instance
-        if (mapToUse) {
-          console.log("🗺️ Valid map instance found for refresh");
+        // Check if the leafletMap reference is available
+        if (leafletMap) {
+          console.log("🗺️ Using direct leafletMap reference for refresh");
           
           // Get the current bounds DIRECTLY from the map - not from our state
-          const liveBounds = mapToUse.getBounds();
+          const liveBounds = leafletMap.getBounds();
           
           if (!liveBounds || !liveBounds.isValid()) {
-            console.error("❌ Invalid bounds from map");
-            throw new Error("Invalid bounds from map");
+            console.error("❌ Invalid bounds from leafletMap");
+            throw new Error("Invalid bounds from leafletMap");
           }
           
           console.log("🗺️ LIVE map bounds when refreshing:", {
@@ -1459,13 +1443,7 @@ export const Map = () => {
                 style={{ height: '100%', width: '100%' }}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <MapProvider 
-                  isDesktop={true}
-                  onMapReady={(map) => {
-                    console.log("🔍 Desktop map reference captured");
-                    desktopMapRef.current = map;
-                  }}
-                >
+                <MapProvider>
                   <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
                   <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
                   <MapOptions />
@@ -1502,7 +1480,7 @@ export const Map = () => {
                 style={{ height: '100%', width: '100%' }}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <MapProvider isDesktop={false}>
+                <MapProvider>
                   <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
                   <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
                   <MapOptions />
