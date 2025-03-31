@@ -7,6 +7,9 @@ import 'leaflet/dist/leaflet.css';
 import { DraggableBottomSheet, DraggableBottomSheetHandle } from '../components/DraggableBottomSheet';
 import { Link, useLocation } from 'react-router-dom';
 
+// Import properties from data file
+import { properties } from '../data/properties';
+
 // Fix marker icons in Leaflet
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -534,6 +537,29 @@ interface House {
   baths: number;
 }
 
+// Convert Property type to House type for use in the map
+const convertPropertiesToHouses = (): House[] => {
+  return properties.map(property => ({
+    id: property.id,
+    title: property.title,
+    price: property.price,
+    rating: property.rating,
+    reviews: property.reviews,
+    // Create an array with the single image
+    images: [property.image],
+    // Convert the location object to an array format
+    location: [property.location.lat, property.location.lng],
+    // Use the title or description as the address if no dedicated address field
+    address: property.description.split('.')[0], // Use the first sentence of description as address
+    // Add default values for properties not in the data file
+    beds: Math.floor(Math.random() * 4) + 1, // Random number of beds between 1-4
+    baths: Math.floor(Math.random() * 3) + 1 // Random number of baths between 1-3
+  }));
+};
+
+// Replace the sampleHouses array with the converted properties
+const sampleHouses: House[] = convertPropertiesToHouses();
+
 // Enhanced geocoding service using OpenStreetMap Nominatim API with better error handling
 const geocodeLocation = async (query: string): Promise<[number, number] | null> => {
   try {
@@ -564,70 +590,6 @@ const convertHouseForSheet = (house: House) => {
     location: house.location
   };
 };
-
-const sampleHouses: House[] = [
-  {
-    id: '1',
-    title: 'Modern Downtown Apartment',
-    price: 150,
-    rating: 4.8,
-    reviews: 124,
-    images: ['https://picsum.photos/seed/house1/400/300'],
-    location: [40.7128, -74.0060],
-    address: 'Downtown Manhattan, NY',
-    beds: 2,
-    baths: 1
-  },
-  {
-    id: '2',
-    title: 'Luxury Penthouse with View',
-    price: 300,
-    rating: 4.9,
-    reviews: 85,
-    images: ['https://picsum.photos/seed/house2/400/300'],
-    location: [40.7589, -73.9850],
-    address: 'Midtown East, NY',
-    beds: 3,
-    baths: 2
-  },
-  {
-    id: '3',
-    title: 'Cozy Brooklyn Brownstone',
-    price: 175,
-    rating: 4.7,
-    reviews: 62,
-    images: ['https://picsum.photos/seed/house3/400/300'],
-    location: [40.6782, -73.9442],
-    address: 'Park Slope, Brooklyn, NY',
-    beds: 1,
-    baths: 1
-  },
-  {
-    id: '4',
-    title: 'Queens Family Home',
-    price: 220,
-    rating: 4.6,
-    reviews: 43,
-    images: ['https://picsum.photos/seed/house4/400/300'],
-    location: [40.7282, -73.7949],
-    address: 'Astoria, Queens, NY',
-    beds: 3,
-    baths: 2
-  },
-  {
-    id: '5',
-    title: 'Central Park View Studio',
-    price: 275,
-    rating: 4.8,
-    reviews: 91,
-    images: ['https://picsum.photos/seed/house5/400/300'],
-    location: [40.7812, -73.9665],
-    address: 'Upper East Side, NY',
-    beds: 1,
-    baths: 1
-  },
-  // Add more sample houses as needed
-];
 
 // Create a context for direct map access
 const MapContext = React.createContext<L.Map | null>(null);
@@ -1066,7 +1028,7 @@ const MapProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
 
 export const Map = () => {
   const [visibleHouses, setVisibleHouses] = useState<House[]>([]);  // Start with empty array
-  const [mapCenter, setMapCenter] = useState<[number, number]>([40.7128, -74.0060]); // Default: NYC
+  const [mapCenter, setMapCenter] = useState<[number, number]>([41.9028, 12.4964]); // Default: Rome, Italy
   const [selectedHouseId, setSelectedHouseId] = useState<string | null>(null);
   const [findOnMapTimestamp, setFindOnMapTimestamp] = useState<number>(0); // Timestamp for "Find on map" clicks
   const [searchParams, setSearchParams] = useState<SearchParams>({ location: '', checkIn: '', checkOut: '' });
@@ -1437,7 +1399,7 @@ export const Map = () => {
             {mapReady && (
               <MapContainer
                 center={mapCenter}
-                zoom={13}
+                zoom={6}
                 className="h-full w-full map-container"
                 zoomControl={false}
                 style={{ height: '100%', width: '100%' }}
@@ -1478,7 +1440,7 @@ export const Map = () => {
             {mapReady && (
               <MapContainer
                 center={mapCenter}
-                zoom={13}
+                zoom={6}
                 className="h-full w-full map-container"
                 zoomControl={false}
                 style={{ height: '100%', width: '100%' }}
