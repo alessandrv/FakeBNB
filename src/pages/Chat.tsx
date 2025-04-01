@@ -35,6 +35,7 @@ export const Chat: React.FC = () => {
   const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pendingMessages = useRef<Set<number>>(new Set()); // Track pending message IDs
+  const processedMessageIds = useRef<Set<number>>(new Set()); // Track all processed message IDs
   
   // Effect for responsive layout
   useEffect(() => {
@@ -266,13 +267,28 @@ export const Chat: React.FC = () => {
       
       console.log('Received new message in Chat component:', message);
       
+      // Skip processing if this is your own message - you'll handle it in handleSendMessage or handleMessageSent
+      if (message.sender_id === user?.id) {
+        console.log('Skipping own message in handleNewMessage');
+        return;
+      }
+      
       // Map the message to our frontend format
       const mappedMessage = mapMessage(message);
+      
+      // Check if we've already processed this message ID
+      if (processedMessageIds.current.has(mappedMessage.id)) {
+        console.log('Skipping already processed message:', mappedMessage.id);
+        return;
+      }
+      
+      // Mark as processed
+      processedMessageIds.current.add(mappedMessage.id);
       
       // Update messages if it's for the current conversation
       if (message.conversation_id === parseInt(conversationId || '0')) {
         setMessages(prev => {
-          // Check if message already exists
+          // Extra check if message already exists
           const exists = prev.some(m => m.id === mappedMessage.id);
           if (!exists) {
             console.log('Adding new message to conversation:', mappedMessage);
@@ -282,10 +298,8 @@ export const Chat: React.FC = () => {
         });
         
         // If the message is from someone else, mark as read
-        if (message.sender_id !== user?.id) {
-          markConversationAsRead(message.conversation_id);
-          chatService.markConversationAsRead(message.conversation_id).catch(console.error);
-        }
+        markConversationAsRead(message.conversation_id);
+        chatService.markConversationAsRead(message.conversation_id).catch(console.error);
         
         // Clear typing indicator for sender
         setTypingUsers(prev => {
@@ -315,7 +329,7 @@ export const Chat: React.FC = () => {
             // If active conversation, mark as read
             const newUnreadCount = parseInt(conversationId || '0') === c.id 
               ? 0 
-              : c.unreadCount + (message.sender_id !== user?.id ? 1 : 0);
+              : c.unreadCount + 1; // Always increment for others' messages
             
             return {
               ...c,
@@ -341,6 +355,15 @@ export const Chat: React.FC = () => {
     const handleMessageSent = (message: any) => {
       console.log('Message sent confirmation:', message);
       if (!isComponentMounted) return;
+      
+      // Check if we've already processed this message ID
+      if (processedMessageIds.current.has(message.id)) {
+        console.log('Skipping already processed message in handleMessageSent:', message.id);
+        return;
+      }
+      
+      // Mark as processed
+      processedMessageIds.current.add(message.id);
       
       // Update messages if it's for the current conversation
       if (message.conversation_id === parseInt(conversationId || '0')) {
@@ -502,29 +525,30 @@ export const Chat: React.FC = () => {
     try {
       setSendingMessage(true);
       
-      // Send via socket first for real-time delivery
-      sendMessage(parseInt(conversationId), content.trim());
+      // Generate a temporary ID for immediate UI feedback
+      const tempId = Date.now();
       
-      // Then send via API for persistence
-      const sentMessage = await chatService.sendMessage(parseInt(conversationId), content.trim());
-      
-      // Create message with the actual ID from the server
-      const newMessage: Message = {
-        id: sentMessage.id,
+      // Create a temporary message for UI display
+      const tempMessage: Message = {
+        id: tempId,
         conversationId: parseInt(conversationId),
         senderId: user.id,
         content: content.trim(),
-        timestamp: new Date(sentMessage.created_at || new Date()),
+        timestamp: new Date(),
         isRead: false
       };
       
-      // Add to UI immediately
-      setMessages(prev => [...prev, newMessage]);
+      // Add to UI immediately for instant feedback
+      setMessages(prev => [...prev, tempMessage]);
       
-      // Reset input
+      // Track this message ID as processed to avoid duplication 
+      processedMessageIds.current.add(tempId);
+      
+      // Send message via socket only - server will handle persistence
+      sendMessage(parseInt(conversationId), content.trim());
+      
+      // Reset input and stop typing indicator
       setMessageText('');
-      
-      // Stop typing indicator
       stopTyping(parseInt(conversationId));
       
       // Scroll to bottom after adding new message

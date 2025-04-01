@@ -115,12 +115,20 @@ export const disconnectSocket = () => {
 
 // Helper to send a message
 export const sendMessage = (conversationId: number, content: string, attachmentUrl?: string) => {
-  if (!socket?.connected) {
+  // Early exit if socket is null or not connected
+  if (!socket) {
+    console.error('Socket is null');
+    return;
+  }
+  
+  if (!socket.connected) {
     console.error('Socket not connected');
     return;
   }
   
   console.log('Sending message via socket:', { conversationId, content });
+  
+  // Only emit message:send - the server should handle storage and broadcasting
   socket.emit('message:send', {
     conversationId,
     content,
@@ -130,11 +138,8 @@ export const sendMessage = (conversationId: number, content: string, attachmentU
       console.error('Error sending message:', response.error);
     } else {
       console.log('Message sent successfully:', response);
-      // Broadcast the message to all clients in the conversation
-      socket?.emit('message:broadcast', {
-        ...response,
-        conversationId
-      });
+      // The server should automatically broadcast to all participants
+      // We've removed the message:broadcast emit to prevent duplicates
     }
   });
 };
