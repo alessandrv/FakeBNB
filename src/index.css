@@ -2,12 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --hide-header-mobile: block;
-  --hide-header-desktop: block;
-  --hide-navbar-mobile: grid;
-  --hide-footer-desktop: block;
-}
+
 
 /* Header visibility control */
 .site-header {
@@ -68,11 +63,7 @@ body {
 }
 
 /* When site header is visible, adjust dashboard layout on desktop */
-@media (min-width: 768px) {
-  .dashboard-content {
-    height: calc(100vh - var(--header-height) - 56px) !important; /* Viewport minus header and searchbar */
-  }
-}
+
 
 /* Add leaflet map styling */
 .leaflet-container {
@@ -105,10 +96,7 @@ body.sheet-expanded .sticky,
 }
 
 /* Special handling for sheet in wrapper */
-.mobile-ui-wrapper .draggable-sheet.sheet-full {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
+
 
 /* Ensure mobile search bar is compact */
 @media (max-width: 768px) {
@@ -178,21 +166,14 @@ body.sheet-expanded .sticky,
   width: 100%;
 }
 
-/* Remove rounded corners when sheet is fully expanded */
-body.sheet-expanded .draggable-sheet {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
 
 /* Ensure content has consistent bottom padding */
 .draggable-sheet .overflow-y-auto {
-  padding-bottom: 1rem; /* 16px bottom padding */
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 /* Ensure last card in list has margin before bottom navbar */
 .draggable-sheet .overflow-y-auto > :last-child {
-  margin-bottom: 1rem;
 }
 
 /* Hide scrollbar when dragging */

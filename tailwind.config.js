@@ -17,6 +17,7 @@ export default {
 				light: {
 					colors: {
 						primary: {
+<<<<<<< HEAD
 							DEFAULT: "#69d5f7", // Your custom primary color (blue)
 							foreground: "#FFFFFF", // Text color on primary backgrounds
 							// You can also define the full color palette (50-900)
@@ -33,6 +34,24 @@ export default {
 						},
 						focus: {
 							DEFAULT: "#69d5f7", // Your custom primary color (amber/orange)
+=======
+							DEFAULT: "#FFA000", // Your custom primary color (amber/orange)
+							foreground: "#FFFFFF", // Text color on primary backgrounds
+							// You can also define the full color palette (50-900)
+							50: "#FFF8E1",
+							100: "#FFECB3",
+							200: "#FFE082",
+							300: "#FFD54F",
+							400: "#FFCA28",
+							500: "#FFC107", // Amber
+							600: "#FFB300",
+							700: "#FFA000", // Your main primary color (amber/orange)
+							800: "#FF8F00",
+							900: "#FF6F00",
+						},
+						focus: {
+							DEFAULT: "#FFA000", // Your custom primary color (amber/orange)
+>>>>>>> 470825bc2bd477262cf77fa116ef60106ead764c
 						}
 						
 					}

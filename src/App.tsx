@@ -11,17 +11,19 @@ import { BookingHistory } from './pages/BookingHistory';
 import { Map } from './pages/Map';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Faq } from './pages/Faq';
-import { Contact } from './pages/Contact';
+import { Faq } from './pages/faq';
+import { Contact } from './pages/contact';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Chat } from './pages/Chat';
 import { ListingForm } from './pages/CreateHouse';
+import { Spacer } from '@heroui/react';
 
 function App() {
+
   return (
     <AuthProvider>
       <Routes>
-        {/* Public Routes */}
+        {/* Routes WITH navbar */}
         <Route path="/" element={<MobileNavbar />}>
           <Route index element={<Home />} />
           <Route path="properties/:id" element={<PropertyDetails />} />
@@ -30,6 +32,8 @@ function App() {
           <Route path="faq" element={<Faq />} />
           <Route path="contact" element={<Contact />} />
           <Route path="verify-email" element={<VerifyEmail />} />
+          <Route path="property" element={<PropertyDetails />} />
+          
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
             path="login" 
@@ -39,12 +43,6 @@ function App() {
               </ProtectedRoute>
             } 
           />
-                    <Route path='create-house' element={
-                      <ProtectedRoute>
-                        <ListingForm />
-                      </ProtectedRoute>
-                      } />
-
           <Route 
             path="register" 
             element={
@@ -54,7 +52,7 @@ function App() {
             } 
           />
           
-          {/* Protected Routes - only accessible when logged in */}
+          {/* Protected Routes with navbar - only accessible when logged in */}
           <Route 
             path="profile" 
             element={
@@ -71,28 +69,39 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="chat" 
-            element={
-              <ProtectedRoute>
-                <Chat />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="chat/:conversationId" 
-            element={
-              <ProtectedRoute>
-                <Chat />
-              </ProtectedRoute>
-            } 
-          />
-         
-          
-          {/* 404 Page */}
-          <Route path="*" element={<NotFound />} />
+           <Route 
+          path="chat" 
+          element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          } 
+        />
+                <Route path="*" element={<NotFound />} />
+
         </Route>
+        
+        {/* Routes WITHOUT navbar */}
+        <Route 
+          path="create-house" 
+          element={
+            <ProtectedRoute>
+              <ListingForm />
+            </ProtectedRoute>
+          } 
+        />
+       
+        <Route 
+          path="chat/:conversationId" 
+          element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          } 
+        />
+        {/* 404 Page */}
       </Routes>
+
     </AuthProvider>
   );
 }

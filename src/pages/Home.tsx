@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody, CardFooter, Button, Input } from '@heroui/react';
+import { Card, CardBody, CardFooter, Button, Input, Spacer } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { Link, useNavigate } from 'react-router-dom';
-
+import { Footer } from '../components/layout/Footer';
+import { Header } from '../components/layout/Header';
 // Sample property data
 const featuredProperties = [
   {
@@ -80,6 +81,9 @@ export const Home = () => {
 
   return (
     <div>
+          <div className="site-header">
+        <Header />
+      </div>
       {/* Hero Section */}
       <section className="relative h-[60vh] min-h-[400px] overflow-hidden">
         <div 
@@ -236,7 +240,9 @@ export const Home = () => {
           </Button>
         </div>
       </section>
-      
+      <Footer className="hidden md:block" />
+      <Spacer y={16} />
+
     </div>
   );
 }; 

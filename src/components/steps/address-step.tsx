@@ -141,7 +141,7 @@ export function AddressStep({ data, updateData }: AddressStepProps) {
   };
 
   return (
-    <div className="pb-0 space-y-6 ">
+    <div className="pb-0">
       <Input
         label="Property Address"
         placeholder="Enter your property's address"
@@ -153,7 +153,7 @@ export function AddressStep({ data, updateData }: AddressStepProps) {
       
      
       
-      <div className="aspect-square w-full rounded-lg overflow-hidden">
+      <div className="md:aspect-auto md:mt-0 md:h-[500px] aspect-square w-full rounded-lg overflow-hidden ">
         <MapContainer
           center={initialMapCenter}
           zoom={initialZoom}
