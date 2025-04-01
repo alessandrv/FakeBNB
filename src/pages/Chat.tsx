@@ -10,7 +10,8 @@ import {
   markConversationAsRead,
   startTyping,
   stopTyping,
-  sendMessage
+  sendMessage,
+  isSocketConnected
 } from '../services/socketService';
 import { Message, User, Chat as ChatType } from '../types/chat';
 import { mapConversation, mapMessage } from '../types/chat';
@@ -36,6 +37,9 @@ export const Chat: React.FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pendingMessages = useRef<Set<number>>(new Set()); // Track pending message IDs
   const processedMessageIds = useRef<Set<number>>(new Set()); // Track all processed message IDs
+  const joinAttempts = useRef<number>(0); // Track conversation join attempts
+  const socketCheckInterval = useRef<number | null>(null); // Interval for socket connection checks
+  const hasJoinedCurrentConversation = useRef<boolean>(false); // Track if current conversation is joined
   
   // Effect for responsive layout
   useEffect(() => {
@@ -94,6 +98,46 @@ export const Chat: React.FC = () => {
     isOnline: false
   };
   
+  // Function to ensure user is joined to the active conversation
+  const ensureJoinedToConversation = () => {
+    if (conversationId && isSocketConnected()) {
+      console.log(`Ensuring user is joined to conversation ${conversationId}`);
+      joinConversation(parseInt(conversationId));
+      hasJoinedCurrentConversation.current = true;
+      
+      // Mark as read when joining
+      markConversationAsRead(parseInt(conversationId));
+      chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
+    }
+  };
+  
+  // Set up socket monitoring to ensure connection
+  useEffect(() => {
+    // Set up an interval to check socket connection and conversation join status
+    if (conversationId) {
+      // Clear any existing interval
+      if (socketCheckInterval.current) {
+        clearInterval(socketCheckInterval.current);
+      }
+      
+      // Create a new check interval
+      socketCheckInterval.current = window.setInterval(() => {
+        // If socket is connected but user hasn't joined the conversation yet
+        if (isSocketConnected() && !hasJoinedCurrentConversation.current && conversationId) {
+          console.log('Socket connected but not joined to conversation, rejoining...');
+          ensureJoinedToConversation();
+        }
+      }, 5000) as unknown as number;
+    }
+    
+    return () => {
+      if (socketCheckInterval.current) {
+        clearInterval(socketCheckInterval.current);
+        socketCheckInterval.current = null;
+      }
+    };
+  }, [conversationId]);
+  
   // Effect to fetch conversations
   useEffect(() => {
     document.documentElement.style.setProperty('--hide-header-mobile', 'None');
@@ -117,6 +161,10 @@ export const Chat: React.FC = () => {
   // Effect to handle conversation change and toggle mobile navbar visibility
   useEffect(() => {
     let isComponentMounted = true;
+    
+    // Reset join status on conversation change
+    hasJoinedCurrentConversation.current = false;
+    joinAttempts.current = 0;
     
     // Clear previous conversation
     if (activeChat) {
@@ -151,8 +199,32 @@ export const Chat: React.FC = () => {
             setMessages(mappedMessages);
           }
           
-          // Join the conversation room via socket
-          joinConversation(parseInt(conversationId));
+          // Join the conversation room via socket with retry logic
+          if (isSocketConnected()) {
+            joinConversation(parseInt(conversationId));
+            hasJoinedCurrentConversation.current = true;
+          } else {
+            // Set up retry for join if socket isn't connected yet
+            const retryJoin = setInterval(() => {
+              if (isSocketConnected() && !hasJoinedCurrentConversation.current) {
+                console.log(`Retrying to join conversation ${conversationId}`);
+                joinConversation(parseInt(conversationId));
+                hasJoinedCurrentConversation.current = true;
+                clearInterval(retryJoin);
+              }
+              
+              joinAttempts.current++;
+              if (joinAttempts.current >= 5) {
+                console.warn('Max join attempts reached');
+                clearInterval(retryJoin);
+              }
+            }, 1000);
+            
+            // Clean up interval after 5 seconds if it hasn't succeeded
+            setTimeout(() => {
+              clearInterval(retryJoin);
+            }, 5000);
+          }
           
           // Mark conversation as read
           markConversationAsRead(parseInt(conversationId));
@@ -202,6 +274,7 @@ export const Chat: React.FC = () => {
       // Cleanup: leave room when unmounting or changing conversations
       if (conversationId) {
         leaveConversation(parseInt(conversationId));
+        hasJoinedCurrentConversation.current = false;
       }
       
       // Restore mobile navbar visibility
@@ -217,6 +290,17 @@ export const Chat: React.FC = () => {
     
     if (!socket) {
       console.error('Socket not initialized');
+      // If we should be in a conversation but socket isn't available, try to reconnect after a short delay
+      if (conversationId) {
+        setTimeout(() => {
+          // Trigger a reconnect through the health check in AuthContext
+          if (!isSocketConnected() && conversationId) {
+            console.log('Socket not initialized, attempting to reconnect via health check');
+            // This will indirectly cause a socket reconnection
+            window.dispatchEvent(new Event('focus'));
+          }
+        }, 1000);
+      }
       return;
     }
 
@@ -245,12 +329,15 @@ export const Chat: React.FC = () => {
       }
       // Rejoin conversation if we were in one
       if (conversationId && isComponentMounted) {
+        console.log(`Rejoining conversation ${conversationId} after socket reconnect`);
         joinConversation(parseInt(conversationId));
+        hasJoinedCurrentConversation.current = true;
       }
     };
 
     const handleDisconnect = () => {
       console.log('Socket disconnected in Chat component');
+      hasJoinedCurrentConversation.current = false;
       if (user && isComponentMounted) {
         setChats(prev => prev.map(chat => ({
           ...chat,
@@ -261,8 +348,24 @@ export const Chat: React.FC = () => {
       }
     };
 
-    // Listen for new messages
-    const handleNewMessage = (message: any) => {
+    const handleReconnectAttempt = (attemptNumber: number) => {
+      console.log(`Socket reconnect attempt ${attemptNumber}`);
+    };
+
+    const handleReconnect = () => {
+      console.log('Socket reconnected');
+      // Rejoin current conversation if we're in one
+      if (conversationId && isComponentMounted) {
+        console.log(`Rejoining conversation ${conversationId} after socket reconnect`);
+        setTimeout(() => {
+          joinConversation(parseInt(conversationId));
+          hasJoinedCurrentConversation.current = true;
+        }, 500);
+      }
+    };
+
+    // Define message handlers within this effect
+    const handleNewMessageLocal = (message: any) => {
       if (!isComponentMounted) return;
       
       console.log('Received new message in Chat component:', message);
@@ -271,6 +374,12 @@ export const Chat: React.FC = () => {
       if (message.sender_id === user?.id) {
         console.log('Skipping own message in handleNewMessage');
         return;
+      }
+      
+      // If we receive a message for the conversation we're viewing but haven't joined yet, join now
+      if (message.conversation_id === parseInt(conversationId || '0') && !hasJoinedCurrentConversation.current) {
+        console.log('Received message for current conversation but not joined, joining now');
+        ensureJoinedToConversation();
       }
       
       // Map the message to our frontend format
@@ -448,36 +557,37 @@ export const Chat: React.FC = () => {
       })));
     };
 
-    // Add all event listeners
+    // Subscribe to all events
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
-    socket.on('message:received', handleNewMessage);
+    socket.on('reconnect_attempt', handleReconnectAttempt);
+    socket.on('reconnect', handleReconnect);
+    socket.on('message:received', handleNewMessageLocal);
     socket.on('message:sent', handleMessageSent);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('conversation:read', handleConversationRead);
     socket.on('user:online', handleUserOnline);
     socket.on('user:offline', handleUserOffline);
+
+    // If socket is connected but we're not joined to the conversation yet, join now
+    if (socket.connected && conversationId && !hasJoinedCurrentConversation.current) {
+      console.log(`Socket already connected, joining conversation ${conversationId}`);
+      joinConversation(parseInt(conversationId));
+      hasJoinedCurrentConversation.current = true;
+    }
     
     // Cleanup function
     return () => {
       isComponentMounted = false;
       console.log('Cleaning up socket event listeners in Chat component');
       
-      // Set current user as offline when component unmounts
-      if (user) {
-        setChats(prev => prev.map(chat => ({
-          ...chat,
-          participants: chat.participants.map(p => 
-            p.id === user.id ? { ...p, isOnline: false } : p
-          )
-        })));
-      }
-
-      // Remove all event listeners
+      // Remove all event listeners to avoid duplicates
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      socket.off('message:received', handleNewMessage);
+      socket.off('reconnect_attempt', handleReconnectAttempt);
+      socket.off('reconnect', handleReconnect);
+      socket.off('message:received', handleNewMessageLocal);
       socket.off('message:sent', handleMessageSent);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
@@ -488,9 +598,61 @@ export const Chat: React.FC = () => {
       // Leave the conversation if we were in one
       if (conversationId) {
         leaveConversation(parseInt(conversationId));
+        hasJoinedCurrentConversation.current = false;
       }
     };
   }, [conversationId, user?.id]);
+  
+  // Add a visibilitychange event handler to catch when user returns to the page
+  useEffect(() => {
+    // Function to handle when the user comes back to the page
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Page became visible, checking socket connection');
+        
+        // If we have an active conversation but socket is not joined
+        if (conversationId && !hasJoinedCurrentConversation.current) {
+          console.log('Rejoining conversation after page became visible');
+          ensureJoinedToConversation();
+        }
+      }
+    };
+    
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Check connection status on mount
+    if (document.visibilityState === 'visible' && conversationId) {
+      setTimeout(() => {
+        ensureJoinedToConversation();
+      }, 500);
+    }
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [conversationId]);
+
+  // Add a handler for window focus events
+  useEffect(() => {
+    // Function to handle when the window regains focus
+    const handleWindowFocus = () => {
+      console.log('Window focused, checking socket connection');
+      
+      // If we have an active conversation but socket is not joined
+      if (conversationId && !hasJoinedCurrentConversation.current) {
+        console.log('Rejoining conversation after window focus');
+        ensureJoinedToConversation();
+      }
+    };
+    
+    // Add focus listener
+    window.addEventListener('focus', handleWindowFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [conversationId]);
   
   // Create new chat with user ID 2
   const createNewChat = async () => {
