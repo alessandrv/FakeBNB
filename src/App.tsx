@@ -17,8 +17,28 @@ import { VerifyEmail } from './pages/VerifyEmail';
 import { Chat } from './pages/Chat';
 import { ListingForm } from './pages/CreateHouse';
 import { Spacer } from '@heroui/react';
+import { PasswordGate } from './components/PasswordGate';
+import { useState, useEffect } from 'react';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Check if user has already entered the password
+  useEffect(() => {
+    const hasEnteredPassword = localStorage.getItem('hasEnteredPassword');
+    if (hasEnteredPassword === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handlePasswordCorrect = () => {
+    localStorage.setItem('hasEnteredPassword', 'true');
+    setIsAuthenticated(true);
+  };
+
+  if (!isAuthenticated) {
+    return <PasswordGate onPasswordCorrect={handlePasswordCorrect} />;
+  }
 
   return (
     <AuthProvider>
@@ -69,16 +89,15 @@ function App() {
               </ProtectedRoute>
             } 
           />
-           <Route 
-          path="chat" 
-          element={
-            <ProtectedRoute>
-              <Chat />
-            </ProtectedRoute>
-          } 
-        />
-                <Route path="*" element={<NotFound />} />
-
+          <Route 
+            path="chat" 
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="*" element={<NotFound />} />
         </Route>
         
         {/* Routes WITHOUT navbar */}
@@ -99,9 +118,7 @@ function App() {
             </ProtectedRoute>
           } 
         />
-        {/* 404 Page */}
       </Routes>
-
     </AuthProvider>
   );
 }
