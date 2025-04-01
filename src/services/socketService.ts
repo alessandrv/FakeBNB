@@ -12,15 +12,22 @@ let reconnectTimer: number | null = null;
 export const isSocketConnected = (): boolean => {
   // For debugging purposes, let's log why a socket might not be connected
   if (!socket) {
-    console.log('Socket connection check: Socket is null');
+    console.log('[SOCKET] Connection check: Socket is null');
     return false;
   }
   
   if (!socket.connected) {
-    console.log('Socket connection check: Socket exists but is not connected');
+    console.log('[SOCKET] Connection check: Socket exists but is not connected');
+    console.log('[SOCKET] Socket state:', {
+      id: socket.id,
+      connected: socket.connected,
+      disconnected: socket.disconnected,
+      hasListeners: socket.hasListeners('connect')
+    });
     return false;
   }
   
+  console.log('[SOCKET] Connection check: Socket is connected with ID', socket.id);
   return true;
 };
 
@@ -162,6 +169,17 @@ const cleanupSocketConnection = () => {
 };
 
 export const getSocket = (): Socket | null => {
+  if (!socket) {
+    console.log('[SOCKET] getSocket: Socket is null');
+    return null;
+  }
+  
+  if (!socket.connected) {
+    console.log('[SOCKET] getSocket: Socket exists but is not connected');
+    return socket;
+  }
+  
+  console.log('[SOCKET] getSocket: Returning active socket with ID', socket.id);
   return socket;
 };
 
@@ -310,33 +328,87 @@ export const stopTyping = (conversationId: number) => {
 };
 
 // Add a function to force socket reconnection
-export const forceSocketReconnection = (token: string | null): boolean => {
+export const forceSocketReconnection = (token: string | null): Promise<boolean> => {
   if (!token) {
     console.error('Cannot reconnect socket: No token provided');
-    return false;
+    return Promise.resolve(false);
   }
   
   console.log('Forcing socket reconnection with new token');
   
-  // Clean up existing socket if it exists
-  if (socket) {
-    cleanupSocketConnection();
-  }
-  
-  // Attempt to create a new socket connection
-  try {
-    initializeSocket(token);
-    
-    // Verify if the new connection was successful
-    if (socket?.connected) {
-      console.log('Socket successfully reconnected');
-      return true;
-    } else {
-      console.log('Socket reconnection started but not immediately connected');
-      return false;
+  return new Promise((resolve) => {
+    // Clean up existing socket if it exists
+    if (socket) {
+      cleanupSocketConnection();
     }
-  } catch (error) {
-    console.error('Error forcing socket reconnection:', error);
-    return false;
-  }
+    
+    // Track whether we've resolved the promise
+    let hasResolved = false;
+    
+    // Attempt to create a new socket connection
+    try {
+      initializeSocket(token);
+      
+      // If socket is already connected, resolve immediately
+      if (socket?.connected) {
+        console.log('Socket successfully reconnected immediately');
+        resolve(true);
+        hasResolved = true;
+        return;
+      }
+      
+      // If not immediately connected, set up listeners
+      if (socket) {
+        // Handle successful connection
+        const handleConnect = () => {
+          if (!hasResolved) {
+            console.log('Socket successfully reconnected after waiting');
+            resolve(true);
+            hasResolved = true;
+            
+            // Clean up listeners
+            if (socket) {
+              socket.off('connect', handleConnect);
+              socket.off('connect_error', handleConnectError);
+            }
+          }
+        };
+        
+        // Handle connection error
+        const handleConnectError = (error: any) => {
+          console.error('Socket reconnection error:', error);
+          
+          // Don't resolve yet, wait for the timeout or a successful connection
+        };
+        
+        // Set up the event listeners
+        socket.on('connect', handleConnect);
+        socket.on('connect_error', handleConnectError);
+        
+        // Set a timeout to resolve the promise after 5 seconds if not resolved yet
+        setTimeout(() => {
+          if (!hasResolved) {
+            console.log('Socket reconnection timed out, but still attempting in background');
+            resolve(socket?.connected || false);
+            hasResolved = true;
+            
+            // Clean up listeners
+            if (socket) {
+              socket.off('connect', handleConnect);
+              socket.off('connect_error', handleConnectError);
+            }
+          }
+        }, 5000);
+      } else {
+        // No socket was created
+        console.error('Failed to create socket instance');
+        resolve(false);
+        hasResolved = true;
+      }
+    } catch (error) {
+      console.error('Error forcing socket reconnection:', error);
+      resolve(false);
+      hasResolved = true;
+    }
+  });
 }; 

@@ -100,43 +100,72 @@ export const Chat: React.FC = () => {
   };
   
   // Function to ensure user is joined to the active conversation
-  const ensureJoinedToConversation = () => {
-    if (conversationId && isSocketConnected()) {
+  const ensureJoinedToConversation = async () => {
+    if (conversationId) {
       console.log(`Ensuring user is joined to conversation ${conversationId}`);
-      try {
-        joinConversation(parseInt(conversationId));
-        hasJoinedCurrentConversation.current = true;
-        
-        // Mark as read when joining
-        markConversationAsRead(parseInt(conversationId));
-        chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
-        
-        console.log(`Successfully joined conversation ${conversationId}`);
-      } catch (error) {
-        console.error('Error joining conversation:', error);
-        
-        // Try to reconnect the socket
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          forceSocketReconnection(token);
-          
-          // Try again after reconnection
-          setTimeout(() => {
-            if (isSocketConnected()) {
-              joinConversation(parseInt(conversationId));
-              hasJoinedCurrentConversation.current = true;
-            }
-          }, 1000);
-        }
-      }
-    } else if (conversationId && !isSocketConnected()) {
-      console.warn('Cannot join conversation - socket not connected');
       
-      // Try to reconnect
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        forceSocketReconnection(token);
+      // First check if socket is connected
+      if (isSocketConnected()) {
+        try {
+          console.log('Socket connected, joining conversation directly');
+          joinConversation(parseInt(conversationId));
+          hasJoinedCurrentConversation.current = true;
+          
+          // Mark as read when joining
+          markConversationAsRead(parseInt(conversationId));
+          chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
+          
+          console.log(`Successfully joined conversation ${conversationId}`);
+        } catch (error) {
+          console.error('Error joining conversation:', error);
+          await reconnectAndJoin();
+        }
+      } else {
+        console.warn('Socket not connected, attempting reconnection');
+        await reconnectAndJoin();
       }
+    }
+  };
+  
+  // Helper function to reconnect socket and join conversation
+  const reconnectAndJoin = async () => {
+    if (!conversationId) return;
+    
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      console.error('No access token available for reconnection');
+      return;
+    }
+    
+    try {
+      console.log('Attempting to reconnect socket and join conversation');
+      // Use the Promise-based reconnection
+      const reconnected = await forceSocketReconnection(token);
+      
+      if (reconnected) {
+        console.log('Socket reconnected, now joining conversation');
+        // Wait a moment for the socket to fully establish
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Try to join the conversation
+        if (isSocketConnected()) {
+          console.log(`Joining conversation ${conversationId} after reconnection`);
+          joinConversation(parseInt(conversationId));
+          hasJoinedCurrentConversation.current = true;
+          
+          // Mark as read
+          markConversationAsRead(parseInt(conversationId));
+          chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
+          
+          console.log(`Successfully joined conversation ${conversationId} after reconnection`);
+        } else {
+          console.error('Socket still not connected after reconnection attempt');
+        }
+      } else {
+        console.error('Failed to reconnect socket');
+      }
+    } catch (error) {
+      console.error('Error during reconnection process:', error);
     }
   };
   
@@ -154,21 +183,31 @@ export const Chat: React.FC = () => {
         // If socket is connected but user hasn't joined the conversation yet
         if (isSocketConnected() && !hasJoinedCurrentConversation.current && conversationId) {
           console.log('Socket connected but not joined to conversation, rejoining...');
-          ensureJoinedToConversation();
+          ensureJoinedToConversation().catch(err => {
+            console.error('Error ensuring joined to conversation:', err);
+          });
         } else if (!isSocketConnected() && !hasJoinedCurrentConversation.current && conversationId) {
           // Socket is disconnected and we're not in the conversation
           console.log('Socket disconnected, attempting reconnection...');
           const token = localStorage.getItem('accessToken');
           if (token) {
-            // Try to force reconnection
-            const reconnected = forceSocketReconnection(token);
-            
-            if (reconnected) {
-              // Wait a short time for the socket to fully establish connection
-              setTimeout(() => {
-                ensureJoinedToConversation();
-              }, 500);
-            }
+            // Try to force reconnection (with async handling)
+            forceSocketReconnection(token)
+              .then(reconnected => {
+                if (reconnected) {
+                  // Wait a short time for the socket to fully establish connection
+                  setTimeout(() => {
+                    ensureJoinedToConversation().catch(err => {
+                      console.error('Error joining after reconnection:', err);
+                    });
+                  }, 500);
+                } else {
+                  console.error('Socket reconnection failed in monitoring interval');
+                }
+              })
+              .catch(err => {
+                console.error('Error during socket reconnection in interval:', err);
+              });
           }
         }
       }, 3000) as unknown as number;
@@ -249,122 +288,83 @@ export const Chat: React.FC = () => {
             hasJoinedCurrentConversation.current = true;
             console.log(`Successfully joined conversation ${conversationId}`);
           } else {
-            console.log('Socket not connected, setting up progressive retry mechanism');
+            console.log('Socket not connected, attempting reconnection');
             
-            // Progressive retry with increasing intervals
-            const retryIntervals = [1000, 2000, 3000, 5000, 8000]; // Fibonacci-like timing
-            const maxRetries = 10; // Increase max retries
-            
-            // Clear any existing join attempt counter
-            joinAttempts.current = 0;
-            
-            // Set up retry with progressive backoff
-            const retryJoin = setInterval(() => {
-              if (isSocketConnected() && !hasJoinedCurrentConversation.current) {
-                console.log(`Retrying to join conversation ${conversationId} (attempt ${joinAttempts.current + 1})`);
-                joinConversation(parseInt(conversationId));
-                hasJoinedCurrentConversation.current = true;
-                console.log(`Successfully joined conversation on retry attempt ${joinAttempts.current + 1}`);
-                clearInterval(retryJoin);
-              } else if (!isSocketConnected()) {
-                console.log(`Socket still not connected (attempt ${joinAttempts.current + 1})`);
-              }
-              
-              joinAttempts.current++;
-              
-              // Dynamically adjust interval based on attempt number
-              if (joinAttempts.current < retryIntervals.length) {
-                clearInterval(retryJoin);
-                setTimeout(() => {
-                  if (!hasJoinedCurrentConversation.current) {
-                    // Start a new interval with the next timing
-                    const newInterval = setInterval(() => {
-                      if (isSocketConnected() && !hasJoinedCurrentConversation.current) {
-                        console.log(`Retrying to join conversation ${conversationId} (attempt ${joinAttempts.current + 1})`);
-                        joinConversation(parseInt(conversationId));
-                        hasJoinedCurrentConversation.current = true;
-                        console.log(`Successfully joined conversation on retry attempt ${joinAttempts.current + 1}`);
-                        clearInterval(newInterval);
-                      }
-                      
-                      joinAttempts.current++;
-                      if (joinAttempts.current >= maxRetries) {
-                        console.warn('Max join attempts reached, forcing socket reconnection');
-                        clearInterval(newInterval);
-                        
-                        // Final attempt: Force socket reconnection
-                        const token = localStorage.getItem('accessToken');
-                        if (token) {
-                          // Dispatch focus event to trigger socket health check
-                          window.dispatchEvent(new Event('focus'));
-                          
-                          // Try one last time after reconnection attempt
-                          setTimeout(() => {
-                            if (isSocketConnected() && !hasJoinedCurrentConversation.current) {
-                              console.log('Final join attempt after socket refresh');
-                              joinConversation(parseInt(conversationId));
-                              hasJoinedCurrentConversation.current = true;
-                            } else {
-                              console.error('Could not establish chat connection. Please refresh the page.');
-                              // Show user-friendly error if needed
-                              if (isComponentMounted) {
-                                setError('Connection issue. Try refreshing the page.');
-                              }
-                            }
-                          }, 2000);
-                        }
-                      }
-                    }, retryIntervals[joinAttempts.current]);
-                  }
-                }, retryIntervals[joinAttempts.current - 1]);
-              } else if (joinAttempts.current >= maxRetries) {
-                console.warn('Max join attempts reached, forcing socket reconnection');
-                clearInterval(retryJoin);
+            try {
+              // Use our Promise-based reconnection logic
+              const token = localStorage.getItem('accessToken');
+              if (token) {
+                console.log('Attempting to reconnect socket before joining conversation');
                 
-                // Final attempt: Force socket reconnection
-                const token = localStorage.getItem('accessToken');
-                if (token) {
-                  // Dispatch focus event to trigger socket health check
-                  window.dispatchEvent(new Event('focus'));
+                // Use progressive retry with Promise
+                const attemptReconnection = async () => {
+                  const reconnected = await forceSocketReconnection(token);
                   
-                  // Try one last time after reconnection attempt
-                  setTimeout(() => {
-                    if (isSocketConnected() && !hasJoinedCurrentConversation.current) {
-                      console.log('Final join attempt after socket refresh');
+                  if (reconnected) {
+                    console.log('Socket reconnected successfully, joining conversation');
+                    // Short delay for socket to be fully ready
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Now join the conversation
+                    if (isSocketConnected()) {
                       joinConversation(parseInt(conversationId));
                       hasJoinedCurrentConversation.current = true;
+                      console.log(`Successfully joined conversation ${conversationId} after reconnection`);
+                      
+                      // Mark as read
+                      markConversationAsRead(parseInt(conversationId));
                     } else {
-                      console.error('Could not establish chat connection. Please refresh the page.');
-                      // Show user-friendly error if needed
-                      if (isComponentMounted) {
-                        setError('Connection issue. Try refreshing the page.');
+                      console.error('Socket still not connected after successful reconnection');
+                      throw new Error('Socket connection unstable');
+                    }
+                  } else {
+                    // If first reconnection attempt failed, try alternative approach
+                    console.log('Initial reconnection failed, trying alternative approach');
+                    
+                    // Trigger focus event to use the AuthContext reconnection logic as well
+                    window.dispatchEvent(new Event('focus'));
+                    
+                    // Wait and try one more time
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Last attempt with a new token fetch
+                    const freshToken = localStorage.getItem('accessToken');
+                    if (freshToken) {
+                      const secondAttempt = await forceSocketReconnection(freshToken);
+                      
+                      if (secondAttempt && isSocketConnected()) {
+                        console.log('Second reconnection attempt succeeded, joining conversation');
+                        joinConversation(parseInt(conversationId));
+                        hasJoinedCurrentConversation.current = true;
+                      } else {
+                        console.error('All reconnection attempts failed');
+                        if (isComponentMounted) {
+                          setError('Could not connect to chat. Please refresh the page.');
+                        }
                       }
                     }
-                  }, 2000);
+                  }
+                };
+                
+                // Execute the reconnection process
+                attemptReconnection().catch(err => {
+                  console.error('Error during reconnection process:', err);
+                  if (isComponentMounted) {
+                    setError('Connection issue. Please try refreshing the page.');
+                  }
+                });
+              } else {
+                console.error('No access token available for reconnection');
+                if (isComponentMounted) {
+                  setError('Authentication issue. Please try logging in again.');
                 }
               }
-            }, 1000);
-            
-            // Clean up interval after a longer period if it hasn't succeeded
-            setTimeout(() => {
-              clearInterval(retryJoin);
-              
-              // If we still haven't joined, try one last time with a fresh socket approach
-              if (!hasJoinedCurrentConversation.current) {
-                console.log('Last resort joining attempt');
-                
-                // Dispatch a focus event to trigger the socket health check in AuthContext
-                window.dispatchEvent(new Event('focus'));
-                
-                // Try after a short delay
-                setTimeout(() => {
-                  if (isSocketConnected()) {
-                    joinConversation(parseInt(conversationId));
-                    hasJoinedCurrentConversation.current = true;
-                  }
-                }, 1000);
+            } catch (error) {
+              console.error('Exception during reconnection process:', error);
+              if (isComponentMounted) {
+                setError('Connection issue. Please try refreshing the page.');
               }
-            }, 15000); // Extend from 5s to 15s total retry window
+            }
           }
           
           // Mark conversation as read
@@ -471,8 +471,25 @@ export const Chat: React.FC = () => {
       // Rejoin conversation if we were in one
       if (conversationId && isComponentMounted) {
         console.log(`Rejoining conversation ${conversationId} after socket reconnect`);
-        joinConversation(parseInt(conversationId));
-        hasJoinedCurrentConversation.current = true;
+        
+        // Clear existing try-join status
+        hasJoinedCurrentConversation.current = false;
+        
+        // Small delay to ensure socket is fully established
+        setTimeout(() => {
+          try {
+            console.log('Attempting to join conversation after socket connect event');
+            joinConversation(parseInt(conversationId));
+            hasJoinedCurrentConversation.current = true;
+            console.log(`Successfully joined conversation ${conversationId} after socket connect`);
+            
+            // Also mark as read
+            markConversationAsRead(parseInt(conversationId));
+            chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
+          } catch (error) {
+            console.error('Error joining conversation after socket connect:', error);
+          }
+        }, 300);
       }
     };
 
@@ -754,7 +771,9 @@ export const Chat: React.FC = () => {
         // If we have an active conversation but socket is not joined
         if (conversationId && !hasJoinedCurrentConversation.current) {
           console.log('Rejoining conversation after page became visible');
-          ensureJoinedToConversation();
+          ensureJoinedToConversation().catch(err => {
+            console.error('Error rejoining conversation on visibility change:', err);
+          });
         }
       }
     };
@@ -765,7 +784,9 @@ export const Chat: React.FC = () => {
     // Check connection status on mount
     if (document.visibilityState === 'visible' && conversationId) {
       setTimeout(() => {
-        ensureJoinedToConversation();
+        ensureJoinedToConversation().catch(err => {
+          console.error('Error joining conversation on initial visibility check:', err);
+        });
       }, 500);
     }
     
@@ -783,7 +804,9 @@ export const Chat: React.FC = () => {
       // If we have an active conversation but socket is not joined
       if (conversationId && !hasJoinedCurrentConversation.current) {
         console.log('Rejoining conversation after window focus');
-        ensureJoinedToConversation();
+        ensureJoinedToConversation().catch(err => {
+          console.error('Error rejoining conversation on window focus:', err);
+        });
       }
     };
     
