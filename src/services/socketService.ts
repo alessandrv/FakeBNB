@@ -219,6 +219,7 @@ export const sendMessage = (conversationId: number, content: string, attachmentU
   console.log('Sending message via socket:', { conversationId, content });
   
   try {
+    // Send message and wait for server response
     socket.emit('message:send', {
       conversationId,
       content,
@@ -228,6 +229,12 @@ export const sendMessage = (conversationId: number, content: string, attachmentU
         console.error('Error sending message:', response.error);
       } else {
         console.log('Message sent successfully:', response);
+        // Broadcast the message to all clients in the conversation
+        socket?.emit('message:broadcast', {
+          ...response,
+          conversation_id: conversationId,
+          sender_id: socket.auth?.userId
+        });
       }
     });
   } catch (error) {

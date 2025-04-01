@@ -470,7 +470,7 @@ export const Chat: React.FC = () => {
       }
       // Rejoin conversation if we were in one
       if (conversationId && isComponentMounted) {
-        console.log(`Rejoining conversation ${conversationId} after socket reconnect`);
+        console.log(`Rejoining conversation ${conversationId} after socket connect event`);
         
         // Clear existing try-join status
         hasJoinedCurrentConversation.current = false;
@@ -522,41 +522,25 @@ export const Chat: React.FC = () => {
       }
     };
 
-    // Define message handlers within this effect
-    const handleNewMessageLocal = (message: any) => {
+    // Listen for new messages
+    const handleNewMessage = (message: any) => {
       if (!isComponentMounted) return;
       
       console.log('Received new message in Chat component:', message);
       
-      // Skip processing if this is your own message - you'll handle it in handleSendMessage or handleMessageSent
-      if (message.sender_id === user?.id) {
-        console.log('Skipping own message in handleNewMessage');
-        return;
-      }
-      
-      // If we receive a message for the conversation we're viewing but haven't joined yet, join now
-      if (message.conversation_id === parseInt(conversationId || '0') && !hasJoinedCurrentConversation.current) {
-        console.log('Received message for current conversation but not joined, joining now');
-        ensureJoinedToConversation();
-      }
-      
       // Map the message to our frontend format
       const mappedMessage = mapMessage(message);
-      
-      // Check if we've already processed this message ID
-      if (processedMessageIds.current.has(mappedMessage.id)) {
-        console.log('Skipping already processed message:', mappedMessage.id);
-        return;
-      }
-      
-      // Mark as processed
-      processedMessageIds.current.add(mappedMessage.id);
       
       // Update messages if it's for the current conversation
       if (message.conversation_id === parseInt(conversationId || '0')) {
         setMessages(prev => {
-          // Extra check if message already exists
-          const exists = prev.some(m => m.id === mappedMessage.id);
+          // Check if message already exists by ID or content and timestamp
+          const exists = prev.some(m => 
+            m.id === mappedMessage.id || 
+            (m.content === mappedMessage.content && 
+             Math.abs(new Date(m.timestamp).getTime() - new Date(mappedMessage.timestamp).getTime()) < 1000)
+          );
+          
           if (!exists) {
             console.log('Adding new message to conversation:', mappedMessage);
             return [...prev, mappedMessage];
@@ -565,8 +549,10 @@ export const Chat: React.FC = () => {
         });
         
         // If the message is from someone else, mark as read
-        markConversationAsRead(message.conversation_id);
-        chatService.markConversationAsRead(message.conversation_id).catch(console.error);
+        if (message.sender_id !== user?.id) {
+          markConversationAsRead(message.conversation_id);
+          chatService.markConversationAsRead(message.conversation_id).catch(console.error);
+        }
         
         // Clear typing indicator for sender
         setTypingUsers(prev => {
@@ -596,7 +582,7 @@ export const Chat: React.FC = () => {
             // If active conversation, mark as read
             const newUnreadCount = parseInt(conversationId || '0') === c.id 
               ? 0 
-              : c.unreadCount + 1; // Always increment for others' messages
+              : c.unreadCount + (message.sender_id !== user?.id ? 1 : 0);
             
             return {
               ...c,
@@ -616,46 +602,6 @@ export const Chat: React.FC = () => {
           new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
         );
       });
-    };
-
-    // Listen for message sent confirmation
-    const handleMessageSent = (message: any) => {
-      console.log('Message sent confirmation:', message);
-      if (!isComponentMounted) return;
-      
-      // Check if we've already processed this message ID
-      if (processedMessageIds.current.has(message.id)) {
-        console.log('Skipping already processed message in handleMessageSent:', message.id);
-        return;
-      }
-      
-      // Mark as processed
-      processedMessageIds.current.add(message.id);
-      
-      // Update messages if it's for the current conversation
-      if (message.conversation_id === parseInt(conversationId || '0')) {
-        setMessages(prev => {
-          const mappedMessage = mapMessage(message);
-          const exists = prev.some(m => m.id === mappedMessage.id);
-          if (!exists) {
-            return [...prev, mappedMessage];
-          }
-          return prev;
-        });
-
-        // Scroll to bottom after adding new message
-        const scrollToBottom = () => {
-          const messagesContainer = document.querySelector('.ChatMessages');
-          if (messagesContainer) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          }
-        };
-        
-        // Multiple scroll attempts to ensure it works
-        scrollToBottom();
-        setTimeout(scrollToBottom, 50);
-        setTimeout(scrollToBottom, 200);
-      }
     };
 
     // Listen for typing indicators
@@ -715,13 +661,12 @@ export const Chat: React.FC = () => {
       })));
     };
 
-    // Subscribe to all events
+    // Add all event listeners
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
-    socket.on('reconnect_attempt', handleReconnectAttempt);
-    socket.on('reconnect', handleReconnect);
-    socket.on('message:received', handleNewMessageLocal);
-    socket.on('message:sent', handleMessageSent);
+    socket.on('message:received', handleNewMessage);
+    socket.on('message:broadcast', handleNewMessage);
+    socket.on('message:sent', handleNewMessage);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('conversation:read', handleConversationRead);
@@ -743,10 +688,9 @@ export const Chat: React.FC = () => {
       // Remove all event listeners to avoid duplicates
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      socket.off('reconnect_attempt', handleReconnectAttempt);
-      socket.off('reconnect', handleReconnect);
-      socket.off('message:received', handleNewMessageLocal);
-      socket.off('message:sent', handleMessageSent);
+      socket.off('message:received', handleNewMessage);
+      socket.off('message:broadcast', handleNewMessage);
+      socket.off('message:sent', handleNewMessage);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
       socket.off('conversation:read', handleConversationRead);
