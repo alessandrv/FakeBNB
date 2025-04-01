@@ -106,11 +106,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize socket when user is authenticated
   useEffect(() => {
     if (user && localStorage.getItem('accessToken')) {
+      console.log('Initializing socket connection...');
       // Initialize Socket.IO connection
-      initializeSocket(localStorage.getItem('accessToken') || '');
+      const socket = initializeSocket(localStorage.getItem('accessToken') || '');
+      
+      // Add connection status listeners
+      socket.on('connect', () => {
+        console.log('Socket connected in AuthContext');
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('Socket connection error in AuthContext:', error);
+      });
+      
+      socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected in AuthContext:', reason);
+      });
     }
     
     return () => {
+      console.log('Cleaning up socket in AuthContext');
       // Clean up socket on unmount
       disconnectSocket();
     };

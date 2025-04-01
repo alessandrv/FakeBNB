@@ -129,20 +129,47 @@ export const ChatView: React.FC<ChatViewProps> = ({
           >
             <Icon icon="lucide:arrow-left" width={24} />
           </Button>
-          <Avatar src={otherUser.avatar} className="w-10 h-10" />
-          <div className="flex-1">
-            <h2 className="font-semibold">
-              {otherUser.firstName} {otherUser.lastName}
-            </h2>
-            <div className="flex items-center gap-2">
-              <p className="text-sm text-default-500">
-                {otherUser.isOnline ? "Online" : "Offline"}
-              </p>
-              {Object.keys(typingUsers).length > 0 && (
-                <p className="text-sm text-default-500">
-                  typing...
-                </p>
+          <div className="flex items-center">
+            <div className="relative">
+              <Avatar
+                src={otherUser.avatar}
+                name={`${otherUser.firstName} ${otherUser.lastName}`}
+                size="lg"
+              />
+              {otherUser.isOnline && (
+                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
               )}
+            </div>
+            <div className="ml-3">
+              <h2 className="text-lg font-semibold">
+                {otherUser.firstName} {otherUser.lastName}
+              </h2>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${
+                    otherUser.isOnline 
+                      ? "bg-green-500 animate-pulse" 
+                      : "bg-default-300"
+                  }`}></div>
+                  <span className={`text-sm font-medium ${
+                    otherUser.isOnline 
+                      ? "text-green-500" 
+                      : "text-default-500"
+                  }`}>
+                    {otherUser.isOnline ? "Online" : "Offline"}
+                  </span>
+                </div>
+                {isTyping && (
+                  <div className="flex items-center gap-1 text-sm text-default-500 animate-fade-in">
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 bg-default-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-1.5 h-1.5 bg-default-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-1.5 h-1.5 bg-default-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                    <span>typing</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

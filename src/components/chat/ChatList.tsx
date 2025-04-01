@@ -95,17 +95,40 @@ export const ChatList: React.FC<ChatListProps> = ({
                 }`}
                 onClick={() => onChatSelect(chat.id)}
               >
-                <Avatar
-                  src={otherUser.avatar}
-                  name={`${otherUser.firstName} ${otherUser.lastName}`}
-                  size="lg"
-                  className="flex-shrink-0"
-                />
-                <div className="ml-3 flex-1 min-w-0">
+                <div className="relative">
+                  <Avatar
+                    src={otherUser.avatar}
+                    name={`${otherUser.firstName} ${otherUser.lastName}`}
+                    size="lg"
+                    className="flex-shrink-0"
+                  />
+                  <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                    otherUser.isOnline 
+                      ? "bg-green-500 animate-pulse" 
+                      : "bg-default-300"
+                  }`}></div>
+                </div>
+                <div className="flex-1 min-w-0 ml-3">
                   <div className="flex justify-between items-center">
-                    <h3 className="font-medium truncate">
-                      {otherUser.firstName} {otherUser.lastName}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium truncate">
+                        {otherUser.firstName} {otherUser.lastName}
+                      </h3>
+                      <div className="flex items-center gap-1">
+                        <div className={`w-2 h-2 rounded-full ${
+                          otherUser.isOnline 
+                            ? "bg-green-500 animate-pulse" 
+                            : "bg-default-300"
+                        }`}></div>
+                        <span className={`text-xs font-medium ${
+                          otherUser.isOnline 
+                            ? "text-green-500" 
+                            : "text-default-500"
+                        }`}>
+                          {otherUser.isOnline ? "Online" : "Offline"}
+                        </span>
+                      </div>
+                    </div>
                     {chat.lastMessage && (
                       <span className="text-xs text-default-500 ml-2 flex-shrink-0">
                         {formatDate(chat.lastMessageAt)}

@@ -9,7 +9,8 @@ import {
   leaveConversation,
   markConversationAsRead,
   startTyping,
-  stopTyping
+  stopTyping,
+  sendMessage
 } from '../services/socketService';
 import { Message, User, Chat as ChatType } from '../types/chat';
 import { mapConversation, mapMessage } from '../types/chat';
@@ -197,16 +198,63 @@ export const Chat: React.FC = () => {
   useEffect(() => {
     const socket = getSocket();
     
-    if (!socket) return;
+    if (!socket) {
+      console.error('Socket not initialized');
+      return;
+    }
     
+    // Add connection status listeners
+    socket.on('connect', () => {
+      console.log('Socket connected successfully in Chat component');
+      // Rejoin conversation if we were in one
+      if (conversationId) {
+        joinConversation(parseInt(conversationId));
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Socket disconnected in Chat component');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error in Chat component:', error);
+    });
+
+    // Listen for user online/offline status
+    socket.on('user:online', (userId: number) => {
+      console.log('User came online:', userId);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === userId ? { ...p, isOnline: true } : p
+        )
+      })));
+    });
+
+    socket.on('user:offline', (userId: number) => {
+      console.log('User went offline:', userId);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === userId ? { ...p, isOnline: false } : p
+        )
+      })));
+    });
+
     // Listen for new messages
     const handleNewMessage = (message: any) => {
+      console.log('Received new message in Chat component:', message);
+      
+      // Map the message to our frontend format
+      const mappedMessage = mapMessage(message);
+      
+      // Update messages if it's for the current conversation
       if (message.conversation_id === parseInt(conversationId || '0')) {
-        // Only add the message if it's not already in the list
         setMessages(prev => {
-          const exists = prev.some(m => m.id === message.id);
+          // Check if message already exists
+          const exists = prev.some(m => m.id === mappedMessage.id);
           if (!exists) {
-            const mappedMessage = mapMessage(message);
+            console.log('Adding new message to conversation:', mappedMessage);
             return [...prev, mappedMessage];
           }
           return prev;
@@ -224,6 +272,19 @@ export const Chat: React.FC = () => {
           delete updated[message.sender_id];
           return updated;
         });
+
+        // Scroll to bottom after adding new message
+        const scrollToBottom = () => {
+          const messagesContainer = document.querySelector('.ChatMessages');
+          if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        };
+        
+        // Multiple scroll attempts to ensure it works
+        scrollToBottom();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 200);
       }
       
       // Update conversation list
@@ -254,9 +315,26 @@ export const Chat: React.FC = () => {
         );
       });
     };
-    
+
+    // Listen for message sent confirmation
+    socket.on('message:sent', (message: any) => {
+      console.log('Message sent confirmation:', message);
+      // Update messages if it's for the current conversation
+      if (message.conversation_id === parseInt(conversationId || '0')) {
+        setMessages(prev => {
+          const mappedMessage = mapMessage(message);
+          const exists = prev.some(m => m.id === mappedMessage.id);
+          if (!exists) {
+            return [...prev, mappedMessage];
+          }
+          return prev;
+        });
+      }
+    });
+
     // Listen for typing indicators
     const handleTypingStart = (data: { userId: number, conversationId: number }) => {
+      console.log('Received typing start:', data);
       if (data.userId === user?.id) return; // Ignore own typing
       
       if (data.conversationId === parseInt(conversationId || '0')) {
@@ -275,6 +353,7 @@ export const Chat: React.FC = () => {
     };
     
     const handleTypingStop = (data: { userId: number, conversationId: number }) => {
+      console.log('Received typing stop:', data);
       if (data.conversationId === parseInt(conversationId || '0')) {
         setTypingUsers(prev => {
           const updated = { ...prev };
@@ -286,20 +365,47 @@ export const Chat: React.FC = () => {
     
     // Listen for read receipts
     const handleConversationRead = (data: { userId: number, conversationId: number }) => {
-      // Update UI to show message has been read
-      console.log(`User ${data.userId} read conversation ${data.conversationId}`);
+      console.log('Received conversation read:', data);
     };
-    
+
+    // Add all event listeners
     socket.on('message:received', handleNewMessage);
+    socket.on('message:sent', handleNewMessage);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('conversation:read', handleConversationRead);
+    socket.on('user:online', (userId: number) => {
+      console.log('User came online:', userId);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === userId ? { ...p, isOnline: true } : p
+        )
+      })));
+    });
+    socket.on('user:offline', (userId: number) => {
+      console.log('User went offline:', userId);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === userId ? { ...p, isOnline: false } : p
+        )
+      })));
+    });
     
+    // Cleanup function
     return () => {
+      console.log('Cleaning up socket event listeners in Chat component');
       socket.off('message:received', handleNewMessage);
+      socket.off('message:sent', handleNewMessage);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
       socket.off('conversation:read', handleConversationRead);
+      socket.off('user:online');
+      socket.off('user:offline');
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
     };
   }, [conversationId, chats, user?.id]);
   
@@ -337,7 +443,10 @@ export const Chat: React.FC = () => {
     try {
       setSendingMessage(true);
       
-      // Send via API first to get the actual message ID
+      // Send via socket first
+      sendMessage(parseInt(conversationId), content.trim());
+      
+      // Also send via API to ensure persistence
       const sentMessage = await chatService.sendMessage(parseInt(conversationId), content.trim());
       
       // Create message with the actual ID from the server
@@ -350,7 +459,7 @@ export const Chat: React.FC = () => {
         isRead: false
       };
       
-      // Add to UI
+      // Add to UI immediately
       setMessages(prev => [...prev, newMessage]);
       
       // Reset input
@@ -361,9 +470,9 @@ export const Chat: React.FC = () => {
       
       // Scroll to bottom immediately and after a short delay
       const scrollToBottom = () => {
-        const messagesEnd = document.querySelector('.ChatMessages .h-32');
-        if (messagesEnd) {
-          messagesEnd.scrollIntoView({ behavior: 'auto' });
+        const messagesContainer = document.querySelector('.ChatMessages');
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
       };
       
@@ -466,7 +575,6 @@ export const Chat: React.FC = () => {
               )}
             </button>
           </div>
-          
         ) : activeChat ? (
           <ChatView 
             chat={activeChat}
@@ -485,4 +593,4 @@ export const Chat: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};
