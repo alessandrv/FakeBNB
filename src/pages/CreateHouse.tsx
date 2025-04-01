@@ -7,6 +7,7 @@ import { AmenitiesStep } from "../components/steps/amenities-step";
 import { PhotosStep } from "../components/steps/photos-step";
 import { DescriptionStep } from "../components/steps/description-step";
 import { PricingStep } from "../components/steps/pricing-step";
+import { SummaryStep } from "../components/steps/summary-step";
 import { FormStepper } from "../components/form-stepper";
 
 export interface ListingData {
@@ -100,6 +101,11 @@ export function ListingForm() {
       description: "Set your price",
       component: <PricingStep data={formData} updateData={setFormData} />,
     },
+    {
+      title: "Summary",
+      description: "Review your listing",
+      component: <SummaryStep data={formData} />,
+    },
   ];
 
   const next = () => {
@@ -133,7 +139,7 @@ export function ListingForm() {
           </div>
         </div>
       </div>
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t border-divider shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t border-divider shadow-lg z-50">
         <div className="flex justify-between gap-4 max-w-6xl mx-auto">
           <Button
             variant="flat"
