@@ -17,20 +17,24 @@ export default {
 				light: {
 					colors: {
 						primary: {
-							DEFAULT: "#4CAF50", // Your custom primary color (green)
+							DEFAULT: "#69d5f7", // Your custom primary color (blue)
 							foreground: "#FFFFFF", // Text color on primary backgrounds
 							// You can also define the full color palette (50-900)
-							50: "#E8F5E9",
-							100: "#C8E6C9",
-							200: "#A5D6A7",
-							300: "#81C784",
-							400: "#66BB6A",
-							500: "#4CAF50", // Your main primary color (green)
-							600: "#43A047",
-							700: "#388E3C",
-							800: "#2E7D32",
-							900: "#1B5E20",
+							50: "#edfaff",
+							100: "#d6f4fe",
+							200: "#aeecfd",
+							300: "#8ee3fb",
+							400: "#7adaf9",
+							500: "#69d5f7", // Your main primary color (blue)
+							600: "#4aabca",
+							700: "#3683a0",
+							800: "#255c75",
+							900: "#14364a",
+						},
+						focus: {
+							DEFAULT: "#69d5f7", // Your custom primary color (amber/orange)
 						}
+						
 					}
 				},
 				// Optional: Add dark theme configuration if you're using dark mode
