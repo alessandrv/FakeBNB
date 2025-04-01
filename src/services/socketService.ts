@@ -10,7 +10,18 @@ let reconnectTimer: number | null = null;
 
 // Check if socket is already initialized and connected
 export const isSocketConnected = (): boolean => {
-  return !!socket?.connected;
+  // For debugging purposes, let's log why a socket might not be connected
+  if (!socket) {
+    console.log('Socket connection check: Socket is null');
+    return false;
+  }
+  
+  if (!socket.connected) {
+    console.log('Socket connection check: Socket exists but is not connected');
+    return false;
+  }
+  
+  return true;
 };
 
 export const initializeSocket = (token: string) => {
@@ -296,4 +307,36 @@ export const stopTyping = (conversationId: number) => {
       console.log('Successfully stopped typing indicator:', response);
     }
   });
+};
+
+// Add a function to force socket reconnection
+export const forceSocketReconnection = (token: string | null): boolean => {
+  if (!token) {
+    console.error('Cannot reconnect socket: No token provided');
+    return false;
+  }
+  
+  console.log('Forcing socket reconnection with new token');
+  
+  // Clean up existing socket if it exists
+  if (socket) {
+    cleanupSocketConnection();
+  }
+  
+  // Attempt to create a new socket connection
+  try {
+    initializeSocket(token);
+    
+    // Verify if the new connection was successful
+    if (socket?.connected) {
+      console.log('Socket successfully reconnected');
+      return true;
+    } else {
+      console.log('Socket reconnection started but not immediately connected');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error forcing socket reconnection:', error);
+    return false;
+  }
 }; 

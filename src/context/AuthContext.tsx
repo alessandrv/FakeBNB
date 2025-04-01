@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (error) => Promise.reject(error)
   );
 
-  // Ensure socket connection is healthy
+  // Enhance the socket health check functionality
   const checkSocketHealth = () => {
     console.log('Checking socket health...');
     
@@ -90,8 +90,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Try to initialize without disrupting the UI
         try {
           console.log('Reinitializing socket due to health check');
+          
+          // First, try normal initialization which preserves the connection if it exists
           initializeSocket(token);
           socketInitialized.current = true;
+          
+          // If that wasn't successful, try a complete reconnection
+          if (!isSocketConnected()) {
+            console.log('Regular initialization failed, forcing complete reconnection');
+            // First disconnect the socket
+            disconnectSocket();
+            socketInitialized.current = false;
+            
+            // Short delay before reconnecting
+            setTimeout(() => {
+              initializeSocket(token);
+              socketInitialized.current = true;
+            }, 500);
+          }
         } catch (error) {
           console.error('Error reinitializing socket:', error);
         }
