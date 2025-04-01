@@ -84,12 +84,12 @@ export const Chat: React.FC = () => {
     firstName: user.first_name,
     lastName: user.last_name,
     avatar: user.profilePic,
-    isOnline: true
+    isOnline: true // Current user is always online when logged in
   } : {
     id: 0,
     firstName: 'Guest',
     lastName: 'User',
-    isOnline: true
+    isOnline: false
   };
   
   // Effect to fetch conversations
@@ -194,7 +194,7 @@ export const Chat: React.FC = () => {
     };
   }, [conversationId, isDesktop]);
   
-  // Socket event listeners
+  // Effect to handle socket connection and online status
   useEffect(() => {
     const socket = getSocket();
     
@@ -202,10 +202,29 @@ export const Chat: React.FC = () => {
       console.error('Socket not initialized');
       return;
     }
+
+    // Set current user as online when component mounts
+    if (user) {
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === user.id ? { ...p, isOnline: true } : p
+        )
+      })));
+    }
     
     // Add connection status listeners
     socket.on('connect', () => {
       console.log('Socket connected successfully in Chat component');
+      // Set current user as online when socket connects
+      if (user) {
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === user.id ? { ...p, isOnline: true } : p
+          )
+        })));
+      }
       // Rejoin conversation if we were in one
       if (conversationId) {
         joinConversation(parseInt(conversationId));
@@ -214,10 +233,15 @@ export const Chat: React.FC = () => {
 
     socket.on('disconnect', () => {
       console.log('Socket disconnected in Chat component');
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('Socket connection error in Chat component:', error);
+      // Set current user as offline when socket disconnects
+      if (user) {
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === user.id ? { ...p, isOnline: false } : p
+          )
+        })));
+      }
     });
 
     // Listen for user online/offline status
@@ -374,28 +398,19 @@ export const Chat: React.FC = () => {
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('conversation:read', handleConversationRead);
-    socket.on('user:online', (userId: number) => {
-      console.log('User came online:', userId);
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        participants: chat.participants.map(p => 
-          p.id === userId ? { ...p, isOnline: true } : p
-        )
-      })));
-    });
-    socket.on('user:offline', (userId: number) => {
-      console.log('User went offline:', userId);
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        participants: chat.participants.map(p => 
-          p.id === userId ? { ...p, isOnline: false } : p
-        )
-      })));
-    });
     
     // Cleanup function
     return () => {
       console.log('Cleaning up socket event listeners in Chat component');
+      // Set current user as offline when component unmounts
+      if (user) {
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === user.id ? { ...p, isOnline: false } : p
+          )
+        })));
+      }
       socket.off('message:received', handleNewMessage);
       socket.off('message:sent', handleNewMessage);
       socket.off('typing:start', handleTypingStart);

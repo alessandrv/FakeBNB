@@ -5,19 +5,25 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 let socket: Socket | null = null;
 
 export const initializeSocket = (token: string) => {
+  // Clean up existing socket if it exists
   if (socket) {
-    return socket;
+    console.log('Cleaning up existing socket connection');
+    socket.removeAllListeners();
+    socket.disconnect();
   }
 
+  // Initialize new socket connection with auth
   socket = io(API_URL, {
     auth: { token },
-    transports: ['websocket'],
+    query: { token },
+    withCredentials: true,
+    autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000,
-    autoConnect: true
+    reconnectionAttempts: 5,
+    transports: ['websocket', 'polling'],
+    forceNew: true,
+    timeout: 10000 // 10 second timeout
   });
 
   socket.on('connect', () => {
@@ -26,14 +32,27 @@ export const initializeSocket = (token: string) => {
     socket?.emit('user:status', { status: 'online' });
   });
 
-  socket.on('disconnect', () => {
-    console.log('Socket disconnected');
+  socket.on('disconnect', (reason) => {
+    console.log('Socket disconnected:', reason);
     // Emit offline status when socket disconnects
     socket?.emit('user:status', { status: 'offline' });
+    if (reason === 'io server disconnect') {
+      // Server disconnected, try to reconnect
+      if (socket) {
+        console.log('Attempting to reconnect after server disconnect');
+        socket.connect();
+      }
+    }
   });
 
   socket.on('connect_error', (error) => {
     console.error('Socket connection error:', error);
+    // Attempt to reconnect with polling if websocket fails
+    if (socket) {
+      console.log('Switching to polling transport after websocket failure');
+      socket.io.opts.transports = ['polling', 'websocket'];
+      socket.connect();
+    }
   });
 
   socket.on('error', (error) => {
@@ -41,11 +60,16 @@ export const initializeSocket = (token: string) => {
   });
 
   // Add a ping/pong mechanism to keep connection alive
-  setInterval(() => {
+  const pingInterval = setInterval(() => {
     if (socket?.connected) {
       socket.emit('ping');
     }
   }, 30000); // Send ping every 30 seconds
+
+  // Clean up interval on disconnect
+  socket.on('disconnect', () => {
+    clearInterval(pingInterval);
+  });
   
   return socket;
 };
@@ -56,6 +80,8 @@ export const getSocket = (): Socket | null => {
 
 export const disconnectSocket = () => {
   if (socket) {
+    console.log('Disconnecting socket and cleaning up');
+    socket.removeAllListeners();
     socket.disconnect();
     socket = null;
   }

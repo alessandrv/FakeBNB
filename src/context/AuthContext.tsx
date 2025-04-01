@@ -179,6 +179,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('refreshToken', refreshToken);
       
       setUser(user);
+
+      // Initialize socket connection after successful login
+      console.log('Initializing socket connection after login...');
+      const socket = initializeSocket(accessToken);
+      
+      // Add connection status listeners
+      socket.on('connect', () => {
+        console.log('Socket connected after login');
+        // Emit online status
+        socket.emit('user:status', { status: 'online' });
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('Socket connection error after login:', error);
+      });
+      
+      socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected after login:', reason);
+      });
     } catch (error) {
       console.error('Login error:', error);
       
