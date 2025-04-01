@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { Avatar, Badge } from "@heroui/react";
 import type { Chat } from "../../types/chat";
 
@@ -10,15 +10,40 @@ interface ChatListProps {
   isLoading?: boolean;
 }
 
-export const ChatList: React.FC<ChatListProps> = ({ 
-  chats, 
-  activeChat, 
-  onChatSelect, 
+export const ChatList: React.FC<ChatListProps> = ({
+  chats,
+  activeChat,
+  onChatSelect,
   onNewChat,
-  isLoading 
+  isLoading = false
 }) => {
-  const listContainerRef = useRef<HTMLDivElement>(null);
-  
+  const listRef = useRef<HTMLDivElement>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleChatClick = (chatId: number) => {
+    if (isNavigating) return;
+    
+    setIsNavigating(true);
+    onChatSelect(chatId);
+    
+    // Reset navigation state after a short delay
+    setTimeout(() => {
+      setIsNavigating(false);
+    }, 500);
+  };
+
+  const handleNewChatClick = () => {
+    if (isNavigating || !onNewChat) return;
+    
+    setIsNavigating(true);
+    onNewChat();
+    
+    // Reset navigation state after a short delay
+    setTimeout(() => {
+      setIsNavigating(false);
+    }, 500);
+  };
+
   const formatDate = (date: string) => {
     const messageDate = new Date(date);
     const today = new Date();
@@ -54,8 +79,11 @@ export const ChatList: React.FC<ChatListProps> = ({
         <h1 className="text-xl font-semibold">Messages</h1>
         {onNewChat && (
           <button 
-            onClick={onNewChat}
-            className="p-2 rounded-full hover:bg-default-100 transition-colors"
+            onClick={handleNewChatClick}
+            disabled={isNavigating}
+            className={`p-2 rounded-full transition-colors ${
+              isNavigating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-default-100'
+            }`}
             aria-label="New conversation"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -65,7 +93,7 @@ export const ChatList: React.FC<ChatListProps> = ({
         )}
       </div>
       
-      <div ref={listContainerRef} className="overflow-y-auto pt-[64px] h-full">
+      <div ref={listRef} className="overflow-y-auto pt-[64px] h-full">
         {isLoading ? (
           <div className="flex items-center justify-center h-full p-4">
             <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
@@ -75,8 +103,11 @@ export const ChatList: React.FC<ChatListProps> = ({
             <p className="text-default-500 mb-2">No conversations yet</p>
             {onNewChat && (
               <button 
-                onClick={onNewChat}
-                className="text-primary hover:underline font-medium"
+                onClick={handleNewChatClick}
+                disabled={isNavigating}
+                className={`text-primary font-medium ${
+                  isNavigating ? 'opacity-50 cursor-not-allowed' : 'hover:underline'
+                }`}
               >
                 Start a new conversation
               </button>
@@ -90,10 +121,10 @@ export const ChatList: React.FC<ChatListProps> = ({
             return (
               <div
                 key={chat.id}
-                className={`flex items-center p-4 cursor-pointer hover:bg-default-100 transition-colors border-b border-default-100 ${
-                  activeChat === chat.id ? "bg-default-100" : ""
-                }`}
-                onClick={() => onChatSelect(chat.id)}
+                className={`flex items-center p-4 cursor-pointer transition-colors border-b border-default-100 ${
+                  isNavigating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-default-100'
+                } ${activeChat === chat.id ? "bg-default-100" : ""}`}
+                onClick={() => handleChatClick(chat.id)}
               >
                 <div className="relative">
                   <Avatar

@@ -34,6 +34,7 @@ export const Chat: React.FC = () => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const pendingMessages = useRef<Set<number>>(new Set()); // Track pending message IDs
   
   // Effect for responsive layout
   useEffect(() => {
@@ -114,6 +115,8 @@ export const Chat: React.FC = () => {
   
   // Effect to handle conversation change and toggle mobile navbar visibility
   useEffect(() => {
+    let isComponentMounted = true;
+    
     // Clear previous conversation
     if (activeChat) {
       leaveConversation(activeChat.id);
@@ -136,12 +139,16 @@ export const Chat: React.FC = () => {
           // Fetch conversation details
           const conversation = await chatService.getConversation(parseInt(conversationId));
           const mappedChat = mapConversation(conversation);
-          setActiveChat(mappedChat);
+          if (isComponentMounted) {
+            setActiveChat(mappedChat);
+          }
           
           // Fetch messages
           const messagesData = await chatService.getMessages(parseInt(conversationId));
           const mappedMessages = messagesData.map(mapMessage).reverse(); // API returns newest first, reverse for display
-          setMessages(mappedMessages);
+          if (isComponentMounted) {
+            setMessages(mappedMessages);
+          }
           
           // Join the conversation room via socket
           joinConversation(parseInt(conversationId));
@@ -151,13 +158,17 @@ export const Chat: React.FC = () => {
           await chatService.markConversationAsRead(parseInt(conversationId));
           
           // Update unread count in conversations list
-          setChats(prevChats => 
-            prevChats.map(c => 
-              c.id === parseInt(conversationId) ? { ...c, unreadCount: 0 } : c
-            )
-          );
+          if (isComponentMounted) {
+            setChats(prevChats => 
+              prevChats.map(c => 
+                c.id === parseInt(conversationId) ? { ...c, unreadCount: 0 } : c
+              )
+            );
+          }
           
-          setLoading(false);
+          if (isComponentMounted) {
+            setLoading(false);
+          }
           
           // Force scroll to bottom after loading messages
           const scrollToBottom = () => {
@@ -173,15 +184,20 @@ export const Chat: React.FC = () => {
           setTimeout(scrollToBottom, 300);
         } catch (error) {
           console.error('Error fetching conversation and messages:', error);
-          setError('Failed to load conversation');
-          setLoading(false);
+          if (isComponentMounted) {
+            setError('Failed to load conversation');
+            setLoading(false);
+          }
         }
       };
       
       fetchConversationAndMessages();
+    } else {
+      setLoading(false);
     }
     
     return () => {
+      isComponentMounted = false;
       // Cleanup: leave room when unmounting or changing conversations
       if (conversationId) {
         leaveConversation(parseInt(conversationId));
@@ -203,8 +219,10 @@ export const Chat: React.FC = () => {
       return;
     }
 
+    let isComponentMounted = true;
+
     // Set current user as online when component mounts
-    if (user) {
+    if (user && isComponentMounted) {
       setChats(prev => prev.map(chat => ({
         ...chat,
         participants: chat.participants.map(p => 
@@ -214,10 +232,9 @@ export const Chat: React.FC = () => {
     }
     
     // Add connection status listeners
-    socket.on('connect', () => {
+    const handleConnect = () => {
       console.log('Socket connected successfully in Chat component');
-      // Set current user as online when socket connects
-      if (user) {
+      if (user && isComponentMounted) {
         setChats(prev => prev.map(chat => ({
           ...chat,
           participants: chat.participants.map(p => 
@@ -226,15 +243,14 @@ export const Chat: React.FC = () => {
         })));
       }
       // Rejoin conversation if we were in one
-      if (conversationId) {
+      if (conversationId && isComponentMounted) {
         joinConversation(parseInt(conversationId));
       }
-    });
+    };
 
-    socket.on('disconnect', () => {
+    const handleDisconnect = () => {
       console.log('Socket disconnected in Chat component');
-      // Set current user as offline when socket disconnects
-      if (user) {
+      if (user && isComponentMounted) {
         setChats(prev => prev.map(chat => ({
           ...chat,
           participants: chat.participants.map(p => 
@@ -242,31 +258,12 @@ export const Chat: React.FC = () => {
           )
         })));
       }
-    });
-
-    // Listen for user online/offline status
-    socket.on('user:online', (userId: number) => {
-      console.log('User came online:', userId);
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        participants: chat.participants.map(p => 
-          p.id === userId ? { ...p, isOnline: true } : p
-        )
-      })));
-    });
-
-    socket.on('user:offline', (userId: number) => {
-      console.log('User went offline:', userId);
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        participants: chat.participants.map(p => 
-          p.id === userId ? { ...p, isOnline: false } : p
-        )
-      })));
-    });
+    };
 
     // Listen for new messages
     const handleNewMessage = (message: any) => {
+      if (!isComponentMounted) return;
+      
       console.log('Received new message in Chat component:', message);
       
       // Map the message to our frontend format
@@ -341,8 +338,10 @@ export const Chat: React.FC = () => {
     };
 
     // Listen for message sent confirmation
-    socket.on('message:sent', (message: any) => {
+    const handleMessageSent = (message: any) => {
       console.log('Message sent confirmation:', message);
+      if (!isComponentMounted) return;
+      
       // Update messages if it's for the current conversation
       if (message.conversation_id === parseInt(conversationId || '0')) {
         setMessages(prev => {
@@ -353,8 +352,21 @@ export const Chat: React.FC = () => {
           }
           return prev;
         });
+
+        // Scroll to bottom after adding new message
+        const scrollToBottom = () => {
+          const messagesContainer = document.querySelector('.ChatMessages');
+          if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        };
+        
+        // Multiple scroll attempts to ensure it works
+        scrollToBottom();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 200);
       }
-    });
+    };
 
     // Listen for typing indicators
     const handleTypingStart = (data: { userId: number, conversationId: number }) => {
@@ -392,16 +404,43 @@ export const Chat: React.FC = () => {
       console.log('Received conversation read:', data);
     };
 
+    // Listen for user online/offline status
+    const handleUserOnline = (userId: number) => {
+      console.log('User came online:', userId);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === userId ? { ...p, isOnline: true } : p
+        )
+      })));
+    };
+
+    const handleUserOffline = (userId: number) => {
+      console.log('User went offline:', userId);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        participants: chat.participants.map(p => 
+          p.id === userId ? { ...p, isOnline: false } : p
+        )
+      })));
+    };
+
     // Add all event listeners
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
     socket.on('message:received', handleNewMessage);
-    socket.on('message:sent', handleNewMessage);
+    socket.on('message:sent', handleMessageSent);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('conversation:read', handleConversationRead);
+    socket.on('user:online', handleUserOnline);
+    socket.on('user:offline', handleUserOffline);
     
     // Cleanup function
     return () => {
+      isComponentMounted = false;
       console.log('Cleaning up socket event listeners in Chat component');
+      
       // Set current user as offline when component unmounts
       if (user) {
         setChats(prev => prev.map(chat => ({
@@ -411,24 +450,29 @@ export const Chat: React.FC = () => {
           )
         })));
       }
+
+      // Remove all event listeners
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
       socket.off('message:received', handleNewMessage);
-      socket.off('message:sent', handleNewMessage);
+      socket.off('message:sent', handleMessageSent);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
       socket.off('conversation:read', handleConversationRead);
-      socket.off('user:online');
-      socket.off('user:offline');
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('connect_error');
+      socket.off('user:online', handleUserOnline);
+      socket.off('user:offline', handleUserOffline);
+
+      // Leave the conversation if we were in one
+      if (conversationId) {
+        leaveConversation(parseInt(conversationId));
+      }
     };
-  }, [conversationId, chats, user?.id]);
+  }, [conversationId, user?.id]);
   
   // Create new chat with user ID 2
   const createNewChat = async () => {
     try {
       setCreatingChat(true);
-      // Use ID 2 for the new chat - this would typically come from user selection
       const userId = 2;
       const conversation = await chatService.getOrCreateDirectConversation(userId);
       
@@ -441,8 +485,8 @@ export const Chat: React.FC = () => {
         return prev;
       });
       
-      // Navigate to the new conversation
-      navigate(`/chat/${conversation.id}`);
+      // Use replace instead of push to prevent adding to history
+      navigate(`/chat/${conversation.id}`, { replace: true });
       setCreatingChat(false);
     } catch (error) {
       console.error('Error creating new conversation:', error);
@@ -458,10 +502,10 @@ export const Chat: React.FC = () => {
     try {
       setSendingMessage(true);
       
-      // Send via socket first
+      // Send via socket first for real-time delivery
       sendMessage(parseInt(conversationId), content.trim());
       
-      // Also send via API to ensure persistence
+      // Then send via API for persistence
       const sentMessage = await chatService.sendMessage(parseInt(conversationId), content.trim());
       
       // Create message with the actual ID from the server
@@ -483,7 +527,7 @@ export const Chat: React.FC = () => {
       // Stop typing indicator
       stopTyping(parseInt(conversationId));
       
-      // Scroll to bottom immediately and after a short delay
+      // Scroll to bottom after adding new message
       const scrollToBottom = () => {
         const messagesContainer = document.querySelector('.ChatMessages');
         if (messagesContainer) {
@@ -556,7 +600,7 @@ export const Chat: React.FC = () => {
         <ChatList 
           chats={chats}
           activeChat={conversationId ? parseInt(conversationId) : undefined}
-          onChatSelect={(chatId) => navigate(`/chat/${chatId}`)}
+          onChatSelect={(chatId) => navigate(`/chat/${chatId}`, { replace: true })}
           onNewChat={createNewChat}
           isLoading={loading && !conversationId}
         />

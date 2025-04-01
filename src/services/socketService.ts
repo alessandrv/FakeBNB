@@ -3,6 +3,8 @@ import { io, Socket } from 'socket.io-client';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 let socket: Socket | null = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 export const initializeSocket = (token: string) => {
   // Clean up existing socket if it exists
@@ -10,7 +12,11 @@ export const initializeSocket = (token: string) => {
     console.log('Cleaning up existing socket connection');
     socket.removeAllListeners();
     socket.disconnect();
+    socket = null;
   }
+
+  // Reset reconnect attempts
+  reconnectAttempts = 0;
 
   // Initialize new socket connection with auth
   socket = io(API_URL, {
@@ -20,7 +26,7 @@ export const initializeSocket = (token: string) => {
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
     transports: ['websocket', 'polling'],
     forceNew: true,
     timeout: 10000 // 10 second timeout
@@ -28,6 +34,7 @@ export const initializeSocket = (token: string) => {
 
   socket.on('connect', () => {
     console.log('Socket connected successfully');
+    reconnectAttempts = 0; // Reset on successful connection
     // Emit online status when socket connects
     socket?.emit('user:status', { status: 'online' });
   });
@@ -36,11 +43,16 @@ export const initializeSocket = (token: string) => {
     console.log('Socket disconnected:', reason);
     // Emit offline status when socket disconnects
     socket?.emit('user:status', { status: 'offline' });
+    
     if (reason === 'io server disconnect') {
       // Server disconnected, try to reconnect
-      if (socket) {
-        console.log('Attempting to reconnect after server disconnect');
+      if (socket && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
         socket.connect();
+      } else {
+        console.log('Max reconnection attempts reached');
+        disconnectSocket();
       }
     }
   });
@@ -48,7 +60,7 @@ export const initializeSocket = (token: string) => {
   socket.on('connect_error', (error) => {
     console.error('Socket connection error:', error);
     // Attempt to reconnect with polling if websocket fails
-    if (socket) {
+    if (socket && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       console.log('Switching to polling transport after websocket failure');
       socket.io.opts.transports = ['polling', 'websocket'];
       socket.connect();
@@ -64,7 +76,7 @@ export const initializeSocket = (token: string) => {
     if (socket?.connected) {
       socket.emit('ping');
     }
-  }, 30000); // Send ping every 30 seconds
+  }, 30000);
 
   // Clean up interval on disconnect
   socket.on('disconnect', () => {
@@ -81,16 +93,30 @@ export const getSocket = (): Socket | null => {
 export const disconnectSocket = () => {
   if (socket) {
     console.log('Disconnecting socket and cleaning up');
+    // Clear any existing intervals
+    const intervals = window.setInterval(() => {}, 0);
+    for (let i = 0; i < intervals; i++) {
+      window.clearInterval(i);
+    }
+    
+    // Remove all listeners
     socket.removeAllListeners();
+    
+    // Disconnect socket
     socket.disconnect();
+    
+    // Clear socket instance
     socket = null;
+    
+    // Reset reconnect attempts
+    reconnectAttempts = 0;
   }
 };
 
 // Helper to send a message
 export const sendMessage = (conversationId: number, content: string, attachmentUrl?: string) => {
-  if (!socket) {
-    console.error('Socket not initialized');
+  if (!socket?.connected) {
+    console.error('Socket not connected');
     return;
   }
   
@@ -104,14 +130,19 @@ export const sendMessage = (conversationId: number, content: string, attachmentU
       console.error('Error sending message:', response.error);
     } else {
       console.log('Message sent successfully:', response);
+      // Broadcast the message to all clients in the conversation
+      socket?.emit('message:broadcast', {
+        ...response,
+        conversationId
+      });
     }
   });
 };
 
 // Helper to join a conversation
 export const joinConversation = (conversationId: number) => {
-  if (!socket) {
-    console.error('Socket not initialized');
+  if (!socket?.connected) {
+    console.error('Socket not connected');
     return;
   }
   
@@ -121,14 +152,20 @@ export const joinConversation = (conversationId: number) => {
       console.error('Error joining conversation:', response.error);
     } else {
       console.log('Successfully joined conversation:', response);
+      // Emit a user:joined event to notify other users
+      const auth = socket.auth as { userId?: number };
+      socket?.emit('user:joined', { 
+        conversationId, 
+        userId: auth?.userId
+      });
     }
   });
 };
 
 // Helper to leave a conversation
 export const leaveConversation = (conversationId: number) => {
-  if (!socket) {
-    console.error('Socket not initialized');
+  if (!socket?.connected) {
+    console.error('Socket not connected');
     return;
   }
   
@@ -144,8 +181,8 @@ export const leaveConversation = (conversationId: number) => {
 
 // Helper to mark a conversation as read
 export const markConversationAsRead = (conversationId: number) => {
-  if (!socket) {
-    console.error('Socket not initialized');
+  if (!socket?.connected) {
+    console.error('Socket not connected');
     return;
   }
   
@@ -161,8 +198,8 @@ export const markConversationAsRead = (conversationId: number) => {
 
 // Helper to indicate typing status
 export const startTyping = (conversationId: number) => {
-  if (!socket) {
-    console.error('Socket not initialized');
+  if (!socket?.connected) {
+    console.error('Socket not connected');
     return;
   }
   
@@ -177,8 +214,8 @@ export const startTyping = (conversationId: number) => {
 };
 
 export const stopTyping = (conversationId: number) => {
-  if (!socket) {
-    console.error('Socket not initialized');
+  if (!socket?.connected) {
+    console.error('Socket not connected');
     return;
   }
   

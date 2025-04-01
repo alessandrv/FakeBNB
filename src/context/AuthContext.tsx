@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { initializeSocket, disconnectSocket } from '../services/socketService';
@@ -48,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+  const socketInitialized = useRef(false);
 
   // Create axios instance with auth headers
   const api = axios.create({
@@ -85,6 +86,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Retry the original request with new token
             const token = localStorage.getItem('accessToken');
             originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            
+            // Reinitialize socket with new token
+            if (token) {
+              initializeSocket(token);
+            }
+            
             return axios(originalRequest);
           } else {
             // If refresh failed, logout and redirect to login
@@ -105,29 +112,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize socket when user is authenticated
   useEffect(() => {
-    if (user && localStorage.getItem('accessToken')) {
+    if (user && localStorage.getItem('accessToken') && !socketInitialized.current) {
       console.log('Initializing socket connection...');
-      // Initialize Socket.IO connection
-      const socket = initializeSocket(localStorage.getItem('accessToken') || '');
-      
-      // Add connection status listeners
-      socket.on('connect', () => {
-        console.log('Socket connected in AuthContext');
-      });
-      
-      socket.on('connect_error', (error) => {
-        console.error('Socket connection error in AuthContext:', error);
-      });
-      
-      socket.on('disconnect', (reason) => {
-        console.log('Socket disconnected in AuthContext:', reason);
-      });
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        initializeSocket(token);
+        socketInitialized.current = true;
+      }
     }
     
     return () => {
       console.log('Cleaning up socket in AuthContext');
-      // Clean up socket on unmount
       disconnectSocket();
+      socketInitialized.current = false;
     };
   }, [user]);
 
@@ -166,7 +163,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
       }, {
-        // Increase timeout for login requests
         timeout: 10000,
         headers: {
           'Content-Type': 'application/json',
@@ -182,34 +178,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Initialize socket connection after successful login
       console.log('Initializing socket connection after login...');
-      const socket = initializeSocket(accessToken);
-      
-      // Add connection status listeners
-      socket.on('connect', () => {
-        console.log('Socket connected after login');
-        // Emit online status
-        socket.emit('user:status', { status: 'online' });
-      });
-      
-      socket.on('connect_error', (error) => {
-        console.error('Socket connection error after login:', error);
-      });
-      
-      socket.on('disconnect', (reason) => {
-        console.log('Socket disconnected after login:', reason);
-      });
+      initializeSocket(accessToken);
+      socketInitialized.current = true;
     } catch (error) {
       console.error('Login error:', error);
       
-      // Check specifically for rate limiting errors
       if (axios.isAxiosError(error) && error.response?.status === 429) {
-        // Pass through the error with rate limit information
         throw error;
       }
       
-      // For demo mode handling when backend is not available
       if (axios.isAxiosError(error) && !error.response) {
-        // If network error or server unavailable, handle gracefully
         console.warn('Backend unreachable, consider using demo mode');
       }
       
@@ -222,6 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Disconnect from Socket.IO
       disconnectSocket();
+      socketInitialized.current = false;
       
       // Call logout endpoint if it exists
       const token = localStorage.getItem('refreshToken');
@@ -255,28 +234,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Attempt to get user profile
         const response = await api.get('/api/auth/profile');
         setUser(response.data.user);
+        
+        // Initialize socket if we have a user
+        if (response.data.user && !socketInitialized.current) {
+          initializeSocket(token);
+          socketInitialized.current = true;
+        }
       } catch (error) {
         console.error('Error loading user:', error);
         
-        // If error is 401, try to refresh the token
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           const refreshed = await refreshToken();
           
           if (refreshed) {
-            // If refresh worked, try to get profile again
             try {
               const response = await api.get('/api/auth/profile');
               setUser(response.data.user);
+              
+              // Initialize socket if we have a user
+              if (response.data.user && !socketInitialized.current) {
+                const newToken = localStorage.getItem('accessToken');
+                if (newToken) {
+                  initializeSocket(newToken);
+                  socketInitialized.current = true;
+                }
+              }
             } catch (profileError) {
-              // If still failing, logout
               await logout();
             }
           } else {
-            // If refresh failed, clear user state
             await logout();
           }
         } else {
-          // For other errors, clear user state
           await logout();
         }
       } finally {
