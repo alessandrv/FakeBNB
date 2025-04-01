@@ -12,6 +12,7 @@ interface ChatViewProps {
   onSendMessage: (content: string) => void;
   isLoading?: boolean;
   typingUsers?: Record<number, string>;
+  isPrimaryDevice: boolean;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -21,7 +22,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onBack,
   onSendMessage,
   isLoading,
-  typingUsers = {}
+  typingUsers = {},
+  isPrimaryDevice
 }) => {
   
   const [newMessage, setNewMessage] = useState("");
@@ -92,11 +94,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   }, [messages]);
 
-  const isTyping = Object.keys(typingUsers).length > 0;
-  const typingText = isTyping 
-    ? Object.values(typingUsers).join(", ") + (Object.keys(typingUsers).length > 1 ? " are " : " is ") + "typing..." 
-    : "";
-    
   const formatTime = (date: Date) => {
     const today = new Date();
     const isToday = date.toDateString() === today.toDateString();
@@ -159,16 +156,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     {otherUser.isOnline ? "Online" : "Offline"}
                   </span>
                 </div>
-                {isTyping && (
-                  <div className="flex items-center gap-1 text-sm text-default-500 animate-fade-in">
-                    <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 bg-default-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-1.5 h-1.5 bg-default-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-1.5 h-1.5 bg-default-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                    <span>typing</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>

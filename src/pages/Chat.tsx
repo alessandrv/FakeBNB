@@ -35,6 +35,7 @@ export const Chat: React.FC = () => {
   const [creatingChat, setCreatingChat] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  const [isPrimaryDevice, setIsPrimaryDevice] = useState(true);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const pendingMessages = useRef<Set<number>>(new Set()); // Track pending message IDs
   const processedMessageIds = useRef<Set<number>>(new Set()); // Track all processed message IDs
@@ -178,39 +179,44 @@ export const Chat: React.FC = () => {
         clearInterval(socketCheckInterval.current);
       }
       
-      // Create a new check interval - check more frequently (every 3 seconds)
+      // Create a new check interval - check more frequently (every 2 seconds)
       socketCheckInterval.current = window.setInterval(() => {
-        // If socket is connected but user hasn't joined the conversation yet
-        if (isSocketConnected() && !hasJoinedCurrentConversation.current && conversationId) {
-          console.log('Socket connected but not joined to conversation, rejoining...');
-          ensureJoinedToConversation().catch(err => {
-            console.error('Error ensuring joined to conversation:', err);
-          });
-        } else if (!isSocketConnected() && !hasJoinedCurrentConversation.current && conversationId) {
-          // Socket is disconnected and we're not in the conversation
-          console.log('Socket disconnected, attempting reconnection...');
+        const socket = getSocket();
+        
+        // If socket is not connected or not initialized
+        if (!socket || !socket.connected) {
+          console.log('Socket disconnected or not initialized, attempting reconnection...');
           const token = localStorage.getItem('accessToken');
           if (token) {
-            // Try to force reconnection (with async handling)
+            // Try to force reconnection
             forceSocketReconnection(token)
               .then(reconnected => {
                 if (reconnected) {
-                  // Wait a short time for the socket to fully establish connection
+                  console.log('Socket reconnected successfully');
+                  // Wait a short time for the socket to fully establish
                   setTimeout(() => {
                     ensureJoinedToConversation().catch(err => {
                       console.error('Error joining after reconnection:', err);
                     });
                   }, 500);
                 } else {
-                  console.error('Socket reconnection failed in monitoring interval');
+                  console.error('Socket reconnection failed');
+                  // Try alternative approach
+                  window.dispatchEvent(new Event('focus'));
                 }
               })
               .catch(err => {
-                console.error('Error during socket reconnection in interval:', err);
+                console.error('Error during socket reconnection:', err);
               });
           }
+        } else if (!hasJoinedCurrentConversation.current) {
+          // Socket is connected but we haven't joined the conversation
+          console.log('Socket connected but not joined to conversation, joining...');
+          ensureJoinedToConversation().catch(err => {
+            console.error('Error ensuring joined to conversation:', err);
+          });
         }
-      }, 3000) as unknown as number;
+      }, 2000) as unknown as number; // Check every 2 seconds
     }
     
     return () => {
@@ -223,7 +229,6 @@ export const Chat: React.FC = () => {
   
   // Effect to fetch conversations
   useEffect(() => {
-    document.documentElement.style.setProperty('--hide-header-mobile', 'None');
     const fetchConversations = async () => {
       try {
         const data = await chatService.getConversations();
@@ -431,13 +436,10 @@ export const Chat: React.FC = () => {
     
     if (!socket) {
       console.error('Socket not initialized');
-      // If we should be in a conversation but socket isn't available, try to reconnect after a short delay
       if (conversationId) {
         setTimeout(() => {
-          // Trigger a reconnect through the health check in AuthContext
           if (!isSocketConnected() && conversationId) {
             console.log('Socket not initialized, attempting to reconnect via health check');
-            // This will indirectly cause a socket reconnection
             window.dispatchEvent(new Event('focus'));
           }
         }, 1000);
@@ -449,6 +451,7 @@ export const Chat: React.FC = () => {
 
     // Set current user as online when component mounts
     if (user && isComponentMounted) {
+      console.log('Setting current user as online:', user.id);
       setChats(prev => prev.map(chat => ({
         ...chat,
         participants: chat.participants.map(p => 
@@ -461,6 +464,7 @@ export const Chat: React.FC = () => {
     const handleConnect = () => {
       console.log('Socket connected successfully in Chat component');
       if (user && isComponentMounted) {
+        console.log('Setting current user as online on connect:', user.id);
         setChats(prev => prev.map(chat => ({
           ...chat,
           participants: chat.participants.map(p => 
@@ -471,19 +475,11 @@ export const Chat: React.FC = () => {
       // Rejoin conversation if we were in one
       if (conversationId && isComponentMounted) {
         console.log(`Rejoining conversation ${conversationId} after socket connect event`);
-        
-        // Clear existing try-join status
         hasJoinedCurrentConversation.current = false;
-        
-        // Small delay to ensure socket is fully established
         setTimeout(() => {
           try {
-            console.log('Attempting to join conversation after socket connect event');
             joinConversation(parseInt(conversationId));
             hasJoinedCurrentConversation.current = true;
-            console.log(`Successfully joined conversation ${conversationId} after socket connect`);
-            
-            // Also mark as read
             markConversationAsRead(parseInt(conversationId));
             chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
           } catch (error) {
@@ -497,28 +493,13 @@ export const Chat: React.FC = () => {
       console.log('Socket disconnected in Chat component');
       hasJoinedCurrentConversation.current = false;
       if (user && isComponentMounted) {
+        console.log('Setting current user as offline on disconnect:', user.id);
         setChats(prev => prev.map(chat => ({
           ...chat,
           participants: chat.participants.map(p => 
             p.id === user.id ? { ...p, isOnline: false } : p
           )
         })));
-      }
-    };
-
-    const handleReconnectAttempt = (attemptNumber: number) => {
-      console.log(`Socket reconnect attempt ${attemptNumber}`);
-    };
-
-    const handleReconnect = () => {
-      console.log('Socket reconnected');
-      // Rejoin current conversation if we're in one
-      if (conversationId && isComponentMounted) {
-        console.log(`Rejoining conversation ${conversationId} after socket reconnect`);
-        setTimeout(() => {
-          joinConversation(parseInt(conversationId));
-          hasJoinedCurrentConversation.current = true;
-        }, 500);
       }
     };
 
@@ -604,6 +585,16 @@ export const Chat: React.FC = () => {
       });
     };
 
+    // Listen for message delivery confirmation
+    const handleMessageDelivered = (data: { message_id: number, conversation_id: number }) => {
+      console.log('Message delivered:', data);
+      if (data.conversation_id === parseInt(conversationId || '0')) {
+        setMessages(prev => prev.map(m => 
+          m.id === data.message_id ? { ...m, isDelivered: true } : m
+        ));
+      }
+    };
+
     // Listen for typing indicators
     const handleTypingStart = (data: { userId: number, conversationId: number }) => {
       console.log('Received typing start:', data);
@@ -640,25 +631,52 @@ export const Chat: React.FC = () => {
       console.log('Received conversation read:', data);
     };
 
-    // Listen for user online/offline status
-    const handleUserOnline = (userId: number) => {
-      console.log('User came online:', userId);
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        participants: chat.participants.map(p => 
-          p.id === userId ? { ...p, isOnline: true } : p
-        )
-      })));
-    };
+    // Separate handler for user status updates
+    const handleUserStatus = (data: { status: 'online' | 'offline', userId: number, timestamp: string }) => {
+      console.log('Received user status:', data);
+      if (isComponentMounted) {
+        // Update the status for the user in all conversations
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === data.userId ? { 
+              ...p, 
+              isOnline: data.status === 'online',
+              lastSeen: data.timestamp
+            } : p
+          )
+        })));
 
-    const handleUserOffline = (userId: number) => {
-      console.log('User went offline:', userId);
-      setChats(prev => prev.map(chat => ({
-        ...chat,
-        participants: chat.participants.map(p => 
-          p.id === userId ? { ...p, isOnline: false } : p
-        )
-      })));
+        // Update active chat if it exists and contains the user
+        if (activeChat && activeChat.participants.some(p => p.id === data.userId)) {
+          console.log('Updating active chat user status:', data.status);
+          setActiveChat(prev => ({
+            ...prev!,
+            participants: prev!.participants.map(p => 
+              p.id === data.userId ? { 
+                ...p, 
+                isOnline: data.status === 'online',
+                lastSeen: data.timestamp
+              } : p
+            )
+          }));
+        }
+
+        // If this is the current user, also update their status
+        if (data.userId === user?.id) {
+          console.log('Updating current user status:', data.status);
+          setChats(prev => prev.map(chat => ({
+            ...chat,
+            participants: chat.participants.map(p => 
+              p.id === user.id ? { 
+                ...p, 
+                isOnline: data.status === 'online',
+                lastSeen: data.timestamp
+              } : p
+            )
+          })));
+        }
+      }
     };
 
     // Add all event listeners
@@ -667,11 +685,33 @@ export const Chat: React.FC = () => {
     socket.on('message:received', handleNewMessage);
     socket.on('message:broadcast', handleNewMessage);
     socket.on('message:sent', handleNewMessage);
+    socket.on('message:delivered', handleMessageDelivered);
     socket.on('typing:start', handleTypingStart);
     socket.on('typing:stop', handleTypingStop);
     socket.on('conversation:read', handleConversationRead);
-    socket.on('user:online', handleUserOnline);
-    socket.on('user:offline', handleUserOffline);
+    socket.on('user:status', handleUserStatus);
+
+    // Add custom event listeners for messages
+    const handleCustomMessageReceived = (event: CustomEvent) => {
+      handleNewMessage(event.detail);
+    };
+
+    const handleCustomMessageBroadcast = (event: CustomEvent) => {
+      handleNewMessage(event.detail);
+    };
+
+    const handleCustomMessageSent = (event: CustomEvent) => {
+      handleNewMessage(event.detail);
+    };
+
+    const handleCustomMessageDelivered = (event: CustomEvent) => {
+      handleMessageDelivered(event.detail);
+    };
+
+    window.addEventListener('message:received', handleCustomMessageReceived as EventListener);
+    window.addEventListener('message:broadcast', handleCustomMessageBroadcast as EventListener);
+    window.addEventListener('message:sent', handleCustomMessageSent as EventListener);
+    window.addEventListener('message:delivered', handleCustomMessageDelivered as EventListener);
 
     // If socket is connected but we're not joined to the conversation yet, join now
     if (socket.connected && conversationId && !hasJoinedCurrentConversation.current) {
@@ -685,17 +725,23 @@ export const Chat: React.FC = () => {
       isComponentMounted = false;
       console.log('Cleaning up socket event listeners in Chat component');
       
-      // Remove all event listeners to avoid duplicates
+      // Remove all event listeners
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('message:received', handleNewMessage);
       socket.off('message:broadcast', handleNewMessage);
       socket.off('message:sent', handleNewMessage);
+      socket.off('message:delivered', handleMessageDelivered);
       socket.off('typing:start', handleTypingStart);
       socket.off('typing:stop', handleTypingStop);
       socket.off('conversation:read', handleConversationRead);
-      socket.off('user:online', handleUserOnline);
-      socket.off('user:offline', handleUserOffline);
+      socket.off('user:status', handleUserStatus);
+
+      // Remove custom event listeners
+      window.removeEventListener('message:received', handleCustomMessageReceived as EventListener);
+      window.removeEventListener('message:broadcast', handleCustomMessageBroadcast as EventListener);
+      window.removeEventListener('message:sent', handleCustomMessageSent as EventListener);
+      window.removeEventListener('message:delivered', handleCustomMessageDelivered as EventListener);
 
       // Leave the conversation if we were in one
       if (conversationId) {
@@ -788,12 +834,42 @@ export const Chat: React.FC = () => {
     }
   };
   
-  // Send message handler for the ChatView component
+  // Add effect to handle device status
+  useEffect(() => {
+    const handleDeviceStatus = (event: CustomEvent) => {
+      setIsPrimaryDevice(event.detail.isPrimary);
+      if (!event.detail.isPrimary) {
+        setError('This device is not authorized to send messages. Only the primary device can send messages.');
+      } else {
+        setError(null);
+      }
+    };
+
+    const handleMessageError = (event: CustomEvent) => {
+      setError(event.detail.error);
+    };
+
+    window.addEventListener('deviceStatus', handleDeviceStatus as EventListener);
+    window.addEventListener('messageError', handleMessageError as EventListener);
+
+    return () => {
+      window.removeEventListener('deviceStatus', handleDeviceStatus as EventListener);
+      window.removeEventListener('messageError', handleMessageError as EventListener);
+    };
+  }, []);
+  
+  // Update handleSendMessage to check device status
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || !conversationId || !user) return;
     
+    if (!isPrimaryDevice) {
+      setError('This device is not authorized to send messages. Only the primary device can send messages.');
+      return;
+    }
+    
     try {
       setSendingMessage(true);
+      setError(null); // Clear any previous errors
       
       // Generate a temporary ID for immediate UI feedback
       const tempId = Date.now();
@@ -855,20 +931,13 @@ export const Chat: React.FC = () => {
   
   // Clean up the header visibility setting when unmounting
   useEffect(() => {
-    // Hide the main app header on Chat page
-    document.documentElement.style.setProperty('--hide-header-mobile', 'None');
-    
-    // On component mount, force a layout update for mobile
+    // On component mount, force a layout update
     const timeoutId = setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
     }, 100);
     
     return () => {
       clearTimeout(timeoutId);
-      // Restore header visibility when leaving the chat page
-      document.documentElement.style.setProperty('--hide-header-mobile', 'block');
-      // Also ensure navbar visibility is restored
-      document.documentElement.style.setProperty('--hide-navbar-mobile', 'grid');
     };
   }, []);
   
@@ -885,7 +954,7 @@ export const Chat: React.FC = () => {
   return (
     <div 
       ref={chatContainerRef}
-      className="flex bg-default-50 w-full h-screen max-h-screen overflow-hidden"
+      className="flex bg-default-50 w-full h-screen max-h-screen overflow-hidden relative"
     >
       {/* Mobile layout: show either chat list or chat view */}
       <div className={`w-full md:w-80 flex-shrink-0 bg-white h-full fixed md:relative left-0 top-0 z-10 md:border-r border-default-200 ${
@@ -901,7 +970,7 @@ export const Chat: React.FC = () => {
       </div>
 
       {/* Chat view */}
-      <div className={`flex-1 h-full ${
+      <div className={`flex-1 h-full relative ${
         !conversationId && !isDesktop ? 'hidden' : 'block'
       }`}>
         {!conversationId ? (
@@ -929,15 +998,40 @@ export const Chat: React.FC = () => {
             </button>
           </div>
         ) : activeChat ? (
-          <ChatView 
-            chat={activeChat}
-            messages={messages}
-            currentUser={currentUser}
-            onBack={() => navigate('/chat')}
-            onSendMessage={handleSendMessage}
-            isLoading={loading}
-            typingUsers={typingUsers}
-          />
+          <>
+            {!isPrimaryDevice && (
+              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm">
+                      This device is not authorized to send messages. Only the primary device can send messages.
+                    </p>
+                    <button
+                      onClick={() => window.dispatchEvent(new Event('focus'))}
+                      className="mt-2 text-sm font-medium text-yellow-800 hover:text-yellow-900"
+                    >
+                      Set as primary device
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            <ChatView 
+              chat={activeChat}
+              messages={messages}
+              currentUser={currentUser}
+              onBack={() => navigate('/chat')}
+              onSendMessage={handleSendMessage}
+              isLoading={loading}
+              typingUsers={typingUsers}
+              isPrimaryDevice={isPrimaryDevice}
+            />
+          </>
         ) : (
           <div className="flex items-center justify-center h-full">
             <Spinner size="lg" />

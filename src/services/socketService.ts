@@ -32,16 +32,9 @@ export const isSocketConnected = (): boolean => {
 };
 
 export const initializeSocket = (token: string) => {
-  // If socket is already connected with the same token, don't reinitialize
-  // This prevents unnecessary reconnections that could cause UI issues
-  if (socket?.connected) {
-    console.log('Socket already connected, skipping initialization');
-    return socket;
-  }
-  
-  // Clean up existing socket if it exists but isn't connected
+  // Always clean up existing socket when initializing with a new token
   if (socket) {
-    console.log('Cleaning up existing socket connection');
+    console.log('Cleaning up existing socket connection before initializing new one');
     cleanupSocketConnection();
   }
 
@@ -73,49 +66,164 @@ export const initializeSocket = (token: string) => {
     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
     timeout: 20000,
     transports: ['websocket', 'polling'],
-    forceNew: false // Changed to false to allow reusing connections
+    forceNew: true,
+    multiplex: false,
+    rememberUpgrade: true
   });
 
+  // Add connection event handlers
   socket.on('connect', () => {
     console.log('Socket connected successfully');
     reconnectAttempts = 0;
     
+    // Update status immediately on connect
     if (socket?.connected) {
-      socket.emit('user:status', { status: 'online' });
+      const auth = socket.auth as { userId?: number };
+      if (auth?.userId) {
+        console.log('Emitting online status for user:', auth.userId);
+        socket.emit('user:status', {
+          status: 'online',
+          userId: auth.userId,
+          timestamp: new Date().toISOString(),
+          force_update: true,
+          broadcast: true,
+          device_type: 'desktop'
+        });
+      }
     }
+
+    // Set up ping interval
+    if (pingInterval) clearInterval(pingInterval);
+    pingInterval = window.setInterval(() => {
+      if (socket?.connected) {
+        try {
+          socket.emit('ping', {}, (response: any) => {
+            if (response?.error) {
+              console.warn('Ping error:', response.error);
+              if (socket && !socket.connected) {
+                console.log('Ping failed, attempting reconnection...');
+                socket.connect();
+              }
+            } else {
+              // If ping successful, ensure online status is maintained
+              const auth = socket?.auth as { userId?: number };
+              if (auth?.userId && socket?.connected) {
+                socket.emit('user:status', {
+                  status: 'online',
+                  userId: auth.userId,
+                  timestamp: new Date().toISOString(),
+                  broadcast: true,
+                  device_type: 'desktop'
+                });
+              }
+            }
+          });
+        } catch (error) {
+          console.warn('Error sending ping:', error);
+        }
+      }
+    }, 15000) as unknown as number;
+  });
+
+  // Add message event handlers
+  socket.on('message:received', (message: any) => {
+    console.log('Received message:', message);
+    // Dispatch a custom event that the Chat component can listen to
+    window.dispatchEvent(new CustomEvent('message:received', { detail: message }));
+  });
+
+  socket.on('message:broadcast', (message: any) => {
+    console.log('Received broadcast message:', message);
+    // Dispatch a custom event that the Chat component can listen to
+    window.dispatchEvent(new CustomEvent('message:broadcast', { detail: message }));
+  });
+
+  socket.on('message:sent', (message: any) => {
+    console.log('Message sent:', message);
+    // Dispatch a custom event that the Chat component can listen to
+    window.dispatchEvent(new CustomEvent('message:sent', { detail: message }));
+  });
+
+  socket.on('message:delivered', (data: any) => {
+    console.log('Message delivered:', data);
+    // Dispatch a custom event that the Chat component can listen to
+    window.dispatchEvent(new CustomEvent('message:delivered', { detail: data }));
+  });
+
+  // Add visibility change handler
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && socket?.connected) {
+      console.log('Page became visible, ensuring socket connection');
+      const auth = socket.auth as { userId?: number };
+      if (auth?.userId) {
+        socket.emit('user:status', {
+          status: 'online',
+          userId: auth.userId,
+          timestamp: new Date().toISOString(),
+          force_update: true,
+          broadcast: true,
+          device_type: 'desktop'
+        });
+      }
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  // Add beforeunload handler
+  const handleBeforeUnload = () => {
+    if (socket?.connected) {
+      const auth = socket.auth as { userId?: number };
+      if (auth?.userId) {
+        socket.emit('user:status', {
+          status: 'offline',
+          userId: auth.userId,
+          timestamp: new Date().toISOString(),
+          broadcast: true,
+          device_type: 'desktop'
+        });
+      }
+    }
+  };
+
+  window.addEventListener('beforeunload', handleBeforeUnload);
+
+  // Clean up event listeners when socket is disconnected
+  socket.on('disconnect', () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
   });
 
   socket.on('reconnect', (attemptNumber) => {
     console.log(`Socket reconnected after ${attemptNumber} attempts`);
     reconnectAttempts = 0;
     
+    // Update status immediately on reconnect
     if (socket?.connected) {
-      socket.emit('user:status', { status: 'online' });
+      const auth = socket.auth as { userId?: number };
+      if (auth?.userId) {
+        console.log('Emitting online status on reconnect for user:', auth.userId);
+        // Force online status update on reconnect
+        socket.emit('user:status', {
+          status: 'online',
+          userId: auth.userId,
+          timestamp: new Date().toISOString(),
+          force_update: true,
+          broadcast: true,
+          device_type: 'desktop'
+        });
+      }
     }
   });
 
   socket.on('reconnect_attempt', (attemptNumber) => {
     console.log(`Socket reconnection attempt ${attemptNumber}`);
-  });
-
-  socket.on('disconnect', (reason) => {
-    console.log('Socket disconnected:', reason);
-    
-    // Handle various disconnect reasons
-    if (reason === 'io server disconnect' || reason === 'transport close') {
-      console.log('Server initiated disconnect, attempting to reconnect...');
-      
-      // Use Socket.IO's built-in reconnection first
-      if (socket && !socket.connected) {
-        // Only try to manually reconnect if Socket.IO's auto reconnect fails
-        if (reconnectTimer) clearTimeout(reconnectTimer);
-        
-        reconnectTimer = window.setTimeout(() => {
-          if (socket && !socket.connected) {
-            console.log('Attempting manual reconnection...');
-            socket.connect();
-          }
-        }, 2000) as unknown as number;
+    // If we've tried too many times, try to force a new connection
+    if (attemptNumber >= MAX_RECONNECT_ATTEMPTS) {
+      console.log('Max reconnection attempts reached, forcing new connection');
+      if (socket) {
+        socket.disconnect();
+        socket.connect();
       }
     }
   });
@@ -127,6 +235,7 @@ export const initializeSocket = (token: string) => {
     if (socket && !socket.connected) {
       console.log('Switching to polling transport after websocket failure');
       socket.io.opts.transports = ['polling', 'websocket'];
+      socket.connect(); // Force reconnection with new transport
     }
   });
 
@@ -135,31 +244,45 @@ export const initializeSocket = (token: string) => {
     // Log but don't disconnect - let Socket.IO handle reconnection
   });
 
-  // Add a ping/pong mechanism to keep connection alive
-  pingInterval = window.setInterval(() => {
-    if (socket?.connected) {
-      try {
-        socket.emit('ping', {}, (response: any) => {
-          if (response?.error) {
-            console.warn('Ping error:', response.error);
-          }
-        });
-      } catch (error) {
-        console.warn('Error sending ping:', error);
-      }
-    }
-  }, 25000) as unknown as number;
-
   return socket;
 };
 
-// Helper function to clean up socket connection
+// Update the cleanup function to handle global room
 const cleanupSocketConnection = () => {
   if (!socket) return;
   
   try {
-    // Remove all listeners to prevent memory leaks
+    // Clear all timers first
+    if (pingInterval) {
+      clearInterval(pingInterval);
+      pingInterval = null;
+    }
+    
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
+    // Remove all listeners
     socket.removeAllListeners();
+    
+    // Emit offline status before disconnecting
+    const auth = socket.auth as { userId?: number };
+    if (auth?.userId) {
+      console.log('Emitting offline status before cleanup for user:', auth.userId);
+      socket.emit('user:status', {
+        status: 'offline',
+        userId: auth.userId,
+        timestamp: new Date().toISOString(),
+        broadcast: true,
+        device_type: 'desktop'
+      });
+    }
+    
+    // Leave global room before disconnecting
+    socket.emit('leave:global');
+    
+    // Disconnect the socket
     socket.disconnect();
   } catch (error) {
     console.error('Error cleaning up socket:', error);
@@ -183,20 +306,33 @@ export const getSocket = (): Socket | null => {
   return socket;
 };
 
+// Update the disconnect function to be more thorough
 export const disconnectSocket = () => {
   if (socket) {
     console.log('Disconnecting socket and cleaning up');
     
-    // Clear ping interval
+    // Clear all timers
     if (pingInterval) {
       clearInterval(pingInterval);
       pingInterval = null;
     }
     
-    // Clear reconnect timer
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+    
+    // Emit offline status before disconnecting
+    const auth = socket.auth as { userId?: number };
+    if (auth?.userId) {
+      console.log('Emitting offline status before disconnect for user:', auth.userId);
+      socket.emit('user:status', {
+        status: 'offline',
+        userId: auth.userId,
+        timestamp: new Date().toISOString(),
+        broadcast: true,
+        device_type: 'desktop'
+      });
     }
     
     cleanupSocketConnection();
@@ -223,22 +359,62 @@ export const sendMessage = (conversationId: number, content: string, attachmentU
     socket.emit('message:send', {
       conversationId,
       content,
-      attachmentUrl
+      attachmentUrl,
+      timestamp: new Date().toISOString(),
+      force_delivery: true
     }, (response: any) => {
       if (response?.error) {
         console.error('Error sending message:', response.error);
       } else {
         console.log('Message sent successfully:', response);
-        // Broadcast the message to all clients in the conversation
+        
+        // Emit message:broadcast to ensure delivery regardless of online status
         socket?.emit('message:broadcast', {
           ...response,
           conversation_id: conversationId,
-          sender_id: socket.auth?.userId
+          sender_id: (socket.auth as any)?.userId || response.sender_id,
+          created_at: new Date().toISOString(),
+          is_delivered: true,
+          force_delivery: true, // Force delivery regardless of status
+          broadcast: true // Add broadcast flag to ensure server broadcasts to all clients
+        });
+
+        // Emit message:delivered event to track delivery
+        socket?.emit('message:delivered', {
+          message_id: response.id,
+          conversation_id: conversationId,
+          delivered_at: new Date().toISOString(),
+          force_delivery: true
         });
       }
     });
   } catch (error) {
     console.error('Exception while sending message:', error);
+  }
+};
+
+// Separate function to handle online/offline status
+export const updateUserStatus = (status: 'online' | 'offline') => {
+  if (!socket?.connected) {
+    console.error('Socket not connected, cannot update status');
+    return;
+  }
+  
+  try {
+    const auth = socket.auth as { userId?: number };
+    if (auth?.userId) {
+      console.log(`Updating user status to ${status} for user:`, auth.userId);
+      socket.emit('user:status', { 
+        status,
+        userId: auth.userId,
+        timestamp: new Date().toISOString(),
+        force_update: status === 'online',
+        broadcast: true,
+        device_type: 'desktop'
+      });
+    }
+  } catch (error) {
+    console.error('Exception while updating user status:', error);
   }
 };
 
@@ -251,22 +427,32 @@ export const joinConversation = (conversationId: number) => {
   
   try {
     console.log('Joining conversation:', conversationId);
-    socket.emit('conversation:join', conversationId, (response: any) => {
+    
+    // Join the global room for all users
+    socket.emit('join:global', (response: any) => {
       if (response?.error) {
-        console.error('Error joining conversation:', response.error);
+        console.error('Error joining global room:', response.error);
       } else {
-        console.log('Successfully joined conversation:', response);
+        console.log('Successfully joined global room');
         if (socket) {
           const auth = socket.auth as { userId?: number };
-          socket.emit('user:joined', { 
-            conversationId, 
-            userId: auth?.userId
-          });
+          // Emit user status when joining global room
+          if (auth?.userId) {
+            console.log('Emitting online status when joining global room for user:', auth.userId);
+            socket.emit('user:status', { 
+              status: 'online',
+              userId: auth.userId,
+              timestamp: new Date().toISOString(),
+              force_update: true,
+              broadcast: true,
+              device_type: 'desktop'
+            });
+          }
         }
       }
     });
   } catch (error) {
-    console.error('Exception while joining conversation:', error);
+    console.error('Exception while joining global room:', error);
   }
 };
 
@@ -276,12 +462,12 @@ export const leaveConversation = (conversationId: number) => {
     return;
   }
   
-  console.log('Leaving conversation:', conversationId);
-  socket.emit('conversation:leave', conversationId, (response: any) => {
+  console.log('Leaving global room');
+  socket.emit('leave:global', (response: any) => {
     if (response?.error) {
-      console.error('Error leaving conversation:', response.error);
+      console.error('Error leaving global room:', response.error);
     } else {
-      console.log('Successfully left conversation:', response);
+      console.log('Successfully left global room');
     }
   });
 };
