@@ -1,13 +1,19 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { initializeSocket, disconnectSocket } from '../services/socketService';
+import { initializeSocket, disconnectSocket, isSocketConnected } from '../services/socketService';
 
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // Set up axios defaults
 axios.defaults.withCredentials = true;
+
+// Token refresh timer - 10 minutes
+const TOKEN_REFRESH_INTERVAL = 10 * 60 * 1000;
+
+// Socket health check - 30 seconds
+const SOCKET_HEALTH_CHECK_INTERVAL = 30 * 1000; 
 
 // Define user interface
 interface User {
@@ -49,6 +55,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const socketInitialized = useRef(false);
+  const refreshTimerRef = useRef<number | null>(null);
+  const socketHealthCheckRef = useRef<number | null>(null);
+  const lastTokenRefresh = useRef<number>(Date.now());
 
   // Create axios instance with auth headers
   const api = axios.create({
@@ -67,6 +76,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     (error) => Promise.reject(error)
   );
+
+  // Ensure socket connection is healthy
+  const checkSocketHealth = () => {
+    console.log('Checking socket health...');
+    
+    // If user is logged in but socket isn't connected, try to reconnect
+    if (user && !isSocketConnected()) {
+      console.log('Socket disconnected, attempting to reconnect...');
+      const token = localStorage.getItem('accessToken');
+      
+      if (token) {
+        // Try to initialize without disrupting the UI
+        try {
+          console.log('Reinitializing socket due to health check');
+          initializeSocket(token);
+          socketInitialized.current = true;
+        } catch (error) {
+          console.error('Error reinitializing socket:', error);
+        }
+      }
+    } else {
+      console.log('Socket health check passed');
+    }
+  };
+
+  // Set up socket health monitor
+  const setupSocketHealthMonitor = () => {
+    // Clear any existing timer
+    if (socketHealthCheckRef.current) {
+      window.clearInterval(socketHealthCheckRef.current);
+    }
+    
+    // Set up new health check if user is logged in
+    if (user) {
+      socketHealthCheckRef.current = window.setInterval(() => {
+        checkSocketHealth();
+      }, SOCKET_HEALTH_CHECK_INTERVAL) as unknown as number;
+    }
+  };
 
   // Handle token refresh on 401 errors
   api.interceptors.response.use(
@@ -87,9 +135,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const token = localStorage.getItem('accessToken');
             originalRequest.headers['Authorization'] = `Bearer ${token}`;
             
-            // Reinitialize socket with new token
-            if (token) {
+            // Only reinitialize socket if it's not connected
+            if (token && user && !isSocketConnected()) {
+              console.log('Reinitializing socket with new token after 401');
               initializeSocket(token);
+              socketInitialized.current = true;
             }
             
             return axios(originalRequest);
@@ -110,21 +160,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   );
 
+  // Set up proactive token refresh
+  const setupTokenRefresh = () => {
+    // Clear any existing timer
+    if (refreshTimerRef.current) {
+      window.clearInterval(refreshTimerRef.current);
+    }
+    
+    // Set up new timer if user is logged in
+    if (user) {
+      refreshTimerRef.current = window.setInterval(async () => {
+        // Don't refresh if we just did it recently (avoid duplicate refreshes)
+        const timeSinceLastRefresh = Date.now() - lastTokenRefresh.current;
+        if (timeSinceLastRefresh < TOKEN_REFRESH_INTERVAL / 2) {
+          console.log('Skipping token refresh, was refreshed recently');
+          return;
+        }
+        
+        console.log('Proactively refreshing token');
+        try {
+          const refreshed = await refreshToken();
+          if (refreshed) {
+            console.log('Token refreshed successfully');
+            lastTokenRefresh.current = Date.now();
+            
+            // Only update socket if it's not connected
+            if (!isSocketConnected()) {
+              const token = localStorage.getItem('accessToken');
+              if (token) {
+                console.log('Updating socket with new token after scheduled refresh');
+                initializeSocket(token);
+                socketInitialized.current = true;
+              }
+            }
+          } else {
+            console.warn('Token refresh failed');
+          }
+        } catch (error) {
+          console.error('Error during scheduled token refresh:', error);
+        }
+      }, TOKEN_REFRESH_INTERVAL) as unknown as number;
+    }
+  };
+
   // Initialize socket when user is authenticated
   useEffect(() => {
-    if (user && localStorage.getItem('accessToken') && !socketInitialized.current) {
-      console.log('Initializing socket connection...');
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        initializeSocket(token);
-        socketInitialized.current = true;
+    if (user && localStorage.getItem('accessToken')) {
+      // Check if socket is already connected before trying to initialize
+      if (!isSocketConnected()) {
+        console.log('Initializing socket connection...');
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          initializeSocket(token);
+          socketInitialized.current = true;
+        }
+      } else {
+        console.log('Socket already connected, skipping initialization');
       }
+      
+      // Set up monitors
+      setupTokenRefresh();
+      setupSocketHealthMonitor();
     }
     
     return () => {
       console.log('Cleaning up socket in AuthContext');
       disconnectSocket();
       socketInitialized.current = false;
+      
+      // Clear timers
+      if (refreshTimerRef.current) {
+        window.clearInterval(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      
+      if (socketHealthCheckRef.current) {
+        window.clearInterval(socketHealthCheckRef.current);
+        socketHealthCheckRef.current = null;
+      }
     };
   }, [user]);
 
@@ -141,14 +254,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshToken,
       });
       
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      if (response.data.accessToken) {
+        localStorage.setItem('accessToken', response.data.accessToken);
+        lastTokenRefresh.current = Date.now();
+        
+        // Store new refresh token too if it's provided
+        if (response.data.refreshToken) {
+          localStorage.setItem('refreshToken', response.data.refreshToken);
+        }
+        
+        return true;
+      }
       
-      return true;
+      return false;
     } catch (error) {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setUser(null);
+      console.error('Token refresh error:', error);
+      // Only clear tokens if the error indicates the refresh token is invalid
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setUser(null);
+      }
       return false;
     }
   };

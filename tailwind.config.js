@@ -16,6 +16,10 @@ export default {
 			themes: {
 				light: {
 					colors: {
+						gradient: {
+							first: "#1674de",
+							second: "#14c4f3"
+						},
 						primary: {
 							DEFAULT: "#69d5f7", // Your custom primary color (blue)
 							foreground: "#FFFFFF", // Text color on primary backgrounds

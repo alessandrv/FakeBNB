@@ -105,7 +105,7 @@ export const ChatList: React.FC<ChatListProps> = ({
               <button 
                 onClick={handleNewChatClick}
                 disabled={isNavigating}
-                className={`text-primary font-medium ${
+                className={`text-primary font-medium  ${
                   isNavigating ? 'opacity-50 cursor-not-allowed' : 'hover:underline'
                 }`}
               >

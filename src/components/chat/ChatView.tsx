@@ -205,7 +205,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <div
                     className={`px-4 py-2 rounded-2xl max-w-[calc(100vw-100px)] md:max-w-md ${
                       isMine
-                        ? "bg-primary text-primary-foreground"
+                        ? " bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
                         : "bg-content2"
                     }`}
                   >
@@ -248,8 +248,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
           />
           <Button
             isIconOnly
-            color="primary"
             size="lg"
+            className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
             onPress={handleSend}
             isDisabled={!newMessage.trim()}
           >
