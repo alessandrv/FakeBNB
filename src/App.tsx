@@ -54,6 +54,7 @@ function App() {
           <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="property" element={<PropertyDetails />} />
           
+          
           {/* Auth Pages - only accessible when NOT logged in */}
           <Route 
             path="login" 

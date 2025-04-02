@@ -17,6 +17,7 @@ export interface Message {
   timestamp: Date;
   isRead: boolean;
   conversationId: number;
+  isLocal?: boolean; // Optional flag to identify locally added messages before server confirmation
 }
 
 export interface Chat {
@@ -49,7 +50,8 @@ export const mapMessage = (backendMessage: any): Message => ({
   senderId: backendMessage.sender_id,
   conversationId: backendMessage.conversation_id,
   timestamp: new Date(backendMessage.created_at),
-  isRead: backendMessage.is_read
+  isRead: backendMessage.is_read,
+  isLocal: backendMessage.isLocal // Preserve isLocal flag if present
 });
 
 // Convert backend Conversation to frontend Chat

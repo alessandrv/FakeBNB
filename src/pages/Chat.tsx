@@ -43,6 +43,9 @@ export const Chat: React.FC = () => {
   const socketCheckInterval = useRef<number | null>(null); // Interval for socket connection checks
   const hasJoinedCurrentConversation = useRef<boolean>(false); // Track if current conversation is joined
   
+  // Add a message tracking ref to avoid duplicates across different event sources
+  const processedMessages = React.useRef<Set<string>>(new Set());
+  
   // Effect for responsive layout
   useEffect(() => {
     const handleResize = () => {
@@ -254,6 +257,9 @@ export const Chat: React.FC = () => {
     hasJoinedCurrentConversation.current = false;
     joinAttempts.current = 0;
     
+    // Reset processed messages tracker on conversation change
+    processedMessages.current.clear();
+    
     // Clear previous conversation
     if (activeChat) {
       leaveConversation(activeChat.id);
@@ -444,7 +450,6 @@ export const Chat: React.FC = () => {
           }
         }, 1000);
       }
-      return;
     }
 
     let isComponentMounted = true;
@@ -460,54 +465,23 @@ export const Chat: React.FC = () => {
       })));
     }
     
-    // Add connection status listeners
-    const handleConnect = () => {
-      console.log('Socket connected successfully in Chat component');
-      if (user && isComponentMounted) {
-        console.log('Setting current user as online on connect:', user.id);
-        setChats(prev => prev.map(chat => ({
-          ...chat,
-          participants: chat.participants.map(p => 
-            p.id === user.id ? { ...p, isOnline: true } : p
-          )
-        })));
-      }
-      // Rejoin conversation if we were in one
-      if (conversationId && isComponentMounted) {
-        console.log(`Rejoining conversation ${conversationId} after socket connect event`);
-        hasJoinedCurrentConversation.current = false;
-        setTimeout(() => {
-          try {
-            joinConversation(parseInt(conversationId));
-            hasJoinedCurrentConversation.current = true;
-            markConversationAsRead(parseInt(conversationId));
-            chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
-          } catch (error) {
-            console.error('Error joining conversation after socket connect:', error);
-          }
-        }, 300);
-      }
-    };
-
-    const handleDisconnect = () => {
-      console.log('Socket disconnected in Chat component');
-      hasJoinedCurrentConversation.current = false;
-      if (user && isComponentMounted) {
-        console.log('Setting current user as offline on disconnect:', user.id);
-        setChats(prev => prev.map(chat => ({
-          ...chat,
-          participants: chat.participants.map(p => 
-            p.id === user.id ? { ...p, isOnline: false } : p
-          )
-        })));
-      }
-    };
-
     // Listen for new messages
     const handleNewMessage = (message: any) => {
       if (!isComponentMounted) return;
       
-      console.log('Received new message in Chat component:', message);
+      console.log('Received message:', message);
+      
+      // Create a unique key for this message
+      const messageKey = `${message.id || ''}:${message.conversation_id || ''}:${message.content || message.text || ''}`;
+      
+      // Skip if already processed this exact message
+      if (processedMessages.current.has(messageKey)) {
+        console.log('Skipping duplicate message (already processed):', messageKey);
+        return;
+      }
+      
+      // Mark as processed
+      processedMessages.current.add(messageKey);
       
       // Map the message to our frontend format
       const mappedMessage = mapMessage(message);
@@ -515,18 +489,43 @@ export const Chat: React.FC = () => {
       // Update messages if it's for the current conversation
       if (message.conversation_id === parseInt(conversationId || '0')) {
         setMessages(prev => {
-          // Check if message already exists by ID or content and timestamp
-          const exists = prev.some(m => 
-            m.id === mappedMessage.id || 
-            (m.content === mappedMessage.content && 
-             Math.abs(new Date(m.timestamp).getTime() - new Date(mappedMessage.timestamp).getTime()) < 1000)
+          // Check if this message is a server confirmation of a message we added optimistically
+          const existingMessageIndex = prev.findIndex(m => 
+            // Check if content matches
+            m.content === message.content &&
+            // And sender is the same
+            m.senderId === message.sender_id &&
+            // And the message is from the current user (we only add optimistic messages for current user)
+            m.senderId === user?.id &&
+            // And it's a temporary ID (larger than typical DB IDs) or it has the isLocal flag
+            ((typeof m.id === 'number' && m.id > 1000000000) || m.isLocal === true)
           );
           
-          if (!exists) {
-            console.log('Adding new message to conversation:', mappedMessage);
-            return [...prev, mappedMessage];
+          if (existingMessageIndex !== -1) {
+            console.log('Found matching local message, replacing with server version:', 
+              {local: prev[existingMessageIndex], server: mappedMessage});
+              
+            // Create a new array with the local message replaced by the server one
+            const updatedMessages = [...prev];
+            updatedMessages[existingMessageIndex] = {
+              ...mappedMessage,
+              // Preserve any UI-specific properties we need
+              // This ensures we don't lose any client-side state when replacing
+            };
+            
+            return updatedMessages;
           }
-          return prev;
+          
+          // Check if the message already exists with the same ID
+          const hasSameId = prev.some(m => m.id === message.id);
+          if (hasSameId) {
+            console.log('Message with ID already exists, skipping:', message.id);
+            return prev;
+          }
+
+          // If neither a confirmation nor duplicate, add as new message
+          console.log('Adding new message to conversation:', mappedMessage);
+          return [...prev, mappedMessage];
         });
         
         // If the message is from someone else, mark as read
@@ -590,7 +589,7 @@ export const Chat: React.FC = () => {
       console.log('Message delivered:', data);
       if (data.conversation_id === parseInt(conversationId || '0')) {
         setMessages(prev => prev.map(m => 
-          m.id === data.message_id ? { ...m, isDelivered: true } : m
+          m.id === data.message_id ? { ...m, isRead: true } : m
         ));
       }
     };
@@ -629,6 +628,11 @@ export const Chat: React.FC = () => {
     // Listen for read receipts
     const handleConversationRead = (data: { userId: number, conversationId: number }) => {
       console.log('Received conversation read:', data);
+      if (data.conversationId === parseInt(conversationId || '0')) {
+        setMessages(prev => prev.map(m => 
+          m.senderId === user?.id ? { ...m, isRead: true } : m
+        ));
+      }
     };
 
     // Separate handler for user status updates
@@ -641,26 +645,10 @@ export const Chat: React.FC = () => {
           participants: chat.participants.map(p => 
             p.id === data.userId ? { 
               ...p, 
-              isOnline: data.status === 'online',
-              lastSeen: data.timestamp
+              isOnline: data.status === 'online'
             } : p
           )
         })));
-
-        // Update active chat if it exists and contains the user
-        if (activeChat && activeChat.participants.some(p => p.id === data.userId)) {
-          console.log('Updating active chat user status:', data.status);
-          setActiveChat(prev => ({
-            ...prev!,
-            participants: prev!.participants.map(p => 
-              p.id === data.userId ? { 
-                ...p, 
-                isOnline: data.status === 'online',
-                lastSeen: data.timestamp
-              } : p
-            )
-          }));
-        }
 
         // If this is the current user, also update their status
         if (data.userId === user?.id) {
@@ -670,8 +658,7 @@ export const Chat: React.FC = () => {
             participants: chat.participants.map(p => 
               p.id === user.id ? { 
                 ...p, 
-                isOnline: data.status === 'online',
-                lastSeen: data.timestamp
+                isOnline: data.status === 'online'
               } : p
             )
           })));
@@ -679,69 +666,131 @@ export const Chat: React.FC = () => {
       }
     };
 
-    // Add all event listeners
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('message:received', handleNewMessage);
-    socket.on('message:broadcast', handleNewMessage);
-    socket.on('message:sent', handleNewMessage);
-    socket.on('message:delivered', handleMessageDelivered);
-    socket.on('typing:start', handleTypingStart);
-    socket.on('typing:stop', handleTypingStop);
-    socket.on('conversation:read', handleConversationRead);
-    socket.on('user:status', handleUserStatus);
+    // Connection status handlers
+    const handleConnect = () => {
+      console.log('Socket connected successfully in Chat component');
+      if (user && isComponentMounted) {
+        console.log('Setting current user as online on connect:', user.id);
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === user.id ? { ...p, isOnline: true } : p
+          )
+        })));
+      }
+      // Rejoin conversation if we were in one
+      if (conversationId && isComponentMounted) {
+        console.log(`Rejoining conversation ${conversationId} after socket connect event`);
+        hasJoinedCurrentConversation.current = false;
+        setTimeout(() => {
+          try {
+            joinConversation(parseInt(conversationId));
+            hasJoinedCurrentConversation.current = true;
+            markConversationAsRead(parseInt(conversationId));
+            chatService.markConversationAsRead(parseInt(conversationId)).catch(console.error);
+          } catch (error) {
+            console.error('Error joining conversation after socket connect:', error);
+          }
+        }, 300);
+      }
+    };
 
+    const handleDisconnect = () => {
+      console.log('Socket disconnected in Chat component');
+      hasJoinedCurrentConversation.current = false;
+      if (user && isComponentMounted) {
+        console.log('Setting current user as offline on disconnect:', user.id);
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === user.id ? { ...p, isOnline: false } : p
+          )
+        })));
+      }
+    };
+
+    // Custom socket:connected event listener
+    const handleSocketConnected = () => {
+      console.log('Received socket:connected event');
+      handleConnect();
+    };
+
+    // Custom socket:reconnected event listener
+    const handleSocketReconnected = () => {
+      console.log('Received socket:reconnected event');
+      handleConnect();
+    };
+    
     // Add custom event listeners for messages
     const handleCustomMessageReceived = (event: CustomEvent) => {
       handleNewMessage(event.detail);
     };
-
+    
     const handleCustomMessageBroadcast = (event: CustomEvent) => {
       handleNewMessage(event.detail);
     };
-
+    
     const handleCustomMessageSent = (event: CustomEvent) => {
       handleNewMessage(event.detail);
     };
-
+    
     const handleCustomMessageDelivered = (event: CustomEvent) => {
       handleMessageDelivered(event.detail);
     };
-
+    
+    // Add event listeners for our custom events
+    window.addEventListener('socket:connected', handleSocketConnected);
+    window.addEventListener('socket:reconnected', handleSocketReconnected);
     window.addEventListener('message:received', handleCustomMessageReceived as EventListener);
     window.addEventListener('message:broadcast', handleCustomMessageBroadcast as EventListener);
     window.addEventListener('message:sent', handleCustomMessageSent as EventListener);
     window.addEventListener('message:delivered', handleCustomMessageDelivered as EventListener);
 
+    // Add all event listeners
+    if (socket) {
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
+      socket.on('message:received', handleNewMessage);
+      socket.on('message:broadcast', handleNewMessage);
+      socket.on('message:sent', handleNewMessage);
+      socket.on('message:delivered', handleMessageDelivered);
+      socket.on('typing:start', handleTypingStart);
+      socket.on('typing:stop', handleTypingStop);
+      socket.on('conversation:read', handleConversationRead);
+      socket.on('user:status', handleUserStatus);
+    }
+
     // If socket is connected but we're not joined to the conversation yet, join now
-    if (socket.connected && conversationId && !hasJoinedCurrentConversation.current) {
+    if (socket && socket.connected && conversationId && !hasJoinedCurrentConversation.current) {
       console.log(`Socket already connected, joining conversation ${conversationId}`);
       joinConversation(parseInt(conversationId));
       hasJoinedCurrentConversation.current = true;
     }
-    
-    // Cleanup function
+
     return () => {
       isComponentMounted = false;
-      console.log('Cleaning up socket event listeners in Chat component');
       
       // Remove all event listeners
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('message:received', handleNewMessage);
-      socket.off('message:broadcast', handleNewMessage);
-      socket.off('message:sent', handleNewMessage);
-      socket.off('message:delivered', handleMessageDelivered);
-      socket.off('typing:start', handleTypingStart);
-      socket.off('typing:stop', handleTypingStop);
-      socket.off('conversation:read', handleConversationRead);
-      socket.off('user:status', handleUserStatus);
+      if (socket) {
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('message:received', handleNewMessage);
+        socket.off('message:broadcast', handleNewMessage);
+        socket.off('message:sent', handleNewMessage);
+        socket.off('message:delivered', handleMessageDelivered);
+        socket.off('typing:start', handleTypingStart);
+        socket.off('typing:stop', handleTypingStop);
+        socket.off('conversation:read', handleConversationRead);
+        socket.off('user:status', handleUserStatus);
+      }
 
       // Remove custom event listeners
       window.removeEventListener('message:received', handleCustomMessageReceived as EventListener);
       window.removeEventListener('message:broadcast', handleCustomMessageBroadcast as EventListener);
       window.removeEventListener('message:sent', handleCustomMessageSent as EventListener);
       window.removeEventListener('message:delivered', handleCustomMessageDelivered as EventListener);
+      window.removeEventListener('socket:connected', handleSocketConnected);
+      window.removeEventListener('socket:reconnected', handleSocketReconnected);
 
       // Leave the conversation if we were in one
       if (conversationId) {
@@ -749,7 +798,7 @@ export const Chat: React.FC = () => {
         hasJoinedCurrentConversation.current = false;
       }
     };
-  }, [conversationId, user?.id]);
+  }, [user, conversationId]);
   
   // Add a visibilitychange event handler to catch when user returns to the page
   useEffect(() => {
@@ -867,31 +916,32 @@ export const Chat: React.FC = () => {
       return;
     }
     
+    console.log('Sending message:', content);
+    
     try {
       setSendingMessage(true);
       setError(null); // Clear any previous errors
       
-      // Generate a temporary ID for immediate UI feedback
-      const tempId = Date.now();
-      
-      // Create a temporary message for UI display
+      // Create a temporary message with a timestamp-based ID and isLocal flag
+      const tempId = Date.now(); // Using timestamp as ID to ensure it's different from server IDs
       const tempMessage: Message = {
         id: tempId,
         conversationId: parseInt(conversationId),
         senderId: user.id,
         content: content.trim(),
         timestamp: new Date(),
-        isRead: false
+        isRead: false,
+        isLocal: true // Add this flag to mark as a local message
       };
       
-      // Add to UI immediately for instant feedback
+      console.log('Adding optimistic local message:', tempMessage);
+      
+      // Generate tracking key for this message
+      const messageKey = `${tempId}:${conversationId}:${content.trim()}`;
+      processedMessages.current.add(messageKey);
+      
+      // Optimistically add to UI
       setMessages(prev => [...prev, tempMessage]);
-      
-      // Track this message ID as processed to avoid duplication 
-      processedMessageIds.current.add(tempId);
-      
-      // Send message via socket only - server will handle persistence
-      sendMessage(parseInt(conversationId), content.trim());
       
       // Reset input and stop typing indicator
       setMessageText('');
@@ -910,10 +960,37 @@ export const Chat: React.FC = () => {
       setTimeout(scrollToBottom, 50);
       setTimeout(scrollToBottom, 200);
       
+      // Send message to server
+      sendMessage(parseInt(conversationId), content.trim());
+      
+      // Update conversation list optimistically
+      setChats(prev => {
+        const updatedChats = prev.map(c => {
+          if (c.id === parseInt(conversationId)) {
+            return {
+              ...c,
+              lastMessage: {
+                content: content.trim(),
+                timestamp: new Date().toISOString()
+              },
+              lastMessageAt: new Date().toISOString(),
+              unreadCount: 0
+            };
+          }
+          return c;
+        });
+        
+        // Sort by last message date, newest first
+        return updatedChats.sort((a, b) => 
+          new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+        );
+      });
+      
       setSendingMessage(false);
     } catch (error) {
       console.error('Error sending message:', error);
       setSendingMessage(false);
+      setError('Failed to send message');
     }
   };
   

@@ -8,11 +8,22 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 let pingInterval: number | null = null;
 let reconnectTimer: number | null = null;
 
+// Auto-initialize socket on page load if token exists
+const initializeOnLoad = () => {
+  const token = localStorage.getItem('accessToken');
+  if (token && !socket) {
+    console.log('[SOCKET] Auto-initializing socket on page load');
+    initializeSocket(token);
+  }
+};
+
 // Check if socket is already initialized and connected
 export const isSocketConnected = (): boolean => {
   // For debugging purposes, let's log why a socket might not be connected
   if (!socket) {
     console.log('[SOCKET] Connection check: Socket is null');
+    // Try auto initialization if token exists
+    initializeOnLoad();
     return false;
   }
   
@@ -24,6 +35,14 @@ export const isSocketConnected = (): boolean => {
       disconnected: socket.disconnected,
       hasListeners: socket.hasListeners('connect')
     });
+    
+    // Try to reconnect if disconnected
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      console.log('[SOCKET] Attempting to reconnect disconnected socket');
+      socket.connect();
+    }
+    
     return false;
   }
   
@@ -123,6 +142,9 @@ export const initializeSocket = (token: string) => {
         }
       }
     }, 15000) as unknown as number;
+    
+    // Broadcast a global event that other components can listen to
+    window.dispatchEvent(new CustomEvent('socket:connected'));
   });
 
   // Add message event handlers
@@ -242,6 +264,29 @@ export const initializeSocket = (token: string) => {
   socket.on('error', (error) => {
     console.error('Socket error:', error);
     // Log but don't disconnect - let Socket.IO handle reconnection
+  });
+
+  // Add enhanced reconnection handler
+  socket.on('reconnect_failed', () => {
+    console.error('Socket reconnection failed after max attempts');
+    
+    // Set up delayed retry with exponential backoff
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+    }
+    
+    const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000);
+    console.log(`Scheduling manual reconnection attempt in ${delay}ms`);
+    
+    reconnectTimer = window.setTimeout(() => {
+      reconnectAttempts++;
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        console.log(`Manual reconnection attempt ${reconnectAttempts}`);
+        // Recreate the socket with fresh token
+        forceSocketReconnection(token);
+      }
+    }, delay) as unknown as number;
   });
 
   return socket;
@@ -368,18 +413,10 @@ export const sendMessage = (conversationId: number, content: string, attachmentU
       } else {
         console.log('Message sent successfully:', response);
         
-        // Emit message:broadcast to ensure delivery regardless of online status
-        socket?.emit('message:broadcast', {
-          ...response,
-          conversation_id: conversationId,
-          sender_id: (socket.auth as any)?.userId || response.sender_id,
-          created_at: new Date().toISOString(),
-          is_delivered: true,
-          force_delivery: true, // Force delivery regardless of status
-          broadcast: true // Add broadcast flag to ensure server broadcasts to all clients
-        });
-
-        // Emit message:delivered event to track delivery
+        // Don't emit message:broadcast again since the server already broadcasts to all clients
+        // This was causing duplicate messages
+        
+        // Just emit message:delivered event to track delivery
         socket?.emit('message:delivered', {
           message_id: response.id,
           conversation_id: conversationId,
@@ -564,6 +601,9 @@ export const forceSocketReconnection = (token: string | null): Promise<boolean> 
               socket.off('connect', handleConnect);
               socket.off('connect_error', handleConnectError);
             }
+            
+            // Broadcast a global reconnection event that components can listen to
+            window.dispatchEvent(new CustomEvent('socket:reconnected'));
           }
         };
         
@@ -604,4 +644,34 @@ export const forceSocketReconnection = (token: string | null): Promise<boolean> 
       hasResolved = true;
     }
   });
-}; 
+};
+
+// Add event listeners for page visibility and focus
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const token = localStorage.getItem('accessToken');
+    if (token && (!socket || !socket.connected)) {
+      console.log('[SOCKET] Page became visible, ensuring socket connection');
+      forceSocketReconnection(token);
+    }
+  }
+});
+
+window.addEventListener('focus', () => {
+  const token = localStorage.getItem('accessToken');
+  if (token && (!socket || !socket.connected)) {
+    console.log('[SOCKET] Window focused, ensuring socket connection');
+    forceSocketReconnection(token);
+  }
+});
+
+// Automatically attempt to reconnect on page load
+window.addEventListener('load', () => {
+  initializeOnLoad();
+});
+
+// Now that all functions are defined, run the initialization
+// Run the initialization when the module is loaded
+setTimeout(() => {
+  initializeOnLoad();
+}, 0); 
