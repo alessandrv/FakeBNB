@@ -151,11 +151,10 @@ export const Login = () => {
     } catch (err: any) {
       console.error('Login error:', err);
       
-      // Handle rate limiting (429 error)
-      if (err.response?.status === 429) {
-        const retrySeconds = err.response.headers['retry-after'] 
-          ? parseInt(err.response.headers['retry-after'], 10) 
-          : 30; // Default to 30 seconds if header is missing
+      // Handle rate limiting errors
+      if (err.name === 'RateLimitError' || err.response?.status === 429) {
+        const retrySeconds = err.retryAfter || 
+          (err.response?.headers['retry-after'] ? parseInt(err.response.headers['retry-after'], 10) : 30);
         
         setLoginDisabled(true);
         setRetryAfter(retrySeconds);
@@ -164,6 +163,8 @@ export const Login = () => {
         setError(err.response.data.message);
       } else if (err.response?.status === 401) {
         setError('Invalid email or password');
+      } else if (err.message) {
+        setError(err.message);
       } else {
         setError('An error occurred during login. Please try again.');
       }
@@ -283,7 +284,7 @@ export const Login = () => {
             <Button 
               variant="bordered" 
               startContent={<Icon icon="logos:google-icon" />}
-              onClick={handleGoogleSignIn}
+              onPress={handleGoogleSignIn}
               disabled={isLoading || loginDisabled}
             >
               Google
@@ -291,7 +292,7 @@ export const Login = () => {
             <Button 
               variant="bordered" 
               startContent={<Icon icon="logos:apple" />}
-              onClick={handleAppleSignIn}
+              onPress={handleAppleSignIn}
               disabled={isLoading || loginDisabled}
             >
               Apple

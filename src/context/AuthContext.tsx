@@ -1,7 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { initializeSocket, disconnectSocket, isSocketConnected } from '../services/socketService';
 
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -12,9 +11,6 @@ axios.defaults.withCredentials = true;
 // Token refresh timer - 10 minutes
 const TOKEN_REFRESH_INTERVAL = 10 * 60 * 1000;
 
-// Socket health check - 30 seconds
-const SOCKET_HEALTH_CHECK_INTERVAL = 30 * 1000; 
-
 // Define user interface
 interface User {
   id: number;
@@ -24,7 +20,7 @@ interface User {
   phone_number?: string;
   created_at: string;
   is_verified: boolean;
-  profilePic?: string; // Added for profile picture URL
+  profilePic?: string;
 }
 
 // Auth context interface
@@ -54,9 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
-  const socketInitialized = useRef(false);
   const refreshTimerRef = useRef<number | null>(null);
-  const socketHealthCheckRef = useRef<number | null>(null);
   const lastTokenRefresh = useRef<number>(Date.now());
 
   // Create axios instance with auth headers
@@ -77,61 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (error) => Promise.reject(error)
   );
 
-  // Enhance the socket health check functionality
-  const checkSocketHealth = () => {
-    console.log('Checking socket health...');
-    
-    // If user is logged in but socket isn't connected, try to reconnect
-    if (user && !isSocketConnected()) {
-      console.log('Socket disconnected, attempting to reconnect...');
-      const token = localStorage.getItem('accessToken');
-      
-      if (token) {
-        // Try to initialize without disrupting the UI
-        try {
-          console.log('Reinitializing socket due to health check');
-          
-          // First, try normal initialization which preserves the connection if it exists
-          initializeSocket(token);
-          socketInitialized.current = true;
-          
-          // If that wasn't successful, try a complete reconnection
-          if (!isSocketConnected()) {
-            console.log('Regular initialization failed, forcing complete reconnection');
-            // First disconnect the socket
-            disconnectSocket();
-            socketInitialized.current = false;
-            
-            // Short delay before reconnecting
-            setTimeout(() => {
-              initializeSocket(token);
-              socketInitialized.current = true;
-            }, 500);
-          }
-        } catch (error) {
-          console.error('Error reinitializing socket:', error);
-        }
-      }
-    } else {
-      console.log('Socket health check passed');
-    }
-  };
-
-  // Set up socket health monitor
-  const setupSocketHealthMonitor = () => {
-    // Clear any existing timer
-    if (socketHealthCheckRef.current) {
-      window.clearInterval(socketHealthCheckRef.current);
-    }
-    
-    // Set up new health check if user is logged in
-    if (user) {
-      socketHealthCheckRef.current = window.setInterval(() => {
-        checkSocketHealth();
-      }, SOCKET_HEALTH_CHECK_INTERVAL) as unknown as number;
-    }
-  };
-
   // Handle token refresh on 401 errors
   api.interceptors.response.use(
     (response) => response,
@@ -150,14 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Retry the original request with new token
             const token = localStorage.getItem('accessToken');
             originalRequest.headers['Authorization'] = `Bearer ${token}`;
-            
-            // Only reinitialize socket if it's not connected
-            if (token && user && !isSocketConnected()) {
-              console.log('Reinitializing socket with new token after 401');
-              initializeSocket(token);
-              socketInitialized.current = true;
-            }
-            
             return axios(originalRequest);
           } else {
             // If refresh failed, logout and redirect to login
@@ -199,16 +130,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (refreshed) {
             console.log('Token refreshed successfully');
             lastTokenRefresh.current = Date.now();
-            
-            // Only update socket if it's not connected
-            if (!isSocketConnected()) {
-              const token = localStorage.getItem('accessToken');
-              if (token) {
-                console.log('Updating socket with new token after scheduled refresh');
-                initializeSocket(token);
-                socketInitialized.current = true;
-              }
-            }
           } else {
             console.warn('Token refresh failed');
           }
@@ -219,40 +140,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Initialize socket when user is authenticated
+  // Set up token refresh when user is authenticated
   useEffect(() => {
-    if (user && localStorage.getItem('accessToken')) {
-      // Check if socket is already connected before trying to initialize
-      if (!isSocketConnected()) {
-        console.log('Initializing socket connection...');
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          initializeSocket(token);
-          socketInitialized.current = true;
-        }
-      } else {
-        console.log('Socket already connected, skipping initialization');
-      }
-      
-      // Set up monitors
+    if (user) {
       setupTokenRefresh();
-      setupSocketHealthMonitor();
     }
     
     return () => {
-      console.log('Cleaning up socket in AuthContext');
-      disconnectSocket();
-      socketInitialized.current = false;
-      
-      // Clear timers
+      // Clear refresh timer
       if (refreshTimerRef.current) {
         window.clearInterval(refreshTimerRef.current);
         refreshTimerRef.current = null;
-      }
-      
-      if (socketHealthCheckRef.current) {
-        window.clearInterval(socketHealthCheckRef.current);
-        socketHealthCheckRef.current = null;
       }
     };
   }, [user]);
@@ -299,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<void> => {
     try {
       // Add a small delay to prevent rapid successive calls
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       const response = await axios.post(`${API_URL}/api/auth/login`, {
         email,
@@ -317,20 +215,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('refreshToken', refreshToken);
       
       setUser(user);
-
-      // Initialize socket connection after successful login
-      console.log('Initializing socket connection after login...');
-      initializeSocket(accessToken);
-      socketInitialized.current = true;
     } catch (error) {
       console.error('Login error:', error);
       
-      if (axios.isAxiosError(error) && error.response?.status === 429) {
-        throw error;
-      }
-      
-      if (axios.isAxiosError(error) && !error.response) {
-        console.warn('Backend unreachable, consider using demo mode');
+      if (axios.isAxiosError(error)) {
+        // Handle rate limiting (429 error)
+        if (error.response?.status === 429) {
+          // Get retry-after header or use default
+          const retryAfter = error.response.headers['retry-after'] 
+            ? parseInt(error.response.headers['retry-after'], 10) 
+            : 30;
+            
+          // Store rate limit info in localStorage
+          localStorage.setItem('loginRateLimit', JSON.stringify({
+            attempts: 5, // Max attempts
+            resetTime: Date.now() + (retryAfter * 1000)
+          }));
+          
+          // Throw a more descriptive error
+          const rateLimitError = new Error(`Rate limit exceeded. Please try again in ${retryAfter} seconds.`);
+          rateLimitError.name = 'RateLimitError';
+          (rateLimitError as any).retryAfter = retryAfter;
+          throw rateLimitError;
+        }
+        
+        // Handle network errors
+        if (!error.response) {
+          console.warn('Backend unreachable, consider using demo mode');
+          throw new Error('Network error. Please check your connection and try again.');
+        }
       }
       
       throw error;
@@ -340,10 +253,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async (): Promise<void> => {
     try {
-      // Disconnect from Socket.IO
-      disconnectSocket();
-      socketInitialized.current = false;
-      
       // Call logout endpoint if it exists
       const token = localStorage.getItem('refreshToken');
       if (token) {
@@ -376,12 +285,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Attempt to get user profile
         const response = await api.get('/api/auth/profile');
         setUser(response.data.user);
-        
-        // Initialize socket if we have a user
-        if (response.data.user && !socketInitialized.current) {
-          initializeSocket(token);
-          socketInitialized.current = true;
-        }
       } catch (error) {
         console.error('Error loading user:', error);
         
@@ -392,15 +295,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
               const response = await api.get('/api/auth/profile');
               setUser(response.data.user);
-              
-              // Initialize socket if we have a user
-              if (response.data.user && !socketInitialized.current) {
-                const newToken = localStorage.getItem('accessToken');
-                if (newToken) {
-                  initializeSocket(newToken);
-                  socketInitialized.current = true;
-                }
-              }
             } catch (profileError) {
               await logout();
             }
