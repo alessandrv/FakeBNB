@@ -234,7 +234,8 @@ export const Register = () => {
               type="submit" 
               color="primary" 
               fullWidth
-              disabled={isLoading}
+              disabled={isLoading}  
+              className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
             >
               {isLoading ? <Spinner size="sm" color="white" /> : 'Sign Up'}
             </Button>

@@ -312,7 +312,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
               color="primary" 
               variant="flat" 
               onClick={toggleSheetState}
-              className="font-medium text-xs h-7 px-2"
+              className="font-medium text-xs h-7 px-2 bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
               startContent={<Icon icon="lucide:map" className="text-xs" />}
             >
               Show Map
@@ -332,7 +332,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
 
       {/* Content - only visible when expanded */}
       <div 
-        className={`overflow-y-auto px-2 pb-2 ${
+        className={`mt-4 overflow-y-auto px-2 pb-2 ${
           sheetState === 'collapsed' 
             ? 'hidden' // Hide completely when collapsed
             : 'h-[calc(100%-55px)]' // Adjusted to the new more compact header
@@ -401,7 +401,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
                             size="sm"
                             variant="solid" 
                             color="primary"
-                            className="w-full text-xs h-8"
+                            className="w-full text-xs h-8 bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
                           >
                             View details
                           </Button>

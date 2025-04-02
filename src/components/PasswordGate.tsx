@@ -31,10 +31,10 @@ export const PasswordGate: React.FC<PasswordGateProps> = ({ onPasswordCorrect })
   return (
     <div className="min-h-screen flex items-center justify-center bg-default-50 p-4">
       <Card className="w-full max-w-md p-6">
-        <div className="text-center mb-6">
+        <div className="text-center mb-6 ">
           <Icon 
             icon="lucide:lock" 
-            className="w-16 h-16 mx-auto text-primary mb-4"
+            className="w-16 h-16 mx-auto mb-4 text-primary "
           />
           <h1 className="text-2xl font-bold mb-2">Welcome</h1>
           <p className="text-default-500">
@@ -59,7 +59,7 @@ export const PasswordGate: React.FC<PasswordGateProps> = ({ onPasswordCorrect })
           <Button
             type="submit"
             color="primary"
-            className="w-full"
+            className="w-full bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
             isLoading={isLoading}
           >
             {isLoading ? "Verifying..." : "Enter"}

@@ -132,6 +132,7 @@ export const Home = () => {
                     type="submit" 
                     color="primary" 
                     startContent={<Icon icon="lucide:search" />}
+                    className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
                   >
                     Search
                   </Button>
@@ -179,7 +180,7 @@ export const Home = () => {
               </CardBody>
               <CardFooter className="border-t border-default-200 p-3">
                 <Link to={`/properties/${property.id}`} className="w-full">
-                  <Button fullWidth variant="light" color="primary">
+                  <Button fullWidth variant="light" color="primary" className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground">
                     View Details
                   </Button>
                 </Link>
@@ -235,7 +236,7 @@ export const Home = () => {
           <p className="text-default-500 mb-8 max-w-2xl mx-auto">
             Share your space, earn extra income, and connect with travelers from around the world.
           </p>
-          <Button color="primary" size="lg">
+          <Button color="primary" size="lg" className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground">
             Become a Host
           </Button>
         </div>

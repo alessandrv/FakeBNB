@@ -200,42 +200,7 @@ export const Login = () => {
   };
 
   // For development/testing - simulates a successful login
-  const handleDemoLogin = async () => {
-    if (loginDisabled) {
-      setError(`Too many login attempts. Please try again in ${retryAfter} seconds.`);
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Create a mock user for demonstration purposes
-      const mockUser = {
-        id: 1,
-        email: 'demo@example.com',
-        first_name: 'Demo',
-        last_name: 'User',
-        phone_number: '+1234567890',
-        created_at: new Date().toISOString(),
-        is_verified: true
-      };
-      
-      // Store dummy tokens in localStorage
-      localStorage.setItem('accessToken', 'demo-access-token');
-      localStorage.setItem('refreshToken', 'demo-refresh-token');
-      
-      // Add a small delay to simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Manually update the auth context by reloading the page
-      // In a real application with a proper backend, the login function would do this
-      window.location.href = '/';
-    } catch (error) {
-      setError('An error occurred during login. Please try again.');
-      setIsLoading(false);
-    }
-  };
+ 
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -295,22 +260,14 @@ export const Login = () => {
             <Button 
               type="submit" 
               color="primary" 
+              className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
               fullWidth
               disabled={isLoading || loginDisabled}
             >
               {isLoading ? <Spinner size="sm" color="white" /> : 'Sign In'}
             </Button>
             
-            {/* Development/demo mode button */}
-            <Button 
-              type="button" 
-              color="success" 
-              fullWidth
-              disabled={isLoading || loginDisabled}
-              onClick={handleDemoLogin}
-            >
-              {isLoading ? <Spinner size="sm" color="white" /> : 'Demo Login (No Backend)'}
-            </Button>
+          
           </form>
 
           <div className="relative">

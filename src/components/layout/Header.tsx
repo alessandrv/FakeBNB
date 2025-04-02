@@ -92,7 +92,7 @@ export const Header = () => {
                 <Button variant="light">Login</Button>
               </Link>
               <Link to="/register">
-                <Button color="primary">Sign Up</Button>
+                <Button color="primary" className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground">Sign Up</Button>
               </Link>
             </>
           )}
