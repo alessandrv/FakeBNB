@@ -3,6 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
 import { format } from 'date-fns';
+// Import Heroicons
+import { ChatBubbleLeftRightIcon, PaperAirplaneIcon, UserCircleIcon, ArrowLeftIcon, PlusIcon, UserPlusIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
+import { ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid, PaperAirplaneIcon as PaperAirplaneIconSolid, ChatBubbleLeftIcon as ChatBubbleLeftIconSolid } from '@heroicons/react/24/solid';
 
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -48,6 +51,16 @@ export const NavbarContext = createContext<{
   hideNavbar: false,
   setHideNavbar: () => {},
 });
+
+// Add a default avatar component
+const DefaultAvatar: React.FC<{ firstName: string; lastName: string }> = ({ firstName, lastName }) => {
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  return (
+    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-lg">
+      {initials}
+    </div>
+  );
+};
 
 const Chat: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -103,8 +116,18 @@ const Chat: React.FC = () => {
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   };
+
+  // Modify scrollToBottom logic to be more reliable
+  useEffect(() => {
+    // Only auto-scroll when the messages change
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages]);
 
   // Initialize socket connection
   useEffect(() => {
@@ -299,7 +322,7 @@ const Chat: React.FC = () => {
           });
           
           if (response.data && Array.isArray(response.data)) {
-            setConversations(response.data);
+          setConversations(response.data);
           } else {
             console.error('Invalid response format for conversations:', response.data);
             setConversations([]);
@@ -364,7 +387,7 @@ const Chat: React.FC = () => {
             // Reverse the messages to show oldest first (bottom to top)
             // Also deduplicate messages by ID and created_at
             const uniqueMessages = response.data.reduce((acc: Message[], message: Message) => {
-              // Add to processed set to prevent duplicates from socket
+              // Add to processed set to prevent duplicates
               processedMessageIds.current.add(message.id);
               
               const exists = acc.some(msg => 
@@ -380,12 +403,15 @@ const Chat: React.FC = () => {
             }, []);
             
             setMessages(uniqueMessages.reverse());
+
+            // Add a small delay to ensure the DOM has updated before scrolling
+            setTimeout(() => {
+              scrollToBottom();
+            }, 100);
           } else {
             console.error('Invalid response format for messages:', response.data);
             setMessages([]);
           }
-          
-          scrollToBottom();
           
           // On mobile, hide conversations when a chat is selected
           if (isMobile) {
@@ -403,10 +429,8 @@ const Chat: React.FC = () => {
             }, 5000); // 5 second delay
           } else if (axios.isAxiosError(error) && error.response?.status === 401) {
             console.error('Authentication error, token may be invalid');
-            // You might want to redirect to login or refresh the token here
           } else if (axios.isAxiosError(error) && error.response?.status === 500) {
             console.error('Server error when fetching messages');
-            // You might want to show a user-friendly error message
           } else if (axios.isAxiosError(error) && !error.response) {
             console.error('Network error, server may be unreachable');
           }
@@ -779,6 +803,47 @@ const Chat: React.FC = () => {
     return () => clearInterval(interval);
   }, [pendingMessages.length]);
 
+  // Add a check to prevent reclicking on already selected conversations
+  const handleConversationClick = (conversation: Conversation) => {
+    // Check if this conversation is already selected
+    if (selectedConversation?.id === conversation.id) {
+      // If already selected, prevent reclick
+      return;
+    }
+
+    // Update the conversation list item styling
+    <div
+      key={conversation.id}
+      className={`p-4 mb-2 rounded-lg cursor-pointer transition-all flex items-center space-x-4 ${
+        selectedConversation?.id === conversation.id
+          ? 'bg-blue-50 border-2 border-blue-200'
+          : 'bg-white border border-gray-200 hover:border-blue-200 hover:shadow-md'
+      }`}
+      onClick={() => setSelectedConversation(conversation)}
+    >
+      {/* Profile Picture */}
+      {conversation.other_user && (
+        conversation.other_user.profile_picture ? (
+          <img
+            src={conversation.other_user.profile_picture}
+            alt={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+            className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              target.nextElementSibling?.classList.remove('hidden');
+            }}
+          />
+        ) : (
+          <DefaultAvatar 
+            firstName={conversation.other_user.first_name}
+            lastName={conversation.other_user.last_name}
+          />
+        )
+      )}
+    </div>
+  };
+
   if (!isAuthenticated) {
     return <div className="p-4 text-center">Please log in to use the chat.</div>;
   }
@@ -791,135 +856,213 @@ const Chat: React.FC = () => {
     <div className="flex h-screen">
       {/* Mobile header when in chat view */}
       {isMobile && selectedConversation && !showConversations && (
-        <div className="fixed top-0 left-0 right-0 bg-white p-4 border-b border-gray-200 flex items-center z-10">
+        <div className="fixed top-0 left-0 right-0 bg-white p-4 border-b border-gray-200 flex items-center z-50 shadow-md">
           <button 
             onClick={goBackToConversations}
-            className="mr-3 text-blue-500"
+            className="mr-3 text-blue-600 hover:text-blue-700 transition-colors p-2 rounded-full hover:bg-blue-50"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <ArrowLeftIcon className="h-6 w-6" />
           </button>
-          <h3 className="font-bold">
-            {selectedConversation.other_user
-              ? `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
-              : 'Unknown User'}
-          </h3>
+          <div>
+            <h3 className="font-bold text-lg">
+              {selectedConversation.other_user
+                ? `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
+                : 'Unknown User'}
+            </h3>
+            <p className="text-xs text-gray-500">Tap to view profile</p>
+          </div>
         </div>
       )}
 
       {/* Conversations sidebar - hidden on mobile when in chat view */}
-      <div className={`${isMobile ? (showConversations ? 'w-full' : 'hidden') : 'w-1/3'} border-r border-gray-200 p-4 overflow-y-auto`}>
-        <h2 className="text-xl font-bold mb-4">Conversations</h2>
-        
-        {/* Start new conversation */}
-        <div className="mb-4 p-2 border border-gray-200 rounded">
-          <input
-            type="number"
-            placeholder="Enter user ID to chat with"
-            className="w-full p-2 border border-gray-300 rounded mb-2"
-            value={otherUserId || ''}
-            onChange={(e) => setOtherUserId(e.target.value ? parseInt(e.target.value) : null)}
-          />
-          <button
-            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-            onClick={handleStartConversation}
-            disabled={!otherUserId}
-          >
-            Start Conversation
-          </button>
+      <div className={`${isMobile ? (showConversations ? 'w-full' : 'hidden') : 'w-1/3'} border-r border-gray-200 bg-gray-50 overflow-y-auto`}>
+        <div className="p-4 bg-white border-b border-gray-200 sticky top-0 z-10">
+          <h2 className="text-xl font-bold mb-4 flex items-center">
+            <ChatBubbleLeftRightIcon className="h-6 w-6 mr-2 text-blue-600" /> 
+            Conversations
+          </h2>
+          
+          {/* Start new conversation */}
+          <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="flex items-center mb-2 text-gray-700">
+              <UserPlusIcon className="h-5 w-5 mr-2 text-blue-600" />
+              <span className="text-sm font-medium">Start New Conversation</span>
+            </div>
+            <input
+              type="number"
+              placeholder="Enter user ID to chat with"
+              className="w-full p-3 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              value={otherUserId || ''}
+              onChange={(e) => setOtherUserId(e.target.value ? parseInt(e.target.value) : null)}
+            />
+            <button
+              className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center"
+              onClick={handleStartConversation}
+              disabled={!otherUserId}
+            >
+              <PlusIcon className="h-5 w-5 mr-2" />
+              Start Conversation
+            </button>
+          </div>
         </div>
         
         {/* Conversations list */}
-        <div>
-          {conversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              className={`p-3 mb-2 rounded cursor-pointer ${
-                selectedConversation?.id === conversation.id
-                  ? 'bg-blue-100'
-                  : 'hover:bg-gray-100'
-              }`}
-              onClick={() => setSelectedConversation(conversation)}
-            >
-              <div className="font-medium">
-                {conversation.other_user
-                  ? `${conversation.other_user.first_name} ${conversation.other_user.last_name}`
-                  : 'Unknown User'}
-              </div>
-              {conversation.last_message && (
-                <div className="text-sm text-gray-500 truncate">
-                  {conversation.last_message.content}
+        <div className="p-4">
+          <div className="space-y-2">
+            {conversations.map((conversation) => (
+              <div
+                key={conversation.id}
+                className={`p-4 mb-2 rounded-lg cursor-pointer transition-all flex items-center space-x-4 ${
+                  selectedConversation?.id === conversation.id
+                    ? 'bg-blue-50 border-2 border-blue-200'
+                    : 'bg-white border border-gray-200 hover:border-blue-200 hover:shadow-md'
+                }`}
+                onClick={() => {
+                  // If this conversation is already selected, deselect it
+                  if (selectedConversation?.id === conversation.id) {
+                    setSelectedConversation(null);
+                  } else {
+                    // Otherwise, select this conversation
+                    setSelectedConversation(conversation);
+                  }
+                }}
+              >
+                {/* Profile Picture */}
+                {conversation.other_user && (
+                  conversation.other_user.profile_picture ? (
+                    <img
+                      src={conversation.other_user.profile_picture}
+                      alt={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : (
+                    <DefaultAvatar 
+                      firstName={conversation.other_user.first_name}
+                      lastName={conversation.other_user.last_name}
+                    />
+                  )
+                )}
+
+                {/* Conversation Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <div className="font-medium text-gray-900 truncate">
+                      {conversation.other_user
+                        ? `${conversation.other_user.first_name} ${conversation.other_user.last_name}`
+                        : 'Unknown User'}
+                    </div>
+                    <div className="text-xs text-gray-400 whitespace-nowrap ml-2">
+                      {conversation.last_message 
+                        ? format(new Date(conversation.last_message.created_at), 'MMM d, h:mm a')
+                        : format(new Date(conversation.created_at), 'MMM d, h:mm a')}
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500 truncate">
+                    {conversation.last_message?.content || 'No messages yet'}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       
       {/* Chat area - full width on mobile when in chat view */}
-      <div className={`${isMobile ? (showConversations ? 'hidden' : 'w-full') : 'flex-1'} flex flex-col`}>
+      <div className={`${isMobile ? (showConversations ? 'hidden' : 'w-full') : 'flex-1'} flex flex-col bg-gray-50`}>
         {selectedConversation ? (
           <>
             {/* Chat header - only visible on desktop */}
             {!isMobile && (
-              <div className="p-4 border-b border-gray-200">
-                <h3 className="font-bold">
-                  {selectedConversation.other_user
-                    ? `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
-                    : 'Unknown User'}
-                </h3>
-              </div>
+            <div className="p-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+              <h3 className="font-bold text-lg">
+                {selectedConversation.other_user
+                  ? `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
+                  : 'Unknown User'}
+              </h3>
+            </div>
             )}
             
             {/* Messages */}
-            <div className={`flex-1 p-4 overflow-y-auto ${isMobile ? 'mt-16 mb-16' : ''}`}>
-              {messages.map((message) => (
-                <div
-                  key={`${message.id}-${message.created_at}`}
-                  className={`mb-4 ${
-                    message.sender_id === user?.id ? 'text-right' : 'text-left'
-                  }`}
-                >
-                  <div
-                    className={`inline-block p-3 rounded-lg ${
-                      message.sender_id === user?.id
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200'
-                    }`}
-                  >
-                    <div>{message.content}</div>
-                    <div className="text-xs mt-1 opacity-70">
-                      {format(new Date(message.created_at), 'MMM d, h:mm a')}
-                    </div>
-                  </div>
+            <div 
+              className={`flex-1 p-4 ${isMobile ? 'mt-16 mb-20' : ''} space-y-4`}
+              style={{ 
+                height: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 180px)',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              {messages.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-gray-500">
+                  <div>No messages yet. Start the conversation!</div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
+              ) : (
+                <>
+                  <div className="py-4"> {/* Spacer at the top to ensure scrollability */}
+                    {messages.length > 10 && <div className="text-center text-sm text-gray-500 mb-4">Scroll up for earlier messages</div>}
+                  </div>
+                  {messages.map((message) => (
+                    <div
+                      key={`${message.id}-${message.created_at}`}
+                      className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[75%] ${
+                          message.sender_id === user?.id
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-900'
+                        } p-4 rounded-2xl shadow-sm ${
+                          message.sender_id === user?.id
+                            ? 'rounded-br-sm'
+                            : 'rounded-bl-sm'
+                        }`}
+                      >
+                        <div className="break-words">{message.content}</div>
+                        <div className={`text-xs mt-1 ${
+                          message.sender_id === user?.id
+                            ? 'text-blue-100'
+                            : 'text-gray-500'
+                        }`}>
+                          {format(new Date(message.created_at), 'MMM d, h:mm a')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} className="pt-1" /> {/* Add some padding to ensure visibility */}
+                </>
+              )}
             </div>
             
             {/* Message input */}
-            <form onSubmit={handleSendMessage} className={`p-4 border-t border-gray-200 ${isMobile ? 'fixed bottom-0 left-0 right-0 bg-white z-10' : ''}`}>
-              <div className="flex">
+            <form onSubmit={handleSendMessage} className={`p-4 bg-white border-t border-gray-200 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-50' : ''} shadow-lg`}>
+              <div className="flex max-w-4xl mx-auto">
                 <input
                   type="text"
                   placeholder="Type a message..."
-                  className="flex-1 p-2 border border-gray-300 rounded-l"
+                  className="flex-1 p-3 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                 />
                 <button
                   type="submit"
-                  className="bg-blue-500 text-white p-2 rounded-r hover:bg-blue-600"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-r-lg hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium flex items-center justify-center"
                 >
-                  Send
+                  <PaperAirplaneIcon className="h-5 w-5" />
                 </button>
               </div>
             </form>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Select a conversation or start a new one
+          <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50">
+            <div className="text-center">
+              <ChatBubbleLeftIconSolid className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-lg font-medium">Select a conversation or start a new one</p>
+            </div>
           </div>
         )}
       </div>
