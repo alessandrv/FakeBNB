@@ -14,10 +14,8 @@ import {
   Divider,
   ScrollShadow,
   User,
-  Tooltip,
-  Spinner
+  Tooltip
 } from "@heroui/react";
-import { useNavigate } from 'react-router-dom';
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -87,15 +85,13 @@ const Chat: React.FC = () => {
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingConversations, setLoadingConversations] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showConversations, setShowConversations] = useState(true);
   const { setHideNavbar } = useContext(NavbarContext);
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const navigate = useNavigate();
+  
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
   
@@ -178,14 +174,8 @@ const Chat: React.FC = () => {
           console.log('Socket connected successfully with ID:', newSocket.id);
           console.log('Socket transport:', newSocket.io.engine.transport.name);
           
-          // Join all conversation rooms on connection
-          if (conversations.length > 0) {
-            console.log('Joining all conversation rooms on connection');
-            conversations.forEach((conv: Conversation) => {
-              console.log(`Joining room: conversation:${conv.id}`);
-              newSocket.emit('join_conversation', conv.id);
-            });
-          }
+          // Store connection status
+          console.log('Socket is now connected and ready to join rooms');
           
           // If a conversation is already selected, join that room immediately
           if (selectedConversation) {
@@ -290,6 +280,7 @@ const Chat: React.FC = () => {
 
         setSocket(newSocket);
 
+        // Clean up function
         return () => {
           console.log('Cleaning up socket connection');
           if (selectedConversation) {
@@ -299,11 +290,11 @@ const Chat: React.FC = () => {
         };
       }
     }
-  }, [isAuthenticated, user, conversations, selectedConversation]);
+  }, [isAuthenticated, user, selectedConversation]);
 
   // Ensure we join the conversation room when selected
   useEffect(() => {
-    if (socket && selectedConversation) {
+    if (socket && selectedConversation && socket.connected) {
       console.log(`Joining conversation room: conversation:${selectedConversation.id}`);
       
       // Join the conversation room immediately when selected
@@ -315,6 +306,7 @@ const Chat: React.FC = () => {
       // Process any pending messages now that we have conversation context
       processPendingMessages();
       
+      // Return cleanup function to leave the room when changing conversations
       return () => {
         console.log(`Leaving conversation room: conversation:${selectedConversation.id}`);
         socket.emit('leave_conversation', selectedConversation.id);
@@ -325,18 +317,32 @@ const Chat: React.FC = () => {
         }
       };
     }
-  }, [socket, selectedConversation, currentRoom]);
+  }, [socket, selectedConversation, socket?.connected]);
+
+  // Add a heartbeat to ensure connection stays alive
+  useEffect(() => {
+    if (socket) {
+      const heartbeatInterval = setInterval(() => {
+        if (socket.connected && selectedConversation) {
+          console.log('Heartbeat: ensuring conversation room connection');
+          socket.emit('heartbeat', selectedConversation.id);
+        }
+      }, 30000); // Every 30 seconds
+      
+      return () => {
+        clearInterval(heartbeatInterval);
+      };
+    }
+  }, [socket, selectedConversation]);
 
   // Fetch conversations
   useEffect(() => {
     const fetchConversations = async () => {
       if (isAuthenticated) {
         try {
-          setLoadingConversations(true);
           const token = localStorage.getItem('accessToken');
           if (!token) {
             console.error('No access token found');
-            setLoadingConversations(false);
             setLoading(false);
             return;
           }
@@ -349,17 +355,15 @@ const Chat: React.FC = () => {
           });
           
           if (response.data && Array.isArray(response.data)) {
-            setConversations(response.data);
+          setConversations(response.data);
           } else {
             console.error('Invalid response format for conversations:', response.data);
             setConversations([]);
           }
           
-          setLoadingConversations(false);
           setLoading(false);
         } catch (error) {
           console.error('Error fetching conversations:', error);
-          setLoadingConversations(false);
           setLoading(false);
           
           // Handle rate limiting
@@ -393,11 +397,11 @@ const Chat: React.FC = () => {
         }
         
         try {
-          setLoadingMessages(true);
+          setLoading(true);
           const token = localStorage.getItem('accessToken');
           if (!token) {
             console.error('No access token found');
-            setLoadingMessages(false);
+            setLoading(false);
             return;
           }
           
@@ -445,11 +449,14 @@ const Chat: React.FC = () => {
             setTimeout(() => {
               scrollToBottom();
             }, 100);
-            
+             
             // Ensure we're connected to the socket room for this conversation
-            if (socket) {
+            if (socket && socket.connected) {
               console.log(`Ensuring socket is connected for conversation: ${selectedConversation.id}`);
               socket.emit('join_conversation', selectedConversation.id);
+            } else if (socket && !socket.connected) {
+              console.log('Socket not connected - attempting to reconnect');
+              socket.connect();  // Try to reconnect if disconnected
             }
           } else {
             console.error('Invalid response format for messages:', response.data);
@@ -457,7 +464,7 @@ const Chat: React.FC = () => {
             setHasMoreMessages(false);
           }
           
-          setLoadingMessages(false);
+          setLoading(false);
           
           // On mobile, hide conversations when a chat is selected
           if (isMobile) {
@@ -465,7 +472,7 @@ const Chat: React.FC = () => {
           }
         } catch (error) {
           console.error('Error fetching messages:', error);
-          setLoadingMessages(false);
+          setLoading(false);
           
           // Handle rate limiting
           if (axios.isAxiosError(error) && error.response?.status === 429) {
@@ -722,6 +729,17 @@ const Chat: React.FC = () => {
     
     try {
       const token = localStorage.getItem('accessToken');
+      
+      // Ensure socket is connected to the right room before sending
+      if (socket && selectedConversation) {
+        if (!socket.connected) {
+          console.log('Socket disconnected, attempting to reconnect before sending message');
+          socket.connect();
+        }
+        
+        // Make sure we're in the right room
+        socket.emit('join_conversation', selectedConversation.id);
+      }
       
       // Create a temporary message ID for optimistic UI update
       const tempId = Date.now();
@@ -998,26 +1016,11 @@ const Chat: React.FC = () => {
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex min-h-[400px] w-full items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <Icon 
-            icon="lucide:lock" 
-            className="h-12 w-12 text-default-400"
-          />
-          <div className="text-lg font-medium text-default-600">
-            Please log in to use the chat
-          </div>
-          <Button 
-            color="primary" 
-            onPress={() => navigate('/login')}
-            startContent={<Icon icon="lucide:log-in" />}
-          >
-            Go to Login
-          </Button>
-        </div>
-      </div>
-    );
+    return <div className="p-4 text-center">Please log in to use the chat.</div>;
+  }
+
+  if (loading) {
+    return <div className="p-4 text-center">Loading conversations...</div>;
   }
 
   return (
@@ -1028,7 +1031,7 @@ const Chat: React.FC = () => {
           isMobile 
             ? showConversations ? "w-full" : "hidden" 
             : "w-[380px]"
-        } p-0 h-full transition-all duration-200 ease-in-out`}
+        } p-0 h-full`}
       >
         <CardBody className="p-0 h-full">
           <div className="p-4 border-b border-divider">
@@ -1041,38 +1044,27 @@ const Chat: React.FC = () => {
           </div>
           
           <ScrollShadow className="h-[calc(100%-65px)]">
-            {loadingConversations ? (
-              <div className="flex h-full items-center justify-center p-6">
-                <Spinner size="sm" color="primary" />
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-                <Icon icon="lucide:message-square" className="mb-2 h-10 w-10 text-default-300" />
-                <p className="text-default-500">No conversations yet</p>
-              </div>
-            ) : (
-              <div className="p-2 space-y-1">
-                {conversations.map((conversation) => (
-                  <Button
-                    key={conversation.id}
-                    className="w-full justify-start p-2 h-auto transition-all duration-200"
-                    color={selectedConversation?.id === conversation.id ? "primary" : "default"}
-                    variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
-                    onPress={() => handleConversationSelect(conversation)}
-                  >
-                    <User
-                      name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
-                      description={conversation.last_message?.content || "No messages yet"}
-                      avatarProps={{
-                        src: conversation.other_user.profile_picture,
-                        name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
-                        size: "sm"
-                      }}
-                    />
-                  </Button>
-                ))}
-              </div>
-            )}
+            <div className="p-2 space-y-1">
+              {conversations.map((conversation) => (
+                <Button
+                  key={conversation.id}
+                  className="w-full justify-start p-2 h-auto"
+                  color={selectedConversation?.id === conversation.id ? "primary" : "default"}
+                  variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
+                  onPress={() => handleConversationSelect(conversation)}
+                >
+                  <User
+                    name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                    description={conversation.last_message?.content || "No messages yet"}
+                    avatarProps={{
+                      src: conversation.other_user.profile_picture,
+                      name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
+                      size: "sm"
+                    }}
+                  />
+                </Button>
+              ))}
+            </div>
           </ScrollShadow>
         </CardBody>
       </Card>
@@ -1083,7 +1075,7 @@ const Chat: React.FC = () => {
           isMobile 
             ? showConversations ? "hidden" : "w-full" 
             : "flex-1"
-        } p-0 h-full transition-all duration-200 ease-in-out`}
+        } p-0 h-full`}
       >
         <CardBody className="p-0 h-full flex flex-col">
           {selectedConversation ? (
@@ -1116,48 +1108,35 @@ const Chat: React.FC = () => {
                 ref={messageContainerRef}
                 onScroll={handleMessagesScroll}
               >
-                <div className="space-y-4 relative min-h-[200px]">
+                <div className="space-y-4">
                   {loadingMore && (
                     <div className="flex justify-center py-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
                     </div>
                   )}
                   <div ref={messagesStartRef} />
-                  
-                  {loadingMessages ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Spinner color="primary" size="md" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center py-12 text-center">
-                      <Icon icon="lucide:message-circle" className="mb-2 h-10 w-10 text-default-300" />
-                      <p className="text-default-500">No messages yet</p>
-                      <p className="text-tiny text-default-400">Start the conversation by sending a message</p>
-                    </div>
-                  ) : (
-                    messages.map((message) => {
-                      const isMyMessage = message.sender_id === user?.id;
-                      return (
+                  {messages.map((message) => {
+                    const isMyMessage = message.sender_id === user?.id;
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                      >
                         <div
-                          key={message.id}
-                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                          className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                            isMyMessage
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-default-100 rounded-bl-sm"
+                          }`}
                         >
-                          <div
-                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                              isMyMessage
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-default-100 rounded-bl-sm"
-                            }`}
-                          >
-                            <p>{message.content}</p>
-                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                              {format(new Date(message.created_at), "h:mm a")}
-                            </span>
-                          </div>
+                          <p>{message.content}</p>
+                          <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                            {format(new Date(message.created_at), "h:mm a")}
+                          </span>
                         </div>
-                      );
-                    })
-                  )}
+                      </div>
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollShadow>
