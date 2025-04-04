@@ -1083,6 +1083,7 @@ const Chat: React.FC = () => {
                   <div ref={messagesStartRef} />
                   {messages.map((message) => {
                     const isMyMessage = message.sender_id === user?.id;
+                    console.log('Formatting timestamp:', message.created_at, 'Parsed:', parseISO(message.created_at)); 
                     return (
                       <div
                         key={message.id}
