@@ -189,7 +189,7 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Modify scrollToBottom logic to be more reliable
+  // Auto-scroll when messages change
   useEffect(() => {
     // Only auto-scroll when the messages change
     if (messages.length > 0) {
@@ -888,193 +888,141 @@ const Chat: React.FC = () => {
   };
 
   // Create a ref for the input element
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Function to maintain focus on input to prevent keyboard from closing
-  const maintainInputFocus = () => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  
+  // Direct function to focus input without side effects
+  const focusInput = () => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
   };
-
-  // Setup touchend event listener for the send button to prevent default behavior
-  useEffect(() => {
-    const sendButton = document.getElementById('send-button');
-    
-    if (sendButton) {
-      const handleTouchEnd = (e: TouchEvent) => {
-        e.preventDefault(); // Prevent default which would cause the keyboard to close
-        // Don't call handle send here as it will be called by the button's onClick
-      };
-      
-      sendButton.addEventListener('touchend', handleTouchEnd);
-      
-      return () => {
-        sendButton.removeEventListener('touchend', handleTouchEnd);
-      };
-    }
-  }, []);
   
-  // Handle sending a message
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle sending a message - completely rewritten to avoid keyboard issues
+  const handleSendMessage = () => {
+    // Get message content directly from the input ref to avoid state timing issues
+    const messageContent = inputRef.current?.value || '';
     
-    if (!newMessage.trim() || !selectedConversation || !isAuthenticated) {
+    if (!messageContent.trim() || !selectedConversation || !isAuthenticated) {
       return;
     }
     
-    // Store message content before clearing
-    const messageToBeSent = newMessage;
-    
-    // Clear the input but maintain focus
-    setNewMessage('');
-    maintainInputFocus();
-    
-    try {
-      const token = localStorage.getItem('accessToken');
+    // Clear input value directly without using state
+    if (inputRef.current) {
+      inputRef.current.value = '';
       
-      // Create a temporary message ID for optimistic UI update
-      const tempId = Date.now();
-      const tempMessage = {
-        id: tempId,
-        content: messageToBeSent,
-        created_at: new Date().toISOString(),
-        sender_id: user?.id || 0,
-        conversation_id: selectedConversation.id,
-        sender: {
-          id: user?.id || 0,
-          first_name: user?.first_name || '',
-          last_name: user?.last_name || '',
-          profilePic: user?.profilePic
-        }
-      };
-      
-      // Generate cosmic particles for this message
-      generateParticles(tempId);
-      
-      // Add the temporary message to the UI immediately
-      setMessages(prevMessages => {
-        // Check if a similar message already exists
-        const exists = prevMessages.some(msg => 
-          msg.content === messageToBeSent && 
-          msg.sender_id === user?.id && 
-          msg.conversation_id === selectedConversation.id &&
-          // Only consider it a duplicate if it was sent in the last 5 seconds
-          Math.abs(new Date().getTime() - new Date(msg.created_at).getTime()) < 5000
-        );
-        
-        if (exists) {
-          console.log('Similar message already exists, not adding temporary message');
-          return prevMessages;
-        }
-        
-        // Add tempId to newMessageIds for animation
-        setNewMessageIds(prev => new Set(prev).add(tempId));
-        
-        // Clear new message status after animation completes
-        setTimeout(() => {
-          setNewMessageIds(prev => {
-            const updated = new Set(prev);
-            updated.delete(tempId);
-            return updated;
-          });
-        }, 3000);
-        
-        return [...prevMessages, tempMessage];
-      });
-      
-      scrollToBottom();
-      
-      // Ensure focus is maintained after UI updates
-      setTimeout(maintainInputFocus, 0);
-      
-      // Update the conversation list with the temporary message
-      setConversations(prevConversations => {
-        return prevConversations.map(conv => {
-          if (conv.id === selectedConversation.id) {
-            return {
-              ...conv,
-              last_message: {
-                id: tempId,
-                content: messageToBeSent,
-                created_at: new Date().toISOString(),
-                sender_id: user?.id || 0
-              },
-              last_message_at: new Date().toISOString()
-            };
-          }
-          return conv;
-        });
-      });
-      
-      // Send the message to the server
-      const response = await axios.post(
-        `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
-        { content: messageToBeSent },
-        { 
-          withCredentials: true,
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      
-      // Ensure focus is still maintained after network request
-      maintainInputFocus();
-      
-      // Add the real message ID to our processed set
-      processedMessageIds.current.add(response.data.id);
-      
-      // Generate cosmic particles for the real message
-      generateParticles(response.data.id);
-      
-      // Replace the temporary message with the real one from the server
-      setMessages(prevMessages => {
-        // Check if the real message already exists
-        const exists = prevMessages.some(msg => 
-          msg.id === response.data.id && 
-          msg.created_at === response.data.created_at
-        );
-        
-        if (exists) {
-          console.log('Real message already exists, not replacing temporary message');
-          return prevMessages;
-        }
-        
-        // Remove the temporary message and add the real one
-        return prevMessages
-          .filter(msg => msg.id !== tempId)
-          .concat(response.data);
-      });
-      
-      // One final focus call to ensure keyboard stays open
-      setTimeout(maintainInputFocus, 50);
-      
-      // Update the conversation list with the real message
-      setConversations(prevConversations => {
-        return prevConversations.map(conv => {
-          if (conv.id === selectedConversation.id) {
-            return {
-              ...conv,
-              last_message: {
-                id: response.data.id,
-                content: response.data.content,
-                created_at: response.data.created_at,
-                sender_id: response.data.sender_id
-              },
-              last_message_at: response.data.created_at
-            };
-          }
-          return conv;
-        });
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Remove the temporary message if there was an error
-      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== Date.now()));
-      // Still maintain focus even on error
-      maintainInputFocus();
+      // Critical: Focus must be maintained on the input element
+      inputRef.current.focus();
     }
+    
+    const sendMessageToServer = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          console.error('No access token found');
+          return;
+        }
+        
+        // Create a temporary message ID for optimistic UI update
+        const tempId = Date.now();
+        const tempMessage = {
+          id: tempId,
+          content: messageContent,
+          created_at: new Date().toISOString(),
+          sender_id: user?.id || 0,
+          conversation_id: selectedConversation.id,
+          sender: {
+            id: user?.id || 0,
+            first_name: user?.first_name || '',
+            last_name: user?.last_name || '',
+            profilePic: user?.profilePic
+          }
+        };
+        
+        // Add temporary message to UI
+        setMessages(prev => [...prev, tempMessage]);
+        
+        // Update conversation list with temporary message
+        setConversations(prev => 
+          prev.map(conv => {
+            if (conv.id === selectedConversation.id) {
+              return {
+                ...conv,
+                last_message: {
+                  id: tempId,
+                  content: messageContent,
+                  created_at: new Date().toISOString(),
+                  sender_id: user?.id || 0
+                },
+                last_message_at: new Date().toISOString()
+              };
+            }
+            return conv;
+          })
+        );
+        
+        // Focus the input again to make sure keyboard stays open
+        setTimeout(focusInput, 0);
+        
+        // Scroll to bottom of messages
+        scrollToBottom();
+        
+        // Send message to server
+        const response = await axios.post(
+          `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
+          { content: messageContent },
+          { 
+            withCredentials: true,
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+        
+        // Add the real message ID to our processed set
+        processedMessageIds.current.add(response.data.id);
+        
+        // Replace temporary message with real one
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === tempId ? response.data : msg
+          )
+        );
+        
+        // Update conversation list with real message
+        setConversations(prev => 
+          prev.map(conv => {
+            if (conv.id === selectedConversation.id) {
+              return {
+                ...conv,
+                last_message: {
+                  id: response.data.id,
+                  content: response.data.content,
+                  created_at: response.data.created_at,
+                  sender_id: response.data.sender_id
+                },
+                last_message_at: response.data.created_at
+              };
+            }
+            return conv;
+          })
+        );
+        
+        // Focus the input again after all updates
+        setTimeout(focusInput, 50);
+        
+      } catch (error) {
+        console.error('Error sending message:', error);
+        
+        // Focus the input even on error
+        setTimeout(focusInput, 0);
+      }
+    };
+    
+    // Launch the async function
+    sendMessageToServer();
+    
+    // Prevent default form submission
+    return false;
   };
 
   // Handle starting a new conversation
@@ -1328,111 +1276,60 @@ const Chat: React.FC = () => {
 
                 {/* Messages Area */}
                 <ScrollShadow 
-                  className="flex-1 p-4 relative overflow-hidden" 
+                  className="flex-1 p-4" 
                   ref={messageContainerRef}
                   onScroll={handleMessagesScroll}
                 >
-                  {/* Cosmic particles container */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {particles.map((particle) => (
-                      <div
-                        key={particle.id}
-                        className="particle"
-                        style={{
-                          width: `${particle.size}px`,
-                          height: `${particle.size}px`,
-                          left: `calc(50% + ${particle.x}px)`,
-                          top: `calc(50% + ${particle.y}px)`,
-                          opacity: particle.opacity,
-                          animationDelay: `${particle.delay}s`
-                        }}
-                      />
-                    ))}
-                  </div>
-                  
-                  <motion.div 
-                    className="space-y-4 z-10 relative"
-                    variants={cosmicContainerVariants}
-                    initial="hidden"
-                    animate="visible"
-                  >
+                  <div className="space-y-4">
                     {loadingMore && (
                       <div className="flex justify-center py-2">
-                        <motion.div 
-                          className="rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"
-                          animate={{ 
-                            rotate: 360,
-                            boxShadow: [
-                              "0 0 10px rgba(120, 120, 255, 0.7)",
-                              "0 0 20px rgba(120, 120, 255, 0.9)",
-                              "0 0 10px rgba(120, 120, 255, 0.7)"
-                            ]
-                          }}
-                          transition={{ 
-                            rotate: { duration: 1, repeat: Infinity, ease: "linear" },
-                            boxShadow: { duration: 1.5, repeat: Infinity, yoyo: true }
-                          }}
-                        ></motion.div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
                       </div>
                     )}
                     <div ref={messagesStartRef} />
-                    
-                    <AnimatePresence>
-                      {messages.map((message) => {
-                        const isMyMessage = message.sender_id === user?.id;
-                        const isNewMessage = newMessageIds.has(message.id);
-                        
-                        return (
-                          <motion.div
-                            key={message.id}
-                            className={`flex ${isMyMessage ? "justify-end" : "justify-start"} message-container`}
-                            custom={isMyMessage}
-                            variants={cosmicMessageVariants}
-                            initial="hidden"
-                            animate="visible"
-                            exit="hidden"
-                            layout
+                    {messages.map((message) => {
+                      const isMyMessage = message.sender_id === user?.id;
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                              isMyMessage
+                                ? "bg-primary text-primary-foreground rounded-br-sm"
+                                : "bg-default-100 rounded-bl-sm"
+                            }`}
                           >
-                            <motion.div
-                              className={`max-w-[70%] px-4 py-2 rounded-xl cosmic-material ${
-                                isMyMessage
-                                  ? "bg-primary text-primary-foreground rounded-br-sm"
-                                  : "bg-default-100 rounded-bl-sm"
-                              }`}
-                              whileHover="hover"
-                            >
-                              {isNewMessage ? (
-                                <AnimatedText text={message.content} />
-                              ) : (
-                                <p>{message.content}</p>
-                              )}
-                              <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                                {format(new Date(message.created_at), "h:mm a")}
-                              </span>
-                            </motion.div>
-                          </motion.div>
-                        );
-                      })}
-                    </AnimatePresence>
-                    
+                            <p>{message.content}</p>
+                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                              {format(new Date(message.created_at), "h:mm a")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                     <div ref={messagesEndRef} />
-                  </motion.div>
+                  </div>
                 </ScrollShadow>
 
-                {/* Message Input */}
+                {/* Message Input - Completely rewritten to avoid keyboard issues */}
                 <div className="p-4 border-t border-divider">
-                  <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <div className="flex gap-2">
                     <Input
                       ref={inputRef}
                       id="message-input"
                       placeholder="Type a message..."
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
                       size="lg"
                       radius="lg"
                       autoComplete="off"
-                      autoFocus
-                      onBlur={() => setTimeout(maintainInputFocus, 10)} // Try to regain focus if lost
+                      autoFocus={true}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
                       startContent={
                         <Tooltip content="Add attachment">
                           <Button
@@ -1446,67 +1343,42 @@ const Chat: React.FC = () => {
                         </Tooltip>
                       }
                     />
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
+                    <Button
+                      id="send-button"
+                      color="primary"
+                      size="lg"
+                      isIconOnly
+                      radius="lg"
+                      onTouchStart={(e) => {
+                        // Prevent default touch behavior
+                        e.preventDefault();
+                        handleSendMessage();
+                        // Force focus back to input
+                        setTimeout(focusInput, 0);
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSendMessage();
+                        // Force focus back to input
+                        setTimeout(focusInput, 0);
+                      }}
                     >
-                      <Button
-                        id="send-button"
-                        type="submit"
-                        color="primary"
-                        size="lg"
-                        isIconOnly
-                        radius="lg"
-                        onTouchEnd={(e) => {
-                          e.preventDefault();
-                          setTimeout(maintainInputFocus, 0);
-                        }}
-                        onClick={() => setTimeout(maintainInputFocus, 0)}
-                      >
-                        <Icon icon="lucide:send" width={20} />
-                      </Button>
-                    </motion.div>
-                  </form>
+                      <Icon icon="lucide:send" width={20} />
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">
-                <motion.div 
-                  className="text-center space-y-4"
-                  initial={{ opacity: 0, filter: "blur(20px)" }}
-                  animate={{ 
-                    opacity: 1, 
-                    y: 0,
-                    filter: "blur(0px)",
-                    transition: {
-                      duration: 1,
-                      ease: "easeOut"
-                    }
-                  }}
-                >
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.2, 1],
-                      rotate: [0, 10, 0, -10, 0],
-                      filter: ["drop-shadow(0 0 0px rgba(120, 120, 255, 0))", 
-                              "drop-shadow(0 0 15px rgba(120, 120, 255, 0.8))",
-                              "drop-shadow(0 0 0px rgba(120, 120, 255, 0))"]
-                    }}
-                    transition={{ 
-                      duration: 4,
-                      repeat: Infinity,
-                      repeatType: "reverse"
-                    }}
-                  >
-                    <Icon
-                      icon="lucide:message-square"
-                      className="w-16 h-16 mx-auto text-primary/60"
-                    />
-                  </motion.div>
+                <div className="text-center space-y-4">
+                  <Icon
+                    icon="lucide:message-square"
+                    className="w-12 h-12 mx-auto text-default-400"
+                  />
                   <p className="text-default-500">
                     Select a conversation to start chatting
                   </p>
-                </motion.div>
+                </div>
               </div>
             )}
           </CardBody>
