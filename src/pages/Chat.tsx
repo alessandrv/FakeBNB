@@ -16,53 +16,6 @@ import {
   User,
   Tooltip
 } from "@heroui/react";
-// Import Framer Motion for awesome animations
-import { motion, AnimatePresence } from "framer-motion";
-
-// Define cosmic materialization animation styles
-const cosmicAnimationStyles = `
-  @keyframes particleFadeIn {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-  
-  .particle {
-    position: absolute;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
-    animation: particleFadeIn 0.8s forwards;
-  }
-  
-  .message-container {
-    position: relative;
-    overflow: visible;
-  }
-  
-  .cosmic-material {
-    position: relative;
-    overflow: visible;
-    backdrop-filter: blur(8px);
-  }
-  
-  .cosmic-material::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: inherit;
-    filter: blur(10px);
-    opacity: 0.7;
-    z-index: -1;
-    border-radius: inherit;
-  }
-`;
-
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -131,6 +84,7 @@ const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -138,8 +92,6 @@ const Chat: React.FC = () => {
   const { setHideNavbar } = useContext(NavbarContext);
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const [newMessageIds, setNewMessageIds] = useState<Set<number>>(new Set());
-  const [particles, setParticles] = useState<{ id: string; x: number; y: number; size: number; delay: number; opacity: number }[]>([]);
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
@@ -189,7 +141,7 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Auto-scroll when messages change
+  // Modify scrollToBottom logic to be more reliable
   useEffect(() => {
     // Only auto-scroll when the messages change
     if (messages.length > 0) {
@@ -613,138 +565,6 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Function to generate cosmic particles for a message
-  const generateParticles = (messageId: number) => {
-    // Generate 15-25 random particles
-    const particleCount = Math.floor(Math.random() * 10) + 15;
-    const newParticles: { id: string; x: number; y: number; size: number; delay: number; opacity: number }[] = [];
-    
-    for (let i = 0; i < particleCount; i++) {
-      newParticles.push({
-        id: `${messageId}-${i}`,
-        x: Math.random() * 200 - 100, // Position around the message (-100 to 100)
-        y: Math.random() * 200 - 100,
-        size: Math.random() * 6 + 2, // Size between 2-8px
-        delay: Math.random() * 0.5,
-        opacity: Math.random() * 0.7 + 0.3
-      });
-    }
-    
-    setParticles(prev => [...prev, ...newParticles]);
-    
-    // Remove particles after animation completes
-    setTimeout(() => {
-      setParticles(prev => prev.filter(p => !p.id.startsWith(`${messageId}-`)));
-    }, 2000);
-  };
-  
-  // Advanced cosmic materialization variants
-  const cosmicContainerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.08,
-        delayChildren: 0.1
-      }
-    }
-  };
-
-  const cosmicMessageVariants = {
-    hidden: (isMyMessage: boolean) => ({
-      opacity: 0,
-      scale: 0.1,
-      x: isMyMessage ? 50 : -50,
-      y: 30,
-      rotate: isMyMessage ? 20 : -20,
-      filter: "blur(20px) brightness(1.5)",
-      boxShadow: "0 0 30px rgba(255,255,255,0.8)"
-    }),
-    visible: {
-      opacity: 1,
-      scale: 1,
-      x: 0,
-      y: 0,
-      rotate: 0,
-      filter: "blur(0px) brightness(1)",
-      boxShadow: "0 0 0px rgba(255,255,255,0)",
-      transition: {
-        type: "spring",
-        damping: 10,
-        stiffness: 80,
-        mass: 0.8,
-        duration: 1.2
-      }
-    },
-    hover: {
-      scale: 1.02,
-      boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
-      transition: {
-        duration: 0.3
-      }
-    }
-  };
-  
-  // Content animation for text appearing letter by letter
-  const textContentVariants = {
-    hidden: {
-      opacity: 0
-    },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.02,
-        delayChildren: 0.2
-      }
-    }
-  };
-  
-  const letterVariants = {
-    hidden: {
-      opacity: 0,
-      y: 20,
-      rotate: Math.random() * 30 - 15,
-      filter: "blur(10px)"
-    },
-    visible: {
-      opacity: 1,
-      y: 0,
-      rotate: 0,
-      filter: "blur(0px)",
-      transition: {
-        type: "spring",
-        damping: 12,
-        stiffness: 100
-      }
-    }
-  };
-
-  // Render text with letter-by-letter animation
-  const AnimatedText = ({ text }: { text: string }) => {
-    return (
-      <motion.span
-        variants={textContentVariants}
-        initial="hidden"
-        animate="visible"
-        className="inline-block"
-      >
-        {text.split('').map((char, index) => (
-          <motion.span
-            key={index}
-            variants={letterVariants}
-            className="inline-block"
-            style={{ 
-              display: char === ' ' ? 'inline' : 'inline-block',
-              whiteSpace: 'pre-wrap' 
-            }}
-          >
-            {char}
-          </motion.span>
-        ))}
-      </motion.span>
-    );
-  };
-
   // Process a message with conversation_id
   const processMessage = (message: any) => {
     // Ensure the message has the correct format
@@ -782,21 +602,6 @@ const Chat: React.FC = () => {
         }
         
         console.log('Adding new message to state');
-        // Add message id to newMessageIds set for animation
-        setNewMessageIds(prev => new Set(prev).add(formattedMessage.id));
-        
-        // Generate cosmic particles for this new message
-        generateParticles(formattedMessage.id);
-        
-        // Clear new message status after animation completes
-        setTimeout(() => {
-          setNewMessageIds(prev => {
-            const updated = new Set(prev);
-            updated.delete(formattedMessage.id);
-            return updated;
-          });
-        }, 3000);
-        
         return [...prevMessages, formattedMessage];
       });
       scrollToBottom();
@@ -887,142 +692,138 @@ const Chat: React.FC = () => {
     });
   };
 
-  // Create a ref for the input element
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  
-  // Direct function to focus input without side effects
-  const focusInput = () => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  };
-  
-  // Handle sending a message - completely rewritten to avoid keyboard issues
-  const handleSendMessage = () => {
-    // Get message content directly from the input ref to avoid state timing issues
-    const messageContent = inputRef.current?.value || '';
+  // Handle sending a message
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!messageContent.trim() || !selectedConversation || !isAuthenticated) {
+    if (!newMessage.trim() || !selectedConversation || !isAuthenticated) {
       return;
     }
     
-    // Clear input value directly without using state
-    if (inputRef.current) {
-      inputRef.current.value = '';
+    try {
+      const token = localStorage.getItem('accessToken');
       
-      // Critical: Focus must be maintained on the input element
-      inputRef.current.focus();
-    }
-    
-    const sendMessageToServer = async () => {
-      try {
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-          console.error('No access token found');
-          return;
+      // Create a temporary message ID for optimistic UI update
+      const tempId = Date.now();
+      const tempMessage = {
+        id: tempId,
+        content: newMessage,
+        created_at: new Date().toISOString(),
+        sender_id: user?.id || 0,
+        conversation_id: selectedConversation.id,
+        sender: {
+          id: user?.id || 0,
+          first_name: user?.first_name || '',
+          last_name: user?.last_name || '',
+          profilePic: user?.profilePic
+        }
+      };
+      
+      // Add the temporary message to the UI immediately
+      setMessages(prevMessages => {
+        // Check if a similar message already exists
+        const exists = prevMessages.some(msg => 
+          msg.content === newMessage && 
+          msg.sender_id === user?.id && 
+          msg.conversation_id === selectedConversation.id &&
+          // Only consider it a duplicate if it was sent in the last 5 seconds
+          Math.abs(new Date().getTime() - new Date(msg.created_at).getTime()) < 5000
+        );
+        
+        if (exists) {
+          console.log('Similar message already exists, not adding temporary message');
+          return prevMessages;
         }
         
-        // Create a temporary message ID for optimistic UI update
-        const tempId = Date.now();
-        const tempMessage = {
-          id: tempId,
-          content: messageContent,
-          created_at: new Date().toISOString(),
-          sender_id: user?.id || 0,
-          conversation_id: selectedConversation.id,
-          sender: {
-            id: user?.id || 0,
-            first_name: user?.first_name || '',
-            last_name: user?.last_name || '',
-            profilePic: user?.profilePic
+        return [...prevMessages, tempMessage];
+      });
+      
+      setNewMessage('');
+      scrollToBottom();
+      
+      // Keep focus on the input to keep the virtual keyboard open on mobile
+      setTimeout(() => {
+        if (messageInputRef.current) {
+          messageInputRef.current.focus();
+        }
+      }, 0);
+      
+      // Update the conversation list with the temporary message
+      setConversations(prevConversations => {
+        return prevConversations.map(conv => {
+          if (conv.id === selectedConversation.id) {
+            return {
+              ...conv,
+              last_message: {
+                id: tempId,
+                content: newMessage,
+                created_at: new Date().toISOString(),
+                sender_id: user?.id || 0
+              },
+              last_message_at: new Date().toISOString()
+            };
           }
-        };
-        
-        // Add temporary message to UI
-        setMessages(prev => [...prev, tempMessage]);
-        
-        // Update conversation list with temporary message
-        setConversations(prev => 
-          prev.map(conv => {
-            if (conv.id === selectedConversation.id) {
-              return {
-                ...conv,
-                last_message: {
-                  id: tempId,
-                  content: messageContent,
-                  created_at: new Date().toISOString(),
-                  sender_id: user?.id || 0
-                },
-                last_message_at: new Date().toISOString()
-              };
-            }
-            return conv;
-          })
-        );
-        
-        // Focus the input again to make sure keyboard stays open
-        setTimeout(focusInput, 0);
-        
-        // Scroll to bottom of messages
-        scrollToBottom();
-        
-        // Send message to server
-        const response = await axios.post(
-          `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
-          { content: messageContent },
-          { 
-            withCredentials: true,
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+          return conv;
+        });
+      });
+      
+      // Send the message to the server
+      const response = await axios.post(
+        `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
+        { content: newMessage },
+        { 
+          withCredentials: true,
+          headers: {
+            Authorization: `Bearer ${token}`
           }
+        }
+      );
+      
+      // Add the real message ID to our processed set
+      processedMessageIds.current.add(response.data.id);
+      
+      // Replace the temporary message with the real one from the server
+      setMessages(prevMessages => {
+        // Check if the real message already exists
+        const exists = prevMessages.some(msg => 
+          msg.id === response.data.id && 
+          msg.created_at === response.data.created_at
         );
         
-        // Add the real message ID to our processed set
-        processedMessageIds.current.add(response.data.id);
+        if (exists) {
+          console.log('Real message already exists, not replacing temporary message');
+          return prevMessages;
+        }
         
-        // Replace temporary message with real one
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === tempId ? response.data : msg
-          )
-        );
-        
-        // Update conversation list with real message
-        setConversations(prev => 
-          prev.map(conv => {
-            if (conv.id === selectedConversation.id) {
-              return {
-                ...conv,
-                last_message: {
-                  id: response.data.id,
-                  content: response.data.content,
-                  created_at: response.data.created_at,
-                  sender_id: response.data.sender_id
-                },
-                last_message_at: response.data.created_at
-              };
-            }
-            return conv;
-          })
-        );
-        
-        // Focus the input again after all updates
-        setTimeout(focusInput, 50);
-        
-      } catch (error) {
-        console.error('Error sending message:', error);
-        
-        // Focus the input even on error
-        setTimeout(focusInput, 0);
-      }
-    };
-    
-    // Launch the async function
-    sendMessageToServer();
-    
-    // Prevent default form submission
-    return false;
+        // Remove the temporary message and add the real one
+        return prevMessages
+          .filter(msg => msg.id !== tempId)
+          .concat(response.data);
+      });
+      
+      // Update the conversation list with the real message
+      setConversations(prevConversations => {
+        return prevConversations.map(conv => {
+          if (conv.id === selectedConversation.id) {
+            return {
+              ...conv,
+              last_message: {
+                id: response.data.id,
+                content: response.data.content,
+                created_at: response.data.created_at,
+                sender_id: response.data.sender_id
+              },
+              last_message_at: response.data.created_at
+            };
+          }
+          return conv;
+        });
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Remove the temporary message if there was an error
+      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== Date.now()));
+    }
   };
 
   // Handle starting a new conversation
@@ -1192,199 +993,174 @@ const Chat: React.FC = () => {
   }
 
   return (
-    <>
-      {/* Add the cosmic animation styles */}
-      <style>{cosmicAnimationStyles}</style>
-      
-      <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
-        {/* Conversations List */}
-        <Card 
-          className={`${
-            isMobile 
-              ? showConversations ? "w-full" : "hidden" 
-              : "w-[380px]"
-          } p-0 h-full`}
-        >
-          <CardBody className="p-0 h-full">
-            <div className="p-4 border-b border-divider">
-              <Input
-                placeholder="Search conversations..."
-                startContent={<Icon icon="lucide:search" className="text-default-400" />}
-                size="sm"
-                radius="lg"
-              />
-            </div>
-            
-            <ScrollShadow className="h-[calc(100%-65px)]">
-              <div className="p-2 space-y-1">
-                {conversations.map((conversation) => (
-                  <Button
-                    key={conversation.id}
-                    className="w-full justify-start p-2 h-auto"
-                    color={selectedConversation?.id === conversation.id ? "primary" : "default"}
-                    variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
-                    onPress={() => handleConversationSelect(conversation)}
-                  >
-                    <User
-                      name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
-                      description={conversation.last_message?.content || "No messages yet"}
-                      avatarProps={{
-                        src: conversation.other_user.profile_picture,
-                        name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
-                        size: "sm"
-                      }}
-                    />
-                  </Button>
-                ))}
-              </div>
-            </ScrollShadow>
-          </CardBody>
-        </Card>
-
-        {/* Chat Area */}
-        <Card 
-          className={`${
-            isMobile 
-              ? showConversations ? "hidden" : "w-full" 
-              : "flex-1"
-          } p-0 h-full`}
-        >
-          <CardBody className="p-0 h-full flex flex-col">
-            {selectedConversation ? (
-              <>
-                {/* Chat Header */}
-                <div className="p-4 border-b border-divider flex items-center gap-2">
-                  {isMobile && (
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      onPress={handleBackToList}
-                      className="mr-2"
-                    >
-                      <Icon icon="lucide:chevron-left" width={24} />
-                    </Button>
-                  )}
+    <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
+      {/* Conversations List */}
+      <Card 
+        className={`${
+          isMobile 
+            ? showConversations ? "w-full" : "hidden" 
+            : "w-[380px]"
+        } p-0 h-full`}
+      >
+        <CardBody className="p-0 h-full">
+          <div className="p-4 border-b border-divider">
+            <Input
+              placeholder="Search conversations..."
+              startContent={<Icon icon="lucide:search" className="text-default-400" />}
+              size="sm"
+              radius="lg"
+            />
+          </div>
+          
+          <ScrollShadow className="h-[calc(100%-65px)]">
+            <div className="p-2 space-y-1">
+              {conversations.map((conversation) => (
+                <Button
+                  key={conversation.id}
+                  className="w-full justify-start p-2 h-auto"
+                  color={selectedConversation?.id === conversation.id ? "primary" : "default"}
+                  variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
+                  onPress={() => handleConversationSelect(conversation)}
+                >
                   <User
-                    name={`${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`}
-                    description="Active now"
+                    name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                    description={conversation.last_message?.content || "No messages yet"}
                     avatarProps={{
-                      src: selectedConversation.other_user.profile_picture,
-                      name: `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
+                      src: conversation.other_user.profile_picture,
+                      name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
+                      size: "sm"
                     }}
                   />
-                </div>
+                </Button>
+              ))}
+            </div>
+          </ScrollShadow>
+        </CardBody>
+      </Card>
 
-                {/* Messages Area */}
-                <ScrollShadow 
-                  className="flex-1 p-4" 
-                  ref={messageContainerRef}
-                  onScroll={handleMessagesScroll}
-                >
-                  <div className="space-y-4">
-                    {loadingMore && (
-                      <div className="flex justify-center py-2">
-                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
-                      </div>
-                    )}
-                    <div ref={messagesStartRef} />
-                    {messages.map((message) => {
-                      const isMyMessage = message.sender_id === user?.id;
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                              isMyMessage
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-default-100 rounded-bl-sm"
-                            }`}
-                          >
-                            <p>{message.content}</p>
-                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                              {format(new Date(message.created_at), "h:mm a")}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollShadow>
-
-                {/* Message Input - Completely rewritten to avoid keyboard issues */}
-                <div className="p-4 border-t border-divider">
-                  <div className="flex gap-2">
-                    <Input
-                      ref={inputRef}
-                      id="message-input"
-                      placeholder="Type a message..."
-                      size="lg"
-                      radius="lg"
-                      autoComplete="off"
-                      autoFocus={true}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                      startContent={
-                        <Tooltip content="Add attachment">
-                          <Button
-                            isIconOnly
-                            variant="light"
-                            size="sm"
-                            className="text-default-400"
-                          >
-                            <Icon icon="lucide:paperclip" width={20} />
-                          </Button>
-                        </Tooltip>
-                      }
-                    />
-                    <Button
-                      id="send-button"
-                      color="primary"
-                      size="lg"
-                      isIconOnly
-                      radius="lg"
-                      onTouchStart={(e) => {
-                        // Prevent default touch behavior
-                        e.preventDefault();
-                        handleSendMessage();
-                        // Force focus back to input
-                        setTimeout(focusInput, 0);
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleSendMessage();
-                        // Force focus back to input
-                        setTimeout(focusInput, 0);
-                      }}
-                    >
-                      <Icon icon="lucide:send" width={20} />
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center space-y-4">
-                  <Icon
-                    icon="lucide:message-square"
-                    className="w-12 h-12 mx-auto text-default-400"
-                  />
-                  <p className="text-default-500">
-                    Select a conversation to start chatting
-                  </p>
-                </div>
+      {/* Chat Area */}
+      <Card 
+        className={`${
+          isMobile 
+            ? showConversations ? "hidden" : "w-full" 
+            : "flex-1"
+        } p-0 h-full`}
+      >
+        <CardBody className="p-0 h-full flex flex-col">
+          {selectedConversation ? (
+            <>
+              {/* Chat Header */}
+              <div className="p-4 border-b border-divider flex items-center gap-2">
+                {isMobile && (
+                  <Button
+                    isIconOnly
+                    variant="light"
+                    onPress={handleBackToList}
+                    className="mr-2"
+                  >
+                    <Icon icon="lucide:chevron-left" width={24} />
+                  </Button>
+                )}
+                <User
+                  name={`${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`}
+                  description="Active now"
+                  avatarProps={{
+                    src: selectedConversation.other_user.profile_picture,
+                    name: `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
+                  }}
+                />
               </div>
-            )}
-          </CardBody>
-        </Card>
-      </div>
-    </>
+
+              {/* Messages Area */}
+              <ScrollShadow 
+                className="flex-1 p-4" 
+                ref={messageContainerRef}
+                onScroll={handleMessagesScroll}
+              >
+                <div className="space-y-4">
+                  {loadingMore && (
+                    <div className="flex justify-center py-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
+                    </div>
+                  )}
+                  <div ref={messagesStartRef} />
+                  {messages.map((message) => {
+                    const isMyMessage = message.sender_id === user?.id;
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                            isMyMessage
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-default-100 rounded-bl-sm"
+                          }`}
+                        >
+                          <p>{message.content}</p>
+                          <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                            {format(new Date(message.created_at), "h:mm a")}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollShadow>
+
+              {/* Message Input */}
+              <div className="p-4 border-t border-divider">
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <Input
+                    placeholder="Type a message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    size="lg"
+                    radius="lg"
+                    ref={messageInputRef}
+                    startContent={
+                      <Tooltip content="Add attachment">
+                        <Button
+                          isIconOnly
+                          variant="light"
+                          size="sm"
+                          className="text-default-400"
+                        >
+                          <Icon icon="lucide:paperclip" width={20} />
+                        </Button>
+                      </Tooltip>
+                    }
+                  />
+                  <Button
+                    type="submit"
+                    color="primary"
+                    size="lg"
+                    isIconOnly
+                    radius="lg"
+                  >
+                    <Icon icon="lucide:send" width={20} />
+                  </Button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center space-y-4">
+                <Icon
+                  icon="lucide:message-square"
+                  className="w-12 h-12 mx-auto text-default-400"
+                />
+                <p className="text-default-500">
+                  Select a conversation to start chatting
+                </p>
+              </div>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+    </div>
   );
 };
 
