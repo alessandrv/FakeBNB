@@ -151,7 +151,8 @@ const GooeyNav: React.FC<GooeyNavProps> = ({
     });
 
     // Auto-trigger animation after 2 seconds
-  
+    triggerAnimation();
+
 
     resizeObserver.observe(containerRef.current);
     
