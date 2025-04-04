@@ -14,8 +14,10 @@ import {
   Divider,
   ScrollShadow,
   User,
-  Tooltip
+  Tooltip,
+  Spinner
 } from "@heroui/react";
+import { useNavigate } from 'react-router-dom';
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -91,7 +93,7 @@ const Chat: React.FC = () => {
   const { setHideNavbar } = useContext(NavbarContext);
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  
+  const navigate = useNavigate();
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
   
@@ -153,7 +155,7 @@ const Chat: React.FC = () => {
     }
   }, [selectedConversation]);
 
-  // Initialize socket connection
+  // Initialize socket connection - moved earlier in the component
   useEffect(() => {
     if (isAuthenticated && user) {
       const token = localStorage.getItem('accessToken');
@@ -181,6 +183,12 @@ const Chat: React.FC = () => {
               console.log(`Joining room: conversation:${conv.id}`);
               newSocket.emit('join_conversation', conv.id);
             });
+          }
+          
+          // If a conversation is already selected, join that room immediately
+          if (selectedConversation) {
+            console.log(`Joining selected conversation room on connect: conversation:${selectedConversation.id}`);
+            newSocket.emit('join_conversation', selectedConversation.id);
           }
         });
 
@@ -289,12 +297,19 @@ const Chat: React.FC = () => {
         };
       }
     }
-  }, [isAuthenticated, user, conversations]);
+  }, [isAuthenticated, user, conversations, selectedConversation]);
 
-  // Handle conversation selection
+  // Ensure we immediately join the conversation room when selected
   useEffect(() => {
     if (socket && selectedConversation) {
-      console.log(`Joining conversation room: conversation:${selectedConversation.id}`);
+      console.log(`Explicitly joining conversation room when selected: conversation:${selectedConversation.id}`);
+      // Leave any previous conversation room first
+      if (currentRoom && currentRoom !== `conversation:${selectedConversation.id}`) {
+        console.log(`Leaving previous room: ${currentRoom}`);
+        socket.emit('leave_conversation', parseInt(currentRoom.split(':')[1], 10));
+      }
+      
+      // Join the new conversation room
       socket.emit('join_conversation', selectedConversation.id);
       
       // Update current room
@@ -304,27 +319,13 @@ const Chat: React.FC = () => {
       processPendingMessages();
       
       return () => {
-        console.log(`Leaving conversation room: conversation:${selectedConversation.id}`);
-        socket.emit('leave_conversation', selectedConversation.id);
-        
-        // Clear current room if it's the one we're leaving
-        if (currentRoom === `conversation:${selectedConversation.id}`) {
-          setCurrentRoom(null);
+        if (socket && selectedConversation) {
+          console.log(`Leaving conversation room on cleanup: conversation:${selectedConversation.id}`);
+          socket.emit('leave_conversation', selectedConversation.id);
         }
       };
     }
-  }, [socket, selectedConversation, currentRoom]);
-
-  // Join conversation rooms when conversations change
-  useEffect(() => {
-    if (socket && conversations.length > 0) {
-      console.log('Joining conversation rooms when conversations change');
-      conversations.forEach((conv: Conversation) => {
-        console.log(`Joining room: conversation:${conv.id}`);
-        socket.emit('join_conversation', conv.id);
-      });
-    }
-  }, [socket, conversations]);
+  }, [socket, selectedConversation]);
 
   // Fetch conversations
   useEffect(() => {
@@ -439,6 +440,12 @@ const Chat: React.FC = () => {
             setTimeout(() => {
               scrollToBottom();
             }, 100);
+            
+            // Ensure we're connected to the socket room for this conversation
+            if (socket) {
+              console.log(`Ensuring socket is connected for conversation: ${selectedConversation.id}`);
+              socket.emit('join_conversation', selectedConversation.id);
+            }
           } else {
             console.error('Invalid response format for messages:', response.data);
             setMessages([]);
@@ -474,7 +481,7 @@ const Chat: React.FC = () => {
     };
 
     fetchMessages();
-  }, [selectedConversation, isAuthenticated, isMobile]);
+  }, [selectedConversation, isAuthenticated, isMobile, socket]);
 
   // Function to load more messages when scrolling up
   const loadMoreMessages = async () => {
@@ -986,11 +993,39 @@ const Chat: React.FC = () => {
   };
 
   if (!isAuthenticated) {
-    return <div className="p-4 text-center">Please log in to use the chat.</div>;
+    return (
+      <div className="flex min-h-[400px] w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Icon 
+            icon="lucide:lock" 
+            className="h-12 w-12 text-default-400"
+          />
+          <div className="text-lg font-medium text-default-600">
+            Please log in to use the chat
+          </div>
+          <Button 
+            color="primary" 
+            onPress={() => navigate('/login')}
+            startContent={<Icon icon="lucide:log-in" />}
+          >
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
-    return <div className="p-4 text-center">Loading conversations...</div>;
+    return (
+      <div className="flex min-h-[400px] w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Spinner size="lg" color="primary" />
+          <div className="text-lg font-medium text-default-600">
+            Loading conversations...
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
