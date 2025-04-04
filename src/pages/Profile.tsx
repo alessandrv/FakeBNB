@@ -394,76 +394,180 @@ export const Profile = () => {
           <Card className="hidden md:block">
             <CardBody className="p-0">
               <div className="flex flex-col">
-                <button 
+                <motion.button 
                   onClick={() => handleTabChange('account')}
-                  className={`flex items-center gap-3 p-4 ${activeTab === 'account' ? 'bg-primary-100 text-primary' : 'hover:bg-default-100'}`}
+                  className="flex items-center gap-3 p-4 relative"
+                  initial={false}
+                  animate={{ 
+                    color: activeTab === 'account' ? 'var(--primary)' : 'inherit'
+                  }}
+                  transition={{ duration: 0.3 }}
                 >
                   <Icon icon="lucide:user" />
                   <span>Account</span>
-                </button>
-                <button 
+                  {activeTab === 'account' && (
+                    <motion.div
+                      className="absolute inset-0 bg-primary-100 -z-10"
+                      layoutId="tabHighlight"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </motion.button>
+                <motion.button 
                   onClick={() => handleTabChange('houses')}
-                  className={`flex items-center gap-3 p-4 ${activeTab === 'houses' ? 'bg-primary-100 text-primary' : 'hover:bg-default-100'}`}
+                  className="flex items-center gap-3 p-4 relative"
+                  initial={false}
+                  animate={{ 
+                    color: activeTab === 'houses' ? 'var(--primary)' : 'inherit'
+                  }}
+                  transition={{ duration: 0.3 }}
                 >
                   <Icon icon="lucide:home" />
                   <span>My Houses</span>
-                </button>
-                <button 
+                  {activeTab === 'houses' && (
+                    <motion.div
+                      className="absolute inset-0 bg-primary-100 -z-10"
+                      layoutId="tabHighlight"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </motion.button>
+                <motion.button 
                   onClick={() => handleTabChange('security')}
-                  className={`flex items-center gap-3 p-4 ${activeTab === 'security' ? 'bg-primary-100 text-primary' : 'hover:bg-default-100'}`}
+                  className="flex items-center gap-3 p-4 relative"
+                  initial={false}
+                  animate={{ 
+                    color: activeTab === 'security' ? 'var(--primary)' : 'inherit'
+                  }}
+                  transition={{ duration: 0.3 }}
                 >
                   <Icon icon="lucide:shield" />
                   <span>Security</span>
-                </button>
-                <button 
+                  {activeTab === 'security' && (
+                    <motion.div
+                      className="absolute inset-0 bg-primary-100 -z-10"
+                      layoutId="tabHighlight"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </motion.button>
+                <motion.button 
                   onClick={() => handleTabChange('preferences')}
-                  className={`flex items-center gap-3 p-4 ${activeTab === 'preferences' ? 'bg-primary-100 text-primary' : 'hover:bg-default-100'}`}
+                  className="flex items-center gap-3 p-4 relative"
+                  initial={false}
+                  animate={{ 
+                    color: activeTab === 'preferences' ? 'var(--primary)' : 'inherit'
+                  }}
+                  transition={{ duration: 0.3 }}
                 >
                   <Icon icon="lucide:settings" />
                   <span>Preferences</span>
-                </button>
+                  {activeTab === 'preferences' && (
+                    <motion.div
+                      className="absolute inset-0 bg-primary-100 -z-10"
+                      layoutId="tabHighlight"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </motion.button>
               </div>
             </CardBody>
           </Card>
           
           {/* Mobile Tabs */}
           <div className="flex md:hidden justify-center overflow-x-auto mb-4 border-b border-default-200">
-            <button 
+            <motion.button 
               onClick={() => handleTabChange('account')}
-              className={`flex-shrink-0 py-3 px-4 border-b-2 ${activeTab === 'account' ? 'border-primary text-primary' : 'border-transparent text-default-500'}`}
+              className="flex-shrink-0 py-3 px-4 border-b-2 border-transparent relative"
+              initial={false}
+              animate={{ 
+                color: activeTab === 'account' ? 'var(--primary)' : 'var(--default-500)'
+              }}
+              transition={{ duration: 0.3 }}
             >
               <div className="flex flex-col items-center">
                 <Icon icon="lucide:user" className="text-xl" />
                 <span className="text-xs mt-1">Account</span>
               </div>
-            </button>
-            <button 
+              {activeTab === 'account' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  layoutId="mobileTabIndicator"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+            </motion.button>
+            <motion.button 
               onClick={() => handleTabChange('houses')}
-              className={`flex-shrink-0 py-3 px-4 border-b-2 ${activeTab === 'houses' ? 'border-primary text-primary' : 'border-transparent text-default-500'}`}
+              className="flex-shrink-0 py-3 px-4 border-b-2 border-transparent relative"
+              initial={false}
+              animate={{ 
+                color: activeTab === 'houses' ? 'var(--primary)' : 'var(--default-500)'
+              }}
+              transition={{ duration: 0.3 }}
             >
               <div className="flex flex-col items-center">
                 <Icon icon="lucide:home" className="text-xl" />
                 <span className="text-xs mt-1">Houses</span>
               </div>
-            </button>
-            <button 
+              {activeTab === 'houses' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  layoutId="mobileTabIndicator"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+            </motion.button>
+            <motion.button 
               onClick={() => handleTabChange('security')}
-              className={`flex-shrink-0 py-3 px-4 border-b-2 ${activeTab === 'security' ? 'border-primary text-primary' : 'border-transparent text-default-500'}`}
+              className="flex-shrink-0 py-3 px-4 border-b-2 border-transparent relative"
+              initial={false}
+              animate={{ 
+                color: activeTab === 'security' ? 'var(--primary)' : 'var(--default-500)'
+              }}
+              transition={{ duration: 0.3 }}
             >
               <div className="flex flex-col items-center">
                 <Icon icon="lucide:shield" className="text-xl" />
                 <span className="text-xs mt-1">Security</span>
               </div>
-            </button>
-            <button 
+              {activeTab === 'security' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  layoutId="mobileTabIndicator"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+            </motion.button>
+            <motion.button 
               onClick={() => handleTabChange('preferences')}
-              className={`flex-shrink-0 py-3 px-4 border-b-2 ${activeTab === 'preferences' ? 'border-primary text-primary' : 'border-transparent text-default-500'}`}
+              className="flex-shrink-0 py-3 px-4 border-b-2 border-transparent relative"
+              initial={false}
+              animate={{ 
+                color: activeTab === 'preferences' ? 'var(--primary)' : 'var(--default-500)'
+              }}
+              transition={{ duration: 0.3 }}
             >
               <div className="flex flex-col items-center">
                 <Icon icon="lucide:settings" className="text-xl" />
                 <span className="text-xs mt-1">Settings</span>
               </div>
-            </button>
+              {activeTab === 'preferences' && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  layoutId="mobileTabIndicator"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+            </motion.button>
           </div>
         </div>
         
