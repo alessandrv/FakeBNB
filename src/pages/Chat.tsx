@@ -19,47 +19,130 @@ import {
 // Import Framer Motion for awesome animations
 import { motion, AnimatePresence } from "framer-motion";
 
-// Define cosmic materialization animation styles
-const cosmicAnimationStyles = `
-  @keyframes particleFadeIn {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
+// Define gooey animation styles
+const gooeyAnimationStyles = `
+  :root {
+    --linear-ease: linear(0, 0.068, 0.19 2.7%, 0.804 8.1%, 1.037, 1.199 13.2%, 1.245, 1.27 15.8%, 1.274, 1.272 17.4%, 1.249 19.1%, 0.996 28%, 0.949, 0.928 33.3%, 0.926, 0.933 36.8%, 1.001 45.6%, 1.013, 1.019 50.8%, 1.018 54.4%, 1 63.1%, 0.995 68%, 1.001 85%, 1);
   }
-  
-  .particle {
-    position: absolute;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
-    animation: particleFadeIn 0.8s forwards;
-  }
-  
+
   .message-container {
     position: relative;
     overflow: visible;
   }
-  
-  .cosmic-material {
+
+  .message-gooey {
     position: relative;
     overflow: visible;
-    backdrop-filter: blur(8px);
+    z-index: 1;
   }
-  
-  .cosmic-material::before {
-    content: '';
+
+  .message-effect {
     position: absolute;
-    top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
-    background: inherit;
-    filter: blur(10px);
-    opacity: 0.7;
-    z-index: -1;
-    border-radius: inherit;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .message-effect.filter {
+    filter: blur(7px) contrast(20);
+    mix-blend-mode: lighten;
+  }
+
+  .particle, .point {
+    display: block;
+    opacity: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 100%;
+    transform-origin: center;
+  }
+
+  .particle {
+    --time: 1s;
+    position: absolute;
+    top: calc(50% - 6px);
+    left: calc(50% - 6px);
+    animation: particle calc(var(--time)) ease 1 -150ms;
+  }
+
+  .point {
+    background: var(--color, #5E9BFF);
+    opacity: 1;
+    animation: point calc(var(--time)) ease 1 -150ms;
+  }
+
+  @keyframes particle {
+    0% {
+      transform: rotate(0deg) translate(calc(var(--start-x)), calc(var(--start-y)));
+      opacity: 1;
+      animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+    }
+
+    70% {
+      transform: rotate(calc(var(--rotate) * 0.5)) translate(calc(var(--end-x) * 1.2), calc(var(--end-y) * 1.2));
+      opacity: 1;
+      animation-timing-function: ease;
+    }
+
+    85% {
+      transform: rotate(calc(var(--rotate) * 0.66)) translate(calc(var(--end-x)), calc(var(--end-y)));
+      opacity: 1;
+    }
+
+    100% {
+      transform: rotate(calc(var(--rotate) * 1.2)) translate(calc(var(--end-x) * 0.5), calc(var(--end-y) * 0.5));
+      opacity: 1;
+    }
+  }
+
+  @keyframes point {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+      animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+    }
+
+    25% {
+      transform: scale(calc(var(--scale) * 0.25));
+    }
+
+    38% {
+      opacity: 1;
+    }
+
+    65% {
+      transform: scale(var(--scale));
+      opacity: 1;
+      animation-timing-function: ease;
+    }
+
+    85% {
+      transform: scale(var(--scale));
+      opacity: 1;
+    }
+
+    100% {
+      transform: scale(0);
+      opacity: 0;
+    }
+  }
+
+  .message-appear {
+    animation: messageAppear 0.3s ease-out forwards;
+  }
+
+  @keyframes messageAppear {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 `;
 
@@ -139,7 +222,7 @@ const Chat: React.FC = () => {
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [newMessageIds, setNewMessageIds] = useState<Set<number>>(new Set());
-  const [particles, setParticles] = useState<{ id: string; x: number; y: number; size: number; delay: number; opacity: number }[]>([]);
+  const [messageEffects, setMessageEffects] = useState<{[key: number]: boolean}>({});
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
@@ -613,136 +696,41 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Function to generate cosmic particles for a message
-  const generateParticles = (messageId: number) => {
-    // Generate 15-25 random particles
-    const particleCount = Math.floor(Math.random() * 10) + 15;
-    const newParticles: { id: string; x: number; y: number; size: number; delay: number; opacity: number }[] = [];
-    
-    for (let i = 0; i < particleCount; i++) {
-      newParticles.push({
-        id: `${messageId}-${i}`,
-        x: Math.random() * 200 - 100, // Position around the message (-100 to 100)
-        y: Math.random() * 200 - 100,
-        size: Math.random() * 6 + 2, // Size between 2-8px
-        delay: Math.random() * 0.5,
-        opacity: Math.random() * 0.7 + 0.3
-      });
-    }
-    
-    setParticles(prev => [...prev, ...newParticles]);
-    
-    // Remove particles after animation completes
+  // Utility functions for particle animation
+  const noise = (n = 1) => n / 2 - Math.random() * n;
+
+  const getXY = (distance: number, pointIndex: number, totalPoints: number) => {
+    const angle = ((360 + noise(8)) / totalPoints) * pointIndex * (Math.PI / 180);
+    return [distance * Math.cos(angle), distance * Math.sin(angle)];
+  };
+
+  const createParticle = (i: number, t: number, distances: number[], rotate: number) => {
+    let rotateNoise = noise(rotate / 10);
+    return {
+      start: getXY(distances[0], 15 - i, 15),
+      end: getXY(distances[1] + noise(7), 15 - i, 15),
+      time: t,
+      scale: 1 + noise(0.2),
+      color: ['#5E9BFF', '#36D6AD', '#F5A623', '#5E9BFF'][Math.floor(Math.random() * 4)],
+      rotate: rotateNoise > 0 ? (rotateNoise + rotate / 20) * 10 : (rotateNoise - rotate / 20) * 10
+    };
+  };
+
+  // Function to generate particles for a message
+  const generateGooeyEffect = (messageId: number, isMyMessage: boolean) => {
+    // Create a timeout to remove the effect after animation completes
     setTimeout(() => {
-      setParticles(prev => prev.filter(p => !p.id.startsWith(`${messageId}-`)));
-    }, 2000);
-  };
-  
-  // Advanced cosmic materialization variants
-  const cosmicContainerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.08,
-        delayChildren: 0.1
-      }
-    }
-  };
+      setMessageEffects(prev => ({
+        ...prev,
+        [messageId]: false
+      }));
+    }, 1500);
 
-  const cosmicMessageVariants = {
-    hidden: (isMyMessage: boolean) => ({
-      opacity: 0,
-      scale: 0.1,
-      x: isMyMessage ? 50 : -50,
-      y: 30,
-      rotate: isMyMessage ? 20 : -20,
-      filter: "blur(20px) brightness(1.5)",
-      boxShadow: "0 0 30px rgba(255,255,255,0.8)"
-    }),
-    visible: {
-      opacity: 1,
-      scale: 1,
-      x: 0,
-      y: 0,
-      rotate: 0,
-      filter: "blur(0px) brightness(1)",
-      boxShadow: "0 0 0px rgba(255,255,255,0)",
-      transition: {
-        type: "spring",
-        damping: 10,
-        stiffness: 80,
-        mass: 0.8,
-        duration: 1.2
-      }
-    },
-    hover: {
-      scale: 1.02,
-      boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
-      transition: {
-        duration: 0.3
-      }
-    }
-  };
-  
-  // Content animation for text appearing letter by letter
-  const textContentVariants = {
-    hidden: {
-      opacity: 0
-    },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.02,
-        delayChildren: 0.2
-      }
-    }
-  };
-  
-  const letterVariants = {
-    hidden: {
-      opacity: 0,
-      y: 20,
-      rotate: Math.random() * 30 - 15,
-      filter: "blur(10px)"
-    },
-    visible: {
-      opacity: 1,
-      y: 0,
-      rotate: 0,
-      filter: "blur(0px)",
-      transition: {
-        type: "spring",
-        damping: 12,
-        stiffness: 100
-      }
-    }
-  };
-
-  // Render text with letter-by-letter animation
-  const AnimatedText = ({ text }: { text: string }) => {
-    return (
-      <motion.span
-        variants={textContentVariants}
-        initial="hidden"
-        animate="visible"
-        className="inline-block"
-      >
-        {text.split('').map((char, index) => (
-          <motion.span
-            key={index}
-            variants={letterVariants}
-            className="inline-block"
-            style={{ 
-              display: char === ' ' ? 'inline' : 'inline-block',
-              whiteSpace: 'pre-wrap' 
-            }}
-          >
-            {char}
-          </motion.span>
-        ))}
-      </motion.span>
-    );
+    // Set the effect to active
+    setMessageEffects(prev => ({
+      ...prev,
+      [messageId]: true
+    }));
   };
 
   // Process a message with conversation_id
@@ -785,8 +773,8 @@ const Chat: React.FC = () => {
         // Add message id to newMessageIds set for animation
         setNewMessageIds(prev => new Set(prev).add(formattedMessage.id));
         
-        // Generate cosmic particles for this new message
-        generateParticles(formattedMessage.id);
+        // Generate gooey effect for this message
+        generateGooeyEffect(formattedMessage.id, formattedMessage.sender_id === user?.id);
         
         // Clear new message status after animation completes
         setTimeout(() => {
@@ -917,8 +905,8 @@ const Chat: React.FC = () => {
         }
       };
       
-      // Generate cosmic particles for this message
-      generateParticles(tempId);
+      // Generate gooey effect for this message
+      generateGooeyEffect(tempId, true);
       
       // Get current input value before clearing
       const messageToBeSent = newMessage;
@@ -1000,8 +988,8 @@ const Chat: React.FC = () => {
       // Add the real message ID to our processed set
       processedMessageIds.current.add(response.data.id);
       
-      // Generate cosmic particles for the real message
-      generateParticles(response.data.id);
+      // Generate gooey effect for the real message if replacing temp message
+      generateGooeyEffect(response.data.id, true);
       
       // Replace the temporary message with the real one from the server
       setMessages(prevMessages => {
@@ -1205,6 +1193,73 @@ const Chat: React.FC = () => {
     </div>
   };
 
+  // Chat container ref to track size
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Create the particle DOM elements and animation
+  useEffect(() => {
+    const createMessageParticles = (messageId: number) => {
+      const messageEl = document.getElementById(`message-${messageId}`);
+      const effectEl = document.getElementById(`effect-${messageId}`);
+      
+      if (!messageEl || !effectEl || !messageEffects[messageId]) return;
+      
+      const particleCount = 15;
+      const animationTime = 600;
+      const timeVariance = 200;
+      const distances = [80, 10]; // [start, end] distances
+      const rotate = 100; // Max rotation
+
+      // Clear existing particles
+      while (effectEl.firstChild) {
+        effectEl.removeChild(effectEl.firstChild);
+      }
+
+      // Add new particles with slight delays for smooth effect
+      for (let i = 0; i < particleCount; i++) {
+        setTimeout(() => {
+          if (!effectEl) return; // Check if element still exists
+          
+          const t = animationTime + noise(timeVariance * 2);
+          const p = createParticle(i, t, distances, rotate);
+          
+          const particle = document.createElement('span');
+          const point = document.createElement('span');
+          
+          particle.classList.add('particle');
+          particle.style.setProperty('--start-x', `${p.start[0]}px`);
+          particle.style.setProperty('--start-y', `${p.start[1]}px`);
+          particle.style.setProperty('--end-x', `${p.end[0]}px`);
+          particle.style.setProperty('--end-y', `${p.end[1]}px`);
+          particle.style.setProperty('--time', `${p.time}ms`);
+          particle.style.setProperty('--scale', `${p.scale}`);
+          particle.style.setProperty('--color', p.color);
+          particle.style.setProperty('--rotate', `${p.rotate}deg`);
+          
+          point.classList.add('point');
+          particle.appendChild(point);
+          effectEl.appendChild(particle);
+          
+          // Clean up particle after animation
+          setTimeout(() => {
+            try {
+              effectEl.removeChild(particle);
+            } catch {
+              // Do nothing if already removed
+            }
+          }, p.time);
+        }, i * 20); // Stagger particle creation
+      }
+    };
+    
+    // Process all message IDs that need effects
+    Object.keys(messageEffects).forEach(id => {
+      if (messageEffects[parseInt(id)]) {
+        createMessageParticles(parseInt(id));
+      }
+    });
+  }, [messageEffects]);
+
   if (!isAuthenticated) {
     return <div className="p-4 text-center">Please log in to use the chat.</div>;
   }
@@ -1215,10 +1270,10 @@ const Chat: React.FC = () => {
 
   return (
     <>
-      {/* Add the cosmic animation styles */}
-      <style>{cosmicAnimationStyles}</style>
+      {/* Add the gooey animation styles */}
+      <style>{gooeyAnimationStyles}</style>
       
-      <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
+      <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1" ref={chatContainerRef}>
         {/* Conversations List */}
         <Card 
           className={`${
@@ -1302,46 +1357,15 @@ const Chat: React.FC = () => {
                   ref={messageContainerRef}
                   onScroll={handleMessagesScroll}
                 >
-                  {/* Cosmic particles container */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {particles.map((particle) => (
-                      <div
-                        key={particle.id}
-                        className="particle"
-                        style={{
-                          width: `${particle.size}px`,
-                          height: `${particle.size}px`,
-                          left: `calc(50% + ${particle.x}px)`,
-                          top: `calc(50% + ${particle.y}px)`,
-                          opacity: particle.opacity,
-                          animationDelay: `${particle.delay}s`
-                        }}
-                      />
-                    ))}
-                  </div>
-                  
                   <motion.div 
                     className="space-y-4 z-10 relative"
-                    variants={cosmicContainerVariants}
-                    initial="hidden"
-                    animate="visible"
                   >
                     {loadingMore && (
                       <div className="flex justify-center py-2">
                         <motion.div 
                           className="rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"
-                          animate={{ 
-                            rotate: 360,
-                            boxShadow: [
-                              "0 0 10px rgba(120, 120, 255, 0.7)",
-                              "0 0 20px rgba(120, 120, 255, 0.9)",
-                              "0 0 10px rgba(120, 120, 255, 0.7)"
-                            ]
-                          }}
-                          transition={{ 
-                            rotate: { duration: 1, repeat: Infinity, ease: "linear" },
-                            boxShadow: { duration: 1.5, repeat: Infinity, yoyo: true }
-                          }}
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                         ></motion.div>
                       </div>
                     )}
@@ -1353,34 +1377,30 @@ const Chat: React.FC = () => {
                         const isNewMessage = newMessageIds.has(message.id);
                         
                         return (
-                          <motion.div
+                          <div
                             key={message.id}
-                            className={`flex ${isMyMessage ? "justify-end" : "justify-start"} message-container`}
-                            custom={isMyMessage}
-                            variants={cosmicMessageVariants}
-                            initial="hidden"
-                            animate="visible"
-                            exit="hidden"
-                            layout
+                            id={`message-${message.id}`}
+                            className={`flex ${isMyMessage ? "justify-end" : "justify-start"} message-container ${isNewMessage ? "message-appear" : ""}`}
                           >
-                            <motion.div
-                              className={`max-w-[70%] px-4 py-2 rounded-xl cosmic-material ${
+                            <div
+                              className={`max-w-[70%] px-4 py-2 rounded-xl message-gooey ${
                                 isMyMessage
                                   ? "bg-primary text-primary-foreground rounded-br-sm"
                                   : "bg-default-100 rounded-bl-sm"
                               }`}
-                              whileHover="hover"
                             >
-                              {isNewMessage ? (
-                                <AnimatedText text={message.content} />
-                              ) : (
-                                <p>{message.content}</p>
-                              )}
+                              <p>{message.content}</p>
                               <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
                                 {format(new Date(message.created_at), "h:mm a")}
                               </span>
-                            </motion.div>
-                          </motion.div>
+                              
+                              {/* Gooey effect container */}
+                              <div 
+                                id={`effect-${message.id}`}
+                                className="message-effect filter"
+                              />
+                            </div>
+                          </div>
                         );
                       })}
                     </AnimatePresence>
@@ -1434,34 +1454,30 @@ const Chat: React.FC = () => {
               <div className="flex-1 flex items-center justify-center">
                 <motion.div 
                   className="text-center space-y-4"
-                  initial={{ opacity: 0, filter: "blur(20px)" }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ 
                     opacity: 1, 
                     y: 0,
-                    filter: "blur(0px)",
                     transition: {
-                      duration: 1,
-                      ease: "easeOut"
+                      type: "spring",
+                      damping: 12
                     }
                   }}
                 >
                   <motion.div
                     animate={{ 
-                      scale: [1, 1.2, 1],
-                      rotate: [0, 10, 0, -10, 0],
-                      filter: ["drop-shadow(0 0 0px rgba(120, 120, 255, 0))", 
-                              "drop-shadow(0 0 15px rgba(120, 120, 255, 0.8))",
-                              "drop-shadow(0 0 0px rgba(120, 120, 255, 0))"]
+                      scale: [1, 1.1, 1],
+                      rotate: [0, 5, 0, -5, 0]
                     }}
                     transition={{ 
-                      duration: 4,
+                      duration: 3,
                       repeat: Infinity,
                       repeatType: "reverse"
                     }}
                   >
                     <Icon
                       icon="lucide:message-square"
-                      className="w-16 h-16 mx-auto text-primary/60"
+                      className="w-12 h-12 mx-auto text-default-400"
                     />
                   </motion.div>
                   <p className="text-default-500">
