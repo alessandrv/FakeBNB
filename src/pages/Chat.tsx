@@ -747,6 +747,15 @@ const Chat: React.FC = () => {
     setShowConversations(true);
   };
 
+  const handleBackToList = () => {
+    setShowConversations(true);
+  };
+  const handleConversationSelect = (conversation: Conversation) => {
+    setSelectedConversation(conversation);
+    if (isMobile) {
+      setShowConversations(false);
+    }
+  };
   // Process pending messages when we have more context
   const processPendingMessages = () => {
     if (pendingMessages.length === 0) return;
@@ -864,7 +873,13 @@ const Chat: React.FC = () => {
   return (
     <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
       {/* Conversations List */}
-      <Card className="w-[380px] p-0 h-full">
+      <Card 
+        className={`${
+          isMobile 
+            ? showConversations ? "w-full" : "hidden" 
+            : "w-[380px]"
+        } p-0 h-full`}
+      >
         <CardBody className="p-0 h-full">
           <div className="p-4 border-b border-divider">
             <Input
@@ -883,7 +898,7 @@ const Chat: React.FC = () => {
                   className="w-full justify-start p-2 h-auto"
                   color={selectedConversation?.id === conversation.id ? "primary" : "default"}
                   variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
-                  onPress={() => setSelectedConversation(conversation)}
+                  onPress={() => handleConversationSelect(conversation)}
                 >
                   <User
                     name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
@@ -902,12 +917,28 @@ const Chat: React.FC = () => {
       </Card>
 
       {/* Chat Area */}
-      <Card className="flex-1 p-0 h-full">
+      <Card 
+        className={`${
+          isMobile 
+            ? showConversations ? "hidden" : "w-full" 
+            : "flex-1"
+        } p-0 h-full`}
+      >
         <CardBody className="p-0 h-full flex flex-col">
           {selectedConversation ? (
             <>
               {/* Chat Header */}
-              <div className="p-4 border-b border-divider">
+              <div className="p-4 border-b border-divider flex items-center gap-2">
+                {isMobile && (
+                  <Button
+                    isIconOnly
+                    variant="light"
+                    onPress={handleBackToList}
+                    className="mr-2"
+                  >
+                    <Icon icon="lucide:chevron-left" width={24} />
+                  </Button>
+                )}
                 <User
                   name={`${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`}
                   description="Active now"
@@ -921,25 +952,28 @@ const Chat: React.FC = () => {
               {/* Messages Area */}
               <ScrollShadow className="flex-1 p-4">
                 <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.sender_id === 1 ? "justify-end" : "justify-start"}`}
-                    >
+                  {messages.map((message) => {
+                    const isMyMessage = message.sender_id === 1; // Replace 1 with actual user ID
+                    return (
                       <div
-                        className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                          message.sender_id === 1
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-default-100"
-                        }`}
+                        key={message.id}
+                        className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
                       >
-                        <p>{message.content}</p>
-                        <span className="text-tiny opacity-70">
-                          {new Date(message.created_at).toLocaleTimeString()}
-                        </span>
+                        <div
+                          className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                            isMyMessage
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-default-100 rounded-bl-sm"
+                          }`}
+                        >
+                          <p>{message.content}</p>
+                          <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                            {format(new Date(message.created_at), "h:mm a")}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollShadow>
