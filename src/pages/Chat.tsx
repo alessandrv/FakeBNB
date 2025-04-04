@@ -1084,11 +1084,7 @@ const Chat: React.FC = () => {
                         key={message.id}
                         className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
                       >
-                        <GooeyNav
-                          particleCount={10}
-                          particleDistances={[60, 5]}
-                          colors={isMyMessage ? [1, 2, 3] : [3, 4, 5]}
-                        >
+                        
                           <div
                             className={`max-w-[70%] px-4 py-2 rounded-xl ${
                               isMyMessage
@@ -1101,7 +1097,6 @@ const Chat: React.FC = () => {
                               {format(new Date(message.created_at), "h:mm a")}
                             </span>
                           </div>
-                        </GooeyNav>
                       </div>
                     );
                   })}
