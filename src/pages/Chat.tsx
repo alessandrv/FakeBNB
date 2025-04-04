@@ -4,9 +4,18 @@ import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
 import { format } from 'date-fns';
 // Import Heroicons
-import { ChatBubbleLeftRightIcon, PaperAirplaneIcon, UserCircleIcon, ArrowLeftIcon, PlusIcon, UserPlusIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
-import { ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid, PaperAirplaneIcon as PaperAirplaneIconSolid, ChatBubbleLeftIcon as ChatBubbleLeftIconSolid } from '@heroicons/react/24/solid';
-
+import { Icon } from "@iconify/react";
+import {
+  Card,
+  CardBody,
+  Input,
+  Button,
+  Avatar,
+  Divider,
+  ScrollShadow,
+  User,
+  Tooltip
+} from "@heroui/react";
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -853,219 +862,137 @@ const Chat: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen">
-      {/* Mobile header when in chat view */}
-      {isMobile && selectedConversation && !showConversations && (
-        <div className="fixed top-0 left-0 right-0 bg-white p-4 border-b border-gray-200 flex items-center z-50 shadow-md">
-          <button 
-            onClick={goBackToConversations}
-            className="mr-3 text-blue-600 hover:text-blue-700 transition-colors p-2 rounded-full hover:bg-blue-50"
-          >
-            <ArrowLeftIcon className="h-6 w-6" />
-          </button>
-          <div>
-            <h3 className="font-bold text-lg">
-              {selectedConversation.other_user
-                ? `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
-                : 'Unknown User'}
-            </h3>
-            <p className="text-xs text-gray-500">Tap to view profile</p>
-          </div>
-        </div>
-      )}
-
-      {/* Conversations sidebar - hidden on mobile when in chat view */}
-      <div className={`${isMobile ? (showConversations ? 'w-full' : 'hidden') : 'w-1/3'} border-r border-gray-200 bg-gray-50 overflow-y-auto`}>
-        <div className="p-4 bg-white border-b border-gray-200 sticky top-0 z-10">
-          <h2 className="text-xl font-bold mb-4 flex items-center">
-            <ChatBubbleLeftRightIcon className="h-6 w-6 mr-2 text-blue-600" /> 
-            Conversations
-          </h2>
-          
-          {/* Start new conversation */}
-          <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div className="flex items-center mb-2 text-gray-700">
-              <UserPlusIcon className="h-5 w-5 mr-2 text-blue-600" />
-              <span className="text-sm font-medium">Start New Conversation</span>
-            </div>
-            <input
-              type="number"
-              placeholder="Enter user ID to chat with"
-              className="w-full p-3 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              value={otherUserId || ''}
-              onChange={(e) => setOtherUserId(e.target.value ? parseInt(e.target.value) : null)}
+    <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
+      {/* Conversations List */}
+      <Card className="w-[380px] p-0 h-full">
+        <CardBody className="p-0 h-full">
+          <div className="p-4 border-b border-divider">
+            <Input
+              placeholder="Search conversations..."
+              startContent={<Icon icon="lucide:search" className="text-default-400" />}
+              size="sm"
+              radius="lg"
             />
-            <button
-              className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center"
-              onClick={handleStartConversation}
-              disabled={!otherUserId}
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Start Conversation
-            </button>
           </div>
-        </div>
-        
-        {/* Conversations list */}
-        <div className="p-4">
-          <div className="space-y-2">
-            {conversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                className={`p-4 mb-2 rounded-lg cursor-pointer transition-all flex items-center space-x-4 ${
-                  selectedConversation?.id === conversation.id
-                    ? 'bg-blue-50 border-2 border-blue-200'
-                    : 'bg-white border border-gray-200 hover:border-blue-200 hover:shadow-md'
-                }`}
-                onClick={() => {
-                  // If this conversation is already selected, deselect it
-                  if (selectedConversation?.id === conversation.id) {
-                    setSelectedConversation(null);
-                  } else {
-                    // Otherwise, select this conversation
-                    setSelectedConversation(conversation);
-                  }
-                }}
-              >
-                {/* Profile Picture */}
-                {conversation.other_user && (
-                  conversation.other_user.profile_picture ? (
-                    <img
-                      src={conversation.other_user.profile_picture}
-                      alt={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        target.nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                  ) : (
-                    <DefaultAvatar 
-                      firstName={conversation.other_user.first_name}
-                      lastName={conversation.other_user.last_name}
-                    />
-                  )
-                )}
-
-                {/* Conversation Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start">
-                    <div className="font-medium text-gray-900 truncate">
-                      {conversation.other_user
-                        ? `${conversation.other_user.first_name} ${conversation.other_user.last_name}`
-                        : 'Unknown User'}
-                    </div>
-                    <div className="text-xs text-gray-400 whitespace-nowrap ml-2">
-                      {conversation.last_message 
-                        ? format(new Date(conversation.last_message.created_at), 'MMM d, h:mm a')
-                        : format(new Date(conversation.created_at), 'MMM d, h:mm a')}
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-500 truncate">
-                    {conversation.last_message?.content || 'No messages yet'}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      
-      {/* Chat area - full width on mobile when in chat view */}
-      <div className={`${isMobile ? (showConversations ? 'hidden' : 'w-full') : 'flex-1'} flex flex-col bg-gray-50`}>
-        {selectedConversation ? (
-          <>
-            {/* Chat header - only visible on desktop */}
-            {!isMobile && (
-            <div className="p-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-              <h3 className="font-bold text-lg">
-                {selectedConversation.other_user
-                  ? `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
-                  : 'Unknown User'}
-              </h3>
+          
+          <ScrollShadow className="h-[calc(100%-65px)]">
+            <div className="p-2 space-y-1">
+              {conversations.map((conversation) => (
+                <Button
+                  key={conversation.id}
+                  className="w-full justify-start p-2 h-auto"
+                  color={selectedConversation?.id === conversation.id ? "primary" : "default"}
+                  variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
+                  onPress={() => setSelectedConversation(conversation)}
+                >
+                  <User
+                    name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                    description={conversation.last_message?.content || "No messages yet"}
+                    avatarProps={{
+                      src: conversation.other_user.profile_picture,
+                      name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
+                      size: "sm"
+                    }}
+                  />
+                </Button>
+              ))}
             </div>
-            )}
-            
-            {/* Messages */}
-            <div 
-              className={`flex-1 p-4 ${isMobile ? 'mt-16 mb-20' : ''} space-y-4`}
-              style={{ 
-                height: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 180px)',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-            >
-              {messages.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-gray-500">
-                  <div>No messages yet. Start the conversation!</div>
-                </div>
-              ) : (
-                <>
-                  <div className="py-4"> {/* Spacer at the top to ensure scrollability */}
-                    {messages.length > 10 && <div className="text-center text-sm text-gray-500 mb-4">Scroll up for earlier messages</div>}
-                  </div>
+          </ScrollShadow>
+        </CardBody>
+      </Card>
+
+      {/* Chat Area */}
+      <Card className="flex-1 p-0 h-full">
+        <CardBody className="p-0 h-full flex flex-col">
+          {selectedConversation ? (
+            <>
+              {/* Chat Header */}
+              <div className="p-4 border-b border-divider">
+                <User
+                  name={`${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`}
+                  description="Active now"
+                  avatarProps={{
+                    src: selectedConversation.other_user.profile_picture,
+                    name: `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
+                  }}
+                />
+              </div>
+
+              {/* Messages Area */}
+              <ScrollShadow className="flex-1 p-4">
+                <div className="space-y-4">
                   {messages.map((message) => (
                     <div
-                      key={`${message.id}-${message.created_at}`}
-                      className={`flex ${message.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}
+                      key={message.id}
+                      className={`flex ${message.sender_id === 1 ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[75%] ${
-                          message.sender_id === user?.id
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white text-gray-900'
-                        } p-4 rounded-2xl shadow-sm ${
-                          message.sender_id === user?.id
-                            ? 'rounded-br-sm'
-                            : 'rounded-bl-sm'
+                        className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                          message.sender_id === 1
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-default-100"
                         }`}
                       >
-                        <div className="break-words">{message.content}</div>
-                        <div className={`text-xs mt-1 ${
-                          message.sender_id === user?.id
-                            ? 'text-blue-100'
-                            : 'text-gray-500'
-                        }`}>
-                          {format(new Date(message.created_at), 'MMM d, h:mm a')}
-                        </div>
+                        <p>{message.content}</p>
+                        <span className="text-tiny opacity-70">
+                          {new Date(message.created_at).toLocaleTimeString()}
+                        </span>
                       </div>
                     </div>
                   ))}
-                  <div ref={messagesEndRef} className="pt-1" /> {/* Add some padding to ensure visibility */}
-                </>
-              )}
-            </div>
-            
-            {/* Message input */}
-            <form onSubmit={handleSendMessage} className={`p-4 bg-white border-t border-gray-200 ${isMobile ? 'fixed bottom-0 left-0 right-0 z-50' : ''} shadow-lg`}>
-              <div className="flex max-w-4xl mx-auto">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  className="flex-1 p-3 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-6 py-3 rounded-r-lg hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium flex items-center justify-center"
-                >
-                  <PaperAirplaneIcon className="h-5 w-5" />
-                </button>
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollShadow>
+
+              {/* Message Input */}
+              <div className="p-4 border-t border-divider">
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <Input
+                    placeholder="Type a message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    size="lg"
+                    radius="lg"
+                    startContent={
+                      <Tooltip content="Add attachment">
+                        <Button
+                          isIconOnly
+                          variant="light"
+                          size="sm"
+                          className="text-default-400"
+                        >
+                          <Icon icon="lucide:paperclip" width={20} />
+                        </Button>
+                      </Tooltip>
+                    }
+                  />
+                  <Button
+                    type="submit"
+                    color="primary"
+                    size="lg"
+                    isIconOnly
+                    radius="lg"
+                  >
+                    <Icon icon="lucide:send" width={20} />
+                  </Button>
+                </form>
               </div>
-            </form>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50">
-            <div className="text-center">
-              <ChatBubbleLeftIconSolid className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium">Select a conversation or start a new one</p>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center space-y-4">
+                <Icon
+                  icon="lucide:message-square"
+                  className="w-12 h-12 mx-auto text-default-400"
+                />
+                <p className="text-default-500">
+                  Select a conversation to start chatting
+                </p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 };
