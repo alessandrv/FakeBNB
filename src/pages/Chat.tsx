@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useContext, createContext } from 'r
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addHours } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 // Import Heroicons
 import { Icon } from "@iconify/react";
@@ -1083,7 +1083,14 @@ const Chat: React.FC = () => {
                   <div ref={messagesStartRef} />
                   {messages.map((message) => {
                     const isMyMessage = message.sender_id === user?.id;
-                    console.log('Formatting timestamp:', message.created_at, 'Parsed:', parseISO(message.created_at)); 
+                    
+                    // Parse the UTC date string
+                    const parsedUtcDate = parseISO(message.created_at);
+                    // Add 2 hours (temporary workaround)
+                    const adjustedDate = addHours(parsedUtcDate, 2);
+
+                    console.log('Original:', message.created_at, 'Parsed:', parsedUtcDate, 'Adjusted:', adjustedDate);
+                    
                     return (
                       <div
                         key={message.id}
@@ -1098,7 +1105,8 @@ const Chat: React.FC = () => {
                         >
                           <p>{message.content}</p>
                           <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                            {formatInTimeZone(parseISO(message.created_at), 'Europe/Rome', 'HH:mm')}
+                            {/* Format the adjusted date */}
+                            {formatInTimeZone(adjustedDate, 'Europe/Rome', 'HH:mm')}
                           </span>
                         </div>
                       </div>
