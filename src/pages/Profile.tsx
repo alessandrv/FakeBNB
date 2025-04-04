@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody, CardHeader, Input, Button, Tabs, Tab, Avatar, Spinner, Badge, Divider, User, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip, Spacer } from '@heroui/react';
+import { Card, CardBody, CardHeader, Input, Button, Tabs, Tab, Avatar, Spinner, Badge, Divider, User, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip, Spacer, Skeleton } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation, PanInfo } from 'framer-motion';
 
 // Define interfaces for house management
 interface Tenant {
@@ -36,6 +36,8 @@ export const Profile = () => {
   const { user, isLoading, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [profileDataLoading, setProfileDataLoading] = useState(true);
+  const [housesDataLoading, setHousesDataLoading] = useState(true);
   
   // Get tab from URL query parameter or default to 'account'
   const getInitialTab = () => {
@@ -61,6 +63,45 @@ export const Profile = () => {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isLogoutOpen, onOpen: onLogoutOpen, onClose: onLogoutClose } = useDisclosure();
+  const [swipeDirection, setSwipeDirection] = useState<string | null>(null);
+  const contentControls = useAnimation();
+  
+  // Define tab order for swipe navigation
+  const tabOrder = ['account', 'houses', 'security', 'preferences'];
+  
+  // Handle swipe to change tabs
+  const handleSwipe = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const swipeThreshold = 50; // Minimum swipe distance
+    
+    if (Math.abs(info.offset.x) > swipeThreshold) {
+      // Determine swipe direction
+      const direction = info.offset.x > 0 ? 'right' : 'left';
+      setSwipeDirection(direction);
+      
+      // Find current tab index
+      const currentIndex = tabOrder.indexOf(activeTab);
+      
+      if (direction === 'left' && currentIndex < tabOrder.length - 1) {
+        // Swipe left to go to next tab
+        handleTabChange(tabOrder[currentIndex + 1]);
+      } else if (direction === 'right' && currentIndex > 0) {
+        // Swipe right to go to previous tab
+        handleTabChange(tabOrder[currentIndex - 1]);
+      } else {
+        // If we can't change tabs (at the end), bounce back
+        contentControls.start({
+          x: 0,
+          transition: { type: 'spring', stiffness: 300, damping: 30 }
+        });
+      }
+    } else {
+      // Not enough swipe distance, bounce back
+      contentControls.start({
+        x: 0,
+        transition: { type: 'spring', stiffness: 300, damping: 30 }
+      });
+    }
+  };
 
   // Update URL when tab changes
   const handleTabChange = (tab: string) => {
@@ -78,6 +119,17 @@ export const Profile = () => {
   useEffect(() => {
     setActiveTab(getInitialTab());
   }, [location.search]);
+
+  // Simulate data loading
+  useEffect(() => {
+    // Simulate API loading time
+    const timer = setTimeout(() => {
+      setProfileDataLoading(false);
+      setHousesDataLoading(false);
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Sample houses data
   const [houses] = useState<House[]>([
@@ -249,6 +301,87 @@ export const Profile = () => {
     exit: { opacity: 0, x: -20, transition: { duration: 0.2 } }
   };
 
+  // Profile skeleton component
+  const ProfileSkeleton = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Skeleton className="h-14 rounded-lg" />
+        <Skeleton className="h-14 rounded-lg" />
+      </div>
+      <Skeleton className="h-14 rounded-lg" />
+      <Skeleton className="h-14 rounded-lg" />
+    </div>
+  );
+
+  // House card skeleton component
+  const HouseCardSkeleton = () => (
+    <Card className="w-full">
+      <CardBody>
+        <div className="grid grid-cols-1 md:grid-cols-[300px,1fr] gap-6">
+          <Skeleton className="w-full h-48 rounded-lg" />
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="w-full">
+                <Skeleton className="h-6 w-3/4 rounded-lg mb-2" />
+                <Skeleton className="h-4 w-1/3 rounded-lg" />
+              </div>
+              <Skeleton className="h-9 w-24 rounded-lg" />
+            </div>
+            <div className="space-y-4">
+              <Skeleton className="h-5 w-40 rounded-lg" />
+              <Card className="w-full">
+                <CardBody>
+                  <div className="flex flex-col gap-3">
+                    <div className="border-b pb-3">
+                      <div className="flex justify-between items-center">
+                        <Skeleton className="h-12 w-40 rounded-lg" />
+                        <Skeleton className="h-8 w-8 rounded-lg" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                        <Skeleton className="h-16 rounded-lg" />
+                        <Skeleton className="h-16 rounded-lg" />
+                        <Skeleton className="h-16 rounded-lg" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center">
+                        <Skeleton className="h-12 w-40 rounded-lg" />
+                        <Skeleton className="h-8 w-8 rounded-lg" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                        <Skeleton className="h-16 rounded-lg" />
+                        <Skeleton className="h-16 rounded-lg" />
+                        <Skeleton className="h-16 rounded-lg" />
+                      </div>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  );
+
+  // Security skeleton component
+  const SecuritySkeleton = () => (
+    <div className="space-y-6">
+      <Skeleton className="h-4 w-3/4 rounded-lg mb-4" />
+      <Skeleton className="h-24 rounded-lg mb-4" />
+      <Skeleton className="h-24 rounded-lg" />
+    </div>
+  );
+
+  // Preferences skeleton component
+  const PreferencesSkeleton = () => (
+    <div className="space-y-6">
+      <Skeleton className="h-4 w-3/4 rounded-lg mb-4" />
+      <Skeleton className="h-24 rounded-lg mb-4" />
+      <Skeleton className="h-24 rounded-lg" />
+    </div>
+  );
+
   return (
     <div className="container mx-auto pb-24 py-8 px-4">
       <div className="flex justify-between items-center mb-8">
@@ -377,17 +510,29 @@ export const Profile = () => {
         <div>
           <Card className="mb-6">
             <CardBody className="flex flex-col items-center p-6">
-              <Avatar 
-                name={getInitials()} 
-                size="lg" 
-                className="mb-4 text-lg"
-              />
-              <div className="text-center">
-                <h2 className="font-semibold text-xl">
-                  {user?.first_name} {user?.last_name}
-                </h2>
-                <p className="text-default-500">{user?.email}</p>
-              </div>
+              {profileDataLoading ? (
+                <>
+                  <Skeleton className="w-16 h-16 rounded-full mb-4" />
+                  <div className="text-center w-full">
+                    <Skeleton className="h-6 w-3/4 mx-auto mb-2 rounded-lg" />
+                    <Skeleton className="h-4 w-1/2 mx-auto rounded-lg" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Avatar 
+                    name={getInitials()} 
+                    size="lg" 
+                    className="mb-4 text-lg"
+                  />
+                  <div className="text-center">
+                    <h2 className="font-semibold text-xl">
+                      {user?.first_name} {user?.last_name}
+                    </h2>
+                    <p className="text-default-500">{user?.email}</p>
+                  </div>
+                </>
+              )}
             </CardBody>
           </Card>
           
@@ -581,7 +726,7 @@ export const Profile = () => {
                 {activeTab === 'security' && 'Security Settings'}
                 {activeTab === 'preferences' && 'Preferences'}
               </h2>
-              {activeTab === 'account' && !isEditing && (
+              {activeTab === 'account' && !isEditing && !profileDataLoading && (
                 <Button 
                   variant="light" 
                   color="primary" 
@@ -591,281 +736,322 @@ export const Profile = () => {
                   Edit
                 </Button>
               )}
-              {activeTab === 'houses' && (
-                 <Link to="/create-house" className="flex items-center gap-2">
-                
-                <Button 
-                  variant="light" 
-                  color="primary" 
-                  startContent={<Icon icon="lucide:plus" />}
-                >
-                  <span>Add Property</span>
-                </Button>               </Link>
-
+              {activeTab === 'houses' && !housesDataLoading && (
+                <Link to="/create-house" className="flex items-center gap-2">
+                  <Button 
+                    variant="light" 
+                    color="primary" 
+                    startContent={<Icon icon="lucide:plus" />}
+                  >
+                    <span>Add Property</span>
+                  </Button>
+                </Link>
               )}
             </CardHeader>
-            <CardBody className="p-6">
-              <AnimatePresence mode="wait">
-                {activeTab === 'account' && (
-                  <motion.div 
-                    key="account"
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    variants={tabVariants}
-                    className="space-y-6"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input
-                        label="First Name"
-                        value={profileForm.firstName}
-                        onValueChange={(value) => handleInputChange('firstName', value)}
-                        variant="bordered"
-                        isDisabled={!isEditing}
-                      />
-                      <Input
-                        label="Last Name"
-                        value={profileForm.lastName}
-                        onValueChange={(value) => handleInputChange('lastName', value)}
-                        variant="bordered"
-                        isDisabled={!isEditing}
-                      />
-                    </div>
-                    
-                    <Input
-                      label="Email"
-                      type="email"
-                      value={profileForm.email}
-                      onValueChange={(value) => handleInputChange('email', value)}
-                      variant="bordered"
-                      startContent={<Icon icon="lucide:mail" />}
-                      isDisabled={true} // Email is typically not editable
-                    />
-                    
-                    <Input
-                      label="Phone Number"
-                      type="tel"
-                      value={profileForm.phoneNumber}
-                      onValueChange={(value) => handleInputChange('phoneNumber', value)}
-                      variant="bordered"
-                      startContent={<Icon icon="lucide:phone" />}
-                      isDisabled={!isEditing}
-                    />
-                    
-                    {isEditing && (
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="bordered" 
-                          onClick={() => setIsEditing(false)}
-                          isDisabled={isSaving}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          color="primary"
-                          onClick={handleSaveProfile}
-                          isLoading={isSaving}
-                        >
-                          Save Changes
-                        </Button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-                
-                {activeTab === 'houses' && (
-                  <motion.div 
-                    key="houses"
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    variants={tabVariants}
-                    className="space-y-6"
-                  >
-                    {houses.map((house) => (
-                      <Card key={house.id} className="w-full">
-                        <CardBody>
-                          <div className="grid grid-cols-1 md:grid-cols-[300px,1fr] gap-6">
-                            <img
-                              src={house.image}
-                              alt={house.address}
-                              className="w-full h-48 md:h-full object-cover rounded-lg"
+            <CardBody className="p-6 overflow-hidden">
+              <motion.div 
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.1}
+                onDragEnd={handleSwipe}
+                animate={contentControls}
+                className="h-full"
+              >
+                <AnimatePresence mode="wait">
+                  {activeTab === 'account' && (
+                    <motion.div 
+                      key="account"
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      variants={tabVariants}
+                      className="space-y-6"
+                    >
+                      {profileDataLoading ? (
+                        <ProfileSkeleton />
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input
+                              label="First Name"
+                              value={profileForm.firstName}
+                              onValueChange={(value) => handleInputChange('firstName', value)}
+                              variant="bordered"
+                              isDisabled={!isEditing}
                             />
-                            <div className="space-y-6">
-                              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div>
-                                  <h3 className="text-lg font-semibold">
-                                    {house.address}
-                                  </h3>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Badge
-                                      color={
-                                        house.status === "occupied"
-                                          ? "success"
-                                          : "danger"
-                                      }
+                            <Input
+                              label="Last Name"
+                              value={profileForm.lastName}
+                              onValueChange={(value) => handleInputChange('lastName', value)}
+                              variant="bordered"
+                              isDisabled={!isEditing}
+                            />
+                          </div>
+                          
+                          <Input
+                            label="Email"
+                            type="email"
+                            value={profileForm.email}
+                            onValueChange={(value) => handleInputChange('email', value)}
+                            variant="bordered"
+                            startContent={<Icon icon="lucide:mail" />}
+                            isDisabled={true} // Email is typically not editable
+                          />
+                          
+                          <Input
+                            label="Phone Number"
+                            type="tel"
+                            value={profileForm.phoneNumber}
+                            onValueChange={(value) => handleInputChange('phoneNumber', value)}
+                            variant="bordered"
+                            startContent={<Icon icon="lucide:phone" />}
+                            isDisabled={!isEditing}
+                          />
+                          
+                          {isEditing && (
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                variant="bordered" 
+                                onClick={() => setIsEditing(false)}
+                                isDisabled={isSaving}
+                              >
+                                Cancel
+                              </Button>
+                              <Button 
+                                color="primary"
+                                onClick={handleSaveProfile}
+                                isLoading={isSaving}
+                              >
+                                Save Changes
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                  
+                  {activeTab === 'houses' && (
+                    <motion.div 
+                      key="houses"
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      variants={tabVariants}
+                      className="space-y-6"
+                    >
+                      {housesDataLoading ? (
+                        <>
+                          <HouseCardSkeleton />
+                          <HouseCardSkeleton />
+                        </>
+                      ) : (
+                        houses.map((house) => (
+                          <Card key={house.id} className="w-full">
+                            <CardBody>
+                              <div className="grid grid-cols-1 md:grid-cols-[300px,1fr] gap-6">
+                                <img
+                                  src={house.image}
+                                  alt={house.address}
+                                  className="w-full h-48 md:h-full object-cover rounded-lg"
+                                />
+                                <div className="space-y-6">
+                                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div>
+                                      <h3 className="text-lg font-semibold">
+                                        {house.address}
+                                      </h3>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <Badge
+                                          color={
+                                            house.status === "occupied"
+                                              ? "success"
+                                              : "danger"
+                                          }
+                                        >
+                                          {house.status}
+                                        </Badge>
+                                        {house.status === "occupied" && (
+                                          <span className="text-small text-default-500">
+                                            {house.occupants} occupants
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="flat"
+                                      color="primary"
+                                      startContent={<Icon icon="lucide:edit" />}
                                     >
-                                      {house.status}
-                                    </Badge>
-                                    {house.status === "occupied" && (
-                                      <span className="text-small text-default-500">
-                                        {house.occupants} occupants
-                                      </span>
-                                    )}
+                                      Manage
+                                    </Button>
                                   </div>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="flat"
-                                  color="primary"
-                                  startContent={<Icon icon="lucide:edit" />}
-                                >
-                                  Manage
-                                </Button>
-                              </div>
 
-                              {house.status === "occupied" && (
-                                <div className="space-y-4">
-                                  <h4 className="text-medium font-semibold">
-                                    Current Tenants
-                                  </h4>
+                                  {house.status === "occupied" && (
+                                    <div className="space-y-4">
+                                      <h4 className="text-medium font-semibold">
+                                        Current Tenants
+                                      </h4>
 
-                                  <Card className="w-full">
-                                    <CardBody>
-                                      <div className="flex flex-col gap-3">
-                                        {house.tenants.map((tenant, index) => (
-                                          <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0">
-                                            <div className="flex justify-between items-center">
-                                              <div className="flex items-center gap-3">
-                                                <User
-                                                  avatarProps={{ radius: "lg", src: tenant.avatar }}
-                                                  description={tenant.email}
-                                                  name={tenant.name}
-                                                >
-                                                  {tenant.email}
-                                                </User>
-                                              </div>
-                                              <div className="flex items-center gap-2">
-                                                <Tooltip content="View Payment History">
-                                                  <Button isIconOnly size="sm" variant="light" onPress={() => handleViewTenant(tenant)}>
-                                                    <EyeIcon />
-                                                  </Button>
-                                                </Tooltip>
-                                              </div>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                                              <div>
-                                                <p className="text-small text-default-500">Since</p>
-                                                <p>{new Date(tenant.moveInDate).toLocaleDateString()}</p>
-                                              </div>
-                                              <div>
-                                                <p className="text-small text-default-500">Monthly Rent</p>
-                                                <p>${tenant.rentAmount}</p>
-                                              </div>
-                                              <div>
-                                                <p className="text-small text-default-500">Last Payment</p>
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                  <p className="text-sm">{new Date(tenant.lastPaymentDate).toLocaleDateString()}</p>
-                                                  <Chip
-                                                    className="capitalize text-xs"
-                                                    color={getPaymentStatusColor(tenant.paymentStatus)}
-                                                    size="sm"
-                                                    variant="flat"
-                                                  >
-                                                    {tenant.paymentStatus}
-                                                  </Chip>
+                                      <Card className="w-full">
+                                        <CardBody>
+                                          <div className="flex flex-col gap-3">
+                                            {house.tenants.map((tenant, index) => (
+                                              <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0">
+                                                <div className="flex justify-between items-center">
+                                                  <div className="flex items-center gap-3">
+                                                    <User
+                                                      avatarProps={{ radius: "lg", src: tenant.avatar }}
+                                                      description={tenant.email}
+                                                      name={tenant.name}
+                                                    >
+                                                      {tenant.email}
+                                                    </User>
+                                                  </div>
+                                                  <div className="flex items-center gap-2">
+                                                    <Tooltip content="View Payment History">
+                                                      <Button isIconOnly size="sm" variant="light" onPress={() => handleViewTenant(tenant)}>
+                                                        <EyeIcon />
+                                                      </Button>
+                                                    </Tooltip>
+                                                  </div>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                                                  <div>
+                                                    <p className="text-small text-default-500">Since</p>
+                                                    <p>{new Date(tenant.moveInDate).toLocaleDateString()}</p>
+                                                  </div>
+                                                  <div>
+                                                    <p className="text-small text-default-500">Monthly Rent</p>
+                                                    <p>${tenant.rentAmount}</p>
+                                                  </div>
+                                                  <div>
+                                                    <p className="text-small text-default-500">Last Payment</p>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                      <p className="text-sm">{new Date(tenant.lastPaymentDate).toLocaleDateString()}</p>
+                                                      <Chip
+                                                        className="capitalize text-xs"
+                                                        color={getPaymentStatusColor(tenant.paymentStatus)}
+                                                        size="sm"
+                                                        variant="flat"
+                                                      >
+                                                        {tenant.paymentStatus}
+                                                      </Chip>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               </div>
-                                            </div>
+                                            ))}
                                           </div>
-                                        ))}
-                                      </div>
-                                    </CardBody>
-                                  </Card>
+                                        </CardBody>
+                                      </Card>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
+                            </CardBody>
+                          </Card>
+                        ))
+                      )}
+                    </motion.div>
+                  )}
+                  
+                  {activeTab === 'security' && (
+                    <motion.div 
+                      key="security"
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      variants={tabVariants}
+                      className="space-y-6"
+                    >
+                      {profileDataLoading ? (
+                        <SecuritySkeleton />
+                      ) : (
+                        <>
+                          <p className="text-default-500 mb-4">
+                            Manage your password and security settings here.
+                          </p>
+                          
+                          <div className="p-4 border rounded-md">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h3 className="font-semibold">Password</h3>
+                                <p className="text-default-500 text-sm">Last changed 3 months ago</p>
+                              </div>
+                              <Button variant="light">Change Password</Button>
                             </div>
                           </div>
-                        </CardBody>
-                      </Card>
-                    ))}
-                  </motion.div>
-                )}
-                
-                {activeTab === 'security' && (
-                  <motion.div 
-                    key="security"
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    variants={tabVariants}
-                    className="space-y-6"
-                  >
-                    <p className="text-default-500 mb-4">
-                      Manage your password and security settings here.
-                    </p>
-                    
-                    <div className="p-4 border rounded-md">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">Password</h3>
-                          <p className="text-default-500 text-sm">Last changed 3 months ago</p>
-                        </div>
-                        <Button variant="light">Change Password</Button>
-                      </div>
-                    </div>
-                    
-                    <div className="p-4 border rounded-md">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">Two-Factor Authentication</h3>
-                          <p className="text-default-500 text-sm">Enhance your account security</p>
-                        </div>
-                        <Button variant="light" color="primary">Enable</Button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-                
-                {activeTab === 'preferences' && (
-                  <motion.div 
-                    key="preferences"
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    variants={tabVariants}
-                    className="space-y-6"
-                  >
-                    <p className="text-default-500 mb-4">
-                      Customize your experience with these preferences.
-                    </p>
-                    
-                    <div className="p-4 border rounded-md">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">Email Notifications</h3>
-                          <p className="text-default-500 text-sm">Receive updates and offers</p>
-                        </div>
-                        <Button variant="light">Manage</Button>
-                      </div>
-                    </div>
-                    
-                    <div className="p-4 border rounded-md">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-semibold">Language</h3>
-                          <p className="text-default-500 text-sm">Current: English</p>
-                        </div>
-                        <Button variant="light">Change</Button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                          
+                          <div className="p-4 border rounded-md">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h3 className="font-semibold">Two-Factor Authentication</h3>
+                                <p className="text-default-500 text-sm">Enhance your account security</p>
+                              </div>
+                              <Button variant="light" color="primary">Enable</Button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                  
+                  {activeTab === 'preferences' && (
+                    <motion.div 
+                      key="preferences"
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      variants={tabVariants}
+                      className="space-y-6"
+                    >
+                      {profileDataLoading ? (
+                        <PreferencesSkeleton />
+                      ) : (
+                        <>
+                          <p className="text-default-500 mb-4">
+                            Customize your experience with these preferences.
+                          </p>
+                          
+                          <div className="p-4 border rounded-md">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h3 className="font-semibold">Email Notifications</h3>
+                                <p className="text-default-500 text-sm">Receive updates and offers</p>
+                              </div>
+                              <Button variant="light">Manage</Button>
+                            </div>
+                          </div>
+                          
+                          <div className="p-4 border rounded-md">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h3 className="font-semibold">Language</h3>
+                                <p className="text-default-500 text-sm">Current: English</p>
+                              </div>
+                              <Button variant="light">Change</Button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             </CardBody>
           </Card>
           <Spacer y={4} />
+          
+          {/* Swipe indicator - shows on mobile only */}
+          <div className="flex justify-center mt-2 md:hidden">
+            <p className="text-xs text-default-400 flex items-center">
+              <Icon icon="lucide:swipe" className="mr-1" />
+              Swipe to change tabs
+            </p>
+          </div>
         </div>
       </div>
     </div>
