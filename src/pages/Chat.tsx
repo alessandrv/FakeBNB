@@ -233,13 +233,19 @@ const Chat: React.FC = () => {
           }
           
           // Check if we've already processed this message (use ref)
-          if (processedMessageIds.current.has(message.id)) {
-            console.log('⏩ Message already processed, skipping:', message.id);
+          // Also check if this is the server echo of our own optimistically added message
+          if (processedMessageIds.current.has(message.id) || 
+              (message.sender_id === user?.id && processedMessageIds.current.has(0)) // Check for temp ID placeholder
+          ) {
+            console.log('⏩ Message already processed or is echo of temp message, skipping:', message.id);
             return;
           }
           
           // Mark this message as processed (use ref)
-          processedMessageIds.current.add(message.id);
+          // We only add the *real* ID here. The temp ID (0) is handled in handleSendMessage
+          if (message.id !== 0) {
+             processedMessageIds.current.add(message.id);
+          }
           
           // Ensure conversation_id is a number
           const conversationId = message.conversation_id ? Number(message.conversation_id) : null;
@@ -614,7 +620,7 @@ const Chat: React.FC = () => {
         id: message.sender_id,
         first_name: 'User',
         last_name: '',
-        profilePic: ''
+        profile_picture: ''
       }
     };
     
@@ -743,9 +749,10 @@ const Chat: React.FC = () => {
     const conversationId = selectedConversation.id;
     
     // Optimistic UI Update
-    const tempId = Date.now();
-    const tempMessage = {
-      id: tempId,
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`; // Unique temporary ID
+    const tempMessage: Message & { tempId?: string } = {
+      id: 0, // Use 0 or a placeholder for temp messages
+      tempId: tempId,
       content: messageContent,
       created_at: new Date().toISOString(),
       sender_id: user?.id || 0,
@@ -754,7 +761,7 @@ const Chat: React.FC = () => {
         id: user?.id || 0,
         first_name: user?.first_name || '',
         last_name: user?.last_name || '',
-        profilePic: user?.profilePic
+        profile_picture: user?.profilePic
       }
     };
     
@@ -770,7 +777,7 @@ const Chat: React.FC = () => {
           return {
             ...conv,
             last_message: {
-              id: tempId,
+              id: 0, // Use 0 or a placeholder for temp messages
               content: messageContent,
               created_at: new Date().toISOString(),
               sender_id: user?.id || 0
@@ -783,7 +790,7 @@ const Chat: React.FC = () => {
     });
     
     // Add temp ID to processed set (important for sender)
-    processedMessageIds.current.add(tempId);
+    processedMessageIds.current.add(0); // Assuming temp ID placeholder was 0
     
     // Emit message via Socket
     console.log(`📤 Emitting 'message:send' via socket for conversation ${conversationId}`);
@@ -792,20 +799,25 @@ const Chat: React.FC = () => {
       if (ack?.error) {
         console.error('Server acknowledged message send error:', ack.error);
         // Remove the temporary message on error
-        setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        setMessages(prev => prev.filter(msg => (msg as any).tempId !== tempId));
         // Maybe show user an error
       } else if (ack?.success && ack.messageId) {
         console.log(`✅ Server acknowledged message send success. Real ID: ${ack.messageId}`);
         // Replace temp ID with real ID in processed set
-        processedMessageIds.current.delete(tempId);
+        processedMessageIds.current.delete(0); // Assuming temp ID placeholder was 0
         processedMessageIds.current.add(ack.messageId);
         
-        // Update the message in the UI with the real ID (optional, but good practice)
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempId ? { ...msg, id: ack.messageId as number } : msg
-        ));
+        // Update the message in the UI with the real ID and remove tempId
+        setMessages(prev => prev.map(msg => {
+          if ((msg as any).tempId === tempId) {
+            const { tempId: removed, ...rest } = msg as any;
+            return { ...rest, id: ack.messageId as number };
+          }
+          return msg;
+        }));
       } else {
         console.log('Server acknowledgment received:', ack);
+        // If no success/error, maybe remove temp message after a timeout?
       }
     });
   };
