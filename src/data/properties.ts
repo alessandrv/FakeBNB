@@ -7,7 +7,7 @@ export const properties: Property[] = [
     title: 'Elegant Apartment near Colosseum',
     description: 'Stylish 2-bedroom apartment just 5 minutes walk from the Colosseum',
     price: 180,
-    image: 'https://picsum.photos/seed/rome1/400/300',
+    image: 'https://images.unsplash.com/photo-1571055107559-3e67626fa8be?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.8902,
       lng: 12.4922
@@ -20,7 +20,7 @@ export const properties: Property[] = [
     title: 'Trastevere Charming Loft',
     description: 'Beautiful loft in the heart of Trastevere with authentic Roman character',
     price: 165,
-    image: 'https://picsum.photos/seed/rome2/400/300',
+    image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.8865,
       lng: 12.4694
@@ -33,7 +33,7 @@ export const properties: Property[] = [
     title: 'Vatican View Apartment',
     description: 'Modern apartment with a stunning view of St. Peter\'s Basilica',
     price: 195,
-    image: 'https://picsum.photos/seed/rome3/400/300',
+    image: 'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.9022,
       lng: 12.4539
@@ -46,7 +46,7 @@ export const properties: Property[] = [
     title: 'Spanish Steps Studio',
     description: 'Cozy studio just steps away from the famous Spanish Steps',
     price: 135,
-    image: 'https://picsum.photos/seed/rome4/400/300',
+    image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.9057,
       lng: 12.4823
@@ -60,7 +60,7 @@ export const properties: Property[] = [
     title: 'Renaissance Apartment near Duomo',
     description: 'Beautifully renovated apartment with views of Florence Cathedral',
     price: 170,
-    image: 'https://picsum.photos/seed/florence1/400/300',
+    image: 'https://images.unsplash.com/photo-1556912172-45b7abe8b7e1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.7731,
       lng: 11.2563
@@ -73,7 +73,7 @@ export const properties: Property[] = [
     title: 'Oltrarno Artist\'s Studio',
     description: 'Unique artist\'s studio in the bohemian Oltrarno district',
     price: 125,
-    image: 'https://picsum.photos/seed/florence2/400/300',
+    image: 'https://images.unsplash.com/photo-1513584684374-8bab748fbf90?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.7647,
       lng: 11.2456
@@ -86,7 +86,7 @@ export const properties: Property[] = [
     title: 'Ponte Vecchio Luxury Suite',
     description: 'High-end suite with direct views of the Ponte Vecchio bridge',
     price: 250,
-    image: 'https://picsum.photos/seed/florence3/400/300',
+    image: 'https://images.unsplash.com/photo-1554995207-c18c203602cb?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.7680,
       lng: 11.2531
@@ -100,7 +100,7 @@ export const properties: Property[] = [
     title: 'Canal-side Venetian House',
     description: 'Authentic Venetian house with its own small canal entrance',
     price: 220,
-    image: 'https://picsum.photos/seed/venice1/400/300',
+    image: 'https://images.unsplash.com/photo-1549918864-48ac978761a4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4371,
       lng: 12.3326
@@ -113,7 +113,7 @@ export const properties: Property[] = [
     title: 'San Marco Luxury Apartment',
     description: 'Elegant apartment just minutes from Piazza San Marco',
     price: 240,
-    image: 'https://picsum.photos/seed/venice2/400/300',
+    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4343,
       lng: 12.3388
@@ -126,7 +126,7 @@ export const properties: Property[] = [
     title: 'Rialto Modern Loft',
     description: 'Contemporary designed loft near the famous Rialto Bridge',
     price: 190,
-    image: 'https://picsum.photos/seed/venice3/400/300',
+    image: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4385,
       lng: 12.3359
@@ -140,7 +140,7 @@ export const properties: Property[] = [
     title: 'Fashion District Penthouse',
     description: 'Stunning penthouse in the heart of Milan\'s fashion district',
     price: 280,
-    image: 'https://picsum.photos/seed/milan1/400/300',
+    image: 'https://images.unsplash.com/photo-1567767292278-a4f21aa2d36e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4669,
       lng: 9.1917
@@ -153,7 +153,7 @@ export const properties: Property[] = [
     title: 'Navigli Canal Apartment',
     description: 'Trendy apartment overlooking the vibrant Navigli canals',
     price: 160,
-    image: 'https://picsum.photos/seed/milan2/400/300',
+    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4583,
       lng: 9.1714
@@ -166,7 +166,7 @@ export const properties: Property[] = [
     title: 'Duomo View Studio',
     description: 'Compact studio with breathtaking views of the Milan Cathedral',
     price: 175,
-    image: 'https://picsum.photos/seed/milan3/400/300',
+    image: 'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4647,
       lng: 9.1921
@@ -180,7 +180,7 @@ export const properties: Property[] = [
     title: 'Seafront Neapolitan Apartment',
     description: 'Beautiful apartment with panoramic views of the Bay of Naples',
     price: 145,
-    image: 'https://picsum.photos/seed/naples1/400/300',
+    image: 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.8358,
       lng: 14.2487
@@ -193,7 +193,7 @@ export const properties: Property[] = [
     title: 'Historic Center Loft',
     description: 'Characterful loft in the ancient heart of Naples',
     price: 120,
-    image: 'https://picsum.photos/seed/naples2/400/300',
+    image: 'https://images.unsplash.com/photo-1574362848149-11496d93a7c7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.8518,
       lng: 14.2681
@@ -207,7 +207,7 @@ export const properties: Property[] = [
     title: 'Taormina Sea View Villa',
     description: 'Luxurious villa with stunning views of the Sicilian coastline',
     price: 300,
-    image: 'https://picsum.photos/seed/sicily1/400/300',
+    image: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 37.8516,
       lng: 15.2853
@@ -220,7 +220,7 @@ export const properties: Property[] = [
     title: 'Palermo Historic Apartment',
     description: 'Elegant apartment in a restored palazzo in central Palermo',
     price: 155,
-    image: 'https://picsum.photos/seed/sicily2/400/300',
+    image: 'https://images.unsplash.com/photo-1560185007-5f0bb1866cab?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 38.1157,
       lng: 13.3615
@@ -233,7 +233,7 @@ export const properties: Property[] = [
     title: 'Syracuse Waterfront Home',
     description: 'Beautiful home with direct access to the crystal clear waters of Syracuse',
     price: 220,
-    image: 'https://picsum.photos/seed/sicily3/400/300',
+    image: 'https://images.unsplash.com/photo-1523217582562-09d0def993a6?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 37.0755,
       lng: 15.2866
@@ -247,7 +247,7 @@ export const properties: Property[] = [
     title: 'Chianti Wine Country Villa',
     description: 'Rustic villa surrounded by vineyards in the heart of Chianti',
     price: 275,
-    image: 'https://picsum.photos/seed/tuscany1/400/300',
+    image: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.4642,
       lng: 11.2544
@@ -260,7 +260,7 @@ export const properties: Property[] = [
     title: 'Siena Medieval Apartment',
     description: 'Charming apartment in a medieval building near Piazza del Campo',
     price: 165,
-    image: 'https://picsum.photos/seed/tuscany2/400/300',
+    image: 'https://images.unsplash.com/photo-1566908829550-e6551b00979b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.3186,
       lng: 11.3306
@@ -273,7 +273,7 @@ export const properties: Property[] = [
     title: 'Lucca City Walls Home',
     description: 'Unique home with views of Lucca\'s famous Renaissance walls',
     price: 185,
-    image: 'https://picsum.photos/seed/tuscany3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.8429,
       lng: 10.5027
@@ -287,7 +287,7 @@ export const properties: Property[] = [
     title: 'Positano Cliffside Suite',
     description: 'Breathtaking suite built into the cliffs with panoramic sea views',
     price: 350,
-    image: 'https://picsum.photos/seed/amalfi1/400/300',
+    image: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.6263,
       lng: 14.4842
@@ -300,7 +300,7 @@ export const properties: Property[] = [
     title: 'Ravello Garden Retreat',
     description: 'Peaceful apartment with beautiful gardens overlooking the coast',
     price: 230,
-    image: 'https://picsum.photos/seed/amalfi2/400/300',
+    image: 'https://images.unsplash.com/photo-1523217582562-09d0def993a6?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.6490,
       lng: 14.6110
@@ -313,7 +313,7 @@ export const properties: Property[] = [
     title: 'Amalfi Historic Center Flat',
     description: 'Cozy flat in the historic center, steps from the main cathedral',
     price: 195,
-    image: 'https://picsum.photos/seed/amalfi3/400/300',
+    image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.6343,
       lng: 14.6023
@@ -327,7 +327,7 @@ export const properties: Property[] = [
     title: 'Bellagio Lakefront Villa',
     description: 'Elegant villa with private dock and unparalleled lake views',
     price: 420,
-    image: 'https://picsum.photos/seed/como1/400/300',
+    image: 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.9862,
       lng: 9.2645
@@ -340,7 +340,7 @@ export const properties: Property[] = [
     title: 'Como City Modern Apartment',
     description: 'Contemporary apartment with stunning lake views in the city of Como',
     price: 190,
-    image: 'https://picsum.photos/seed/como2/400/300',
+    image: 'https://images.unsplash.com/photo-1565182999561-18d7dc61c393?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.8103,
       lng: 9.0851
@@ -353,7 +353,7 @@ export const properties: Property[] = [
     title: 'Varenna Hillside Cottage',
     description: 'Charming cottage with terraced garden overlooking the eastern shore',
     price: 210,
-    image: 'https://picsum.photos/seed/como3/400/300',
+    image: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.0088,
       lng: 9.2845
@@ -367,7 +367,7 @@ export const properties: Property[] = [
     title: 'Costa Smeralda Luxury Villa',
     description: 'Exclusive villa with private beach access in Porto Cervo',
     price: 500,
-    image: 'https://picsum.photos/seed/sardinia1/400/300',
+    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.1360,
       lng: 9.5423
@@ -380,7 +380,7 @@ export const properties: Property[] = [
     title: 'Alghero Old Town Apartment',
     description: 'Stylish apartment in the historic center of Alghero',
     price: 155,
-    image: 'https://picsum.photos/seed/sardinia2/400/300',
+    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.5584,
       lng: 8.3125
@@ -393,7 +393,7 @@ export const properties: Property[] = [
     title: 'Cagliari Seaside Loft',
     description: 'Modern loft with panoramic views of the Gulf of Cagliari',
     price: 175,
-    image: 'https://picsum.photos/seed/sardinia3/400/300',
+    image: 'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 39.2238,
       lng: 9.1217
@@ -407,7 +407,7 @@ export const properties: Property[] = [
     title: 'Taormina Sea View Villa',
     description: 'Elegant villa with breathtaking views of the Ionian Sea',
     price: 320,
-    image: 'https://picsum.photos/seed/sicily1/400/300',
+    image: 'https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 37.8516,
       lng: 15.2853
@@ -420,7 +420,7 @@ export const properties: Property[] = [
     title: 'Palermo Historic Center Apartment',
     description: 'Charming apartment in the heart of Palermo\'s historic district',
     price: 140,
-    image: 'https://picsum.photos/seed/sicily2/400/300',
+    image: 'https://images.unsplash.com/photo-1560185007-5f0bb1866cab?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 38.1157,
       lng: 13.3615
@@ -433,7 +433,7 @@ export const properties: Property[] = [
     title: 'Syracuse Ortigia Island Loft',
     description: 'Renovated loft in the ancient island of Ortigia',
     price: 165,
-    image: 'https://picsum.photos/seed/sicily3/400/300',
+    image: 'https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 37.0662,
       lng: 15.2958
@@ -447,7 +447,7 @@ export const properties: Property[] = [
     title: 'Chianti Vineyard Farmhouse',
     description: 'Authentic farmhouse surrounded by vineyards in the Chianti region',
     price: 280,
-    image: 'https://picsum.photos/seed/tuscany1/400/300',
+    image: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.4846,
       lng: 11.2093
@@ -460,7 +460,7 @@ export const properties: Property[] = [
     title: 'Val d\'Orcia Stone Villa',
     description: 'Traditional stone villa with pool overlooking the rolling hills of Val d\'Orcia',
     price: 310,
-    image: 'https://picsum.photos/seed/tuscany2/400/300',
+    image: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.0285,
       lng: 11.6178
@@ -473,7 +473,7 @@ export const properties: Property[] = [
     title: 'Lucca Medieval Tower House',
     description: 'Unique accommodation in a restored medieval tower near Lucca\'s walls',
     price: 225,
-    image: 'https://picsum.photos/seed/tuscany3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.8429,
       lng: 10.5027
@@ -487,7 +487,7 @@ export const properties: Property[] = [
     title: 'Alberobello Trullo House',
     description: 'Authentic trullo house with modern amenities in UNESCO World Heritage site',
     price: 195,
-    image: 'https://picsum.photos/seed/puglia1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.7864,
       lng: 17.2402
@@ -500,7 +500,7 @@ export const properties: Property[] = [
     title: 'Polignano a Mare Cliff House',
     description: 'Stunning house built into the limestone cliffs with sea views',
     price: 275,
-    image: 'https://picsum.photos/seed/puglia2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.9964,
       lng: 17.2246
@@ -513,7 +513,7 @@ export const properties: Property[] = [
     title: 'Lecce Baroque Apartment',
     description: 'Elegant apartment in a baroque building in Lecce\'s historic center',
     price: 160,
-    image: 'https://picsum.photos/seed/puglia3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.3516,
       lng: 18.1718
@@ -527,7 +527,7 @@ export const properties: Property[] = [
     title: 'Vernazza Colorful House',
     description: 'Vibrant house with terrace overlooking the harbor of Vernazza',
     price: 230,
-    image: 'https://picsum.photos/seed/cinqueterre1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.1350,
       lng: 9.6837
@@ -540,7 +540,7 @@ export const properties: Property[] = [
     title: 'Manarola Vineyard Cottage',
     description: 'Cozy cottage surrounded by terraced vineyards with sea views',
     price: 210,
-    image: 'https://picsum.photos/seed/cinqueterre2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.1075,
       lng: 9.7263
@@ -553,7 +553,7 @@ export const properties: Property[] = [
     title: 'Riomaggiore Fisherman\'s House',
     description: 'Traditional fisherman\'s house renovated with modern comforts',
     price: 185,
-    image: 'https://picsum.photos/seed/cinqueterre3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.0997,
       lng: 9.7379
@@ -567,7 +567,7 @@ export const properties: Property[] = [
     title: 'Cortina Mountain Chalet',
     description: 'Luxurious wooden chalet with panoramic views of the Dolomites',
     price: 350,
-    image: 'https://picsum.photos/seed/dolomites1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.5404,
       lng: 12.1366
@@ -580,7 +580,7 @@ export const properties: Property[] = [
     title: 'Val Gardena Ski Lodge',
     description: 'Cozy lodge with direct access to ski slopes in Val Gardena',
     price: 290,
-    image: 'https://picsum.photos/seed/dolomites2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.5580,
       lng: 11.6760
@@ -593,7 +593,7 @@ export const properties: Property[] = [
     title: 'Alpe di Siusi Alpine Hut',
     description: 'Traditional alpine hut on Europe\'s largest high-altitude meadow',
     price: 240,
-    image: 'https://picsum.photos/seed/dolomites3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.5422,
       lng: 11.6080
@@ -607,7 +607,7 @@ export const properties: Property[] = [
     title: 'Positano Cliffside Villa',
     description: 'Spectacular villa with infinity pool overlooking the Amalfi Coast',
     price: 450,
-    image: 'https://picsum.photos/seed/amalfi1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.6280,
       lng: 14.4843
@@ -620,7 +620,7 @@ export const properties: Property[] = [
     title: 'Capri Luxury Suite',
     description: 'Elegant suite with private terrace and views of the Faraglioni rocks',
     price: 380,
-    image: 'https://picsum.photos/seed/capri1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.5532,
       lng: 14.2222
@@ -633,7 +633,7 @@ export const properties: Property[] = [
     title: 'Naples Historic Center Loft',
     description: 'Stylish loft in a 16th-century building in the heart of Naples',
     price: 170,
-    image: 'https://picsum.photos/seed/naples1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.8518,
       lng: 14.2681
@@ -647,7 +647,7 @@ export const properties: Property[] = [
     title: 'Assisi Stone Farmhouse',
     description: 'Restored farmhouse with garden overlooking the Umbrian valley',
     price: 220,
-    image: 'https://picsum.photos/seed/umbria1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.0707,
       lng: 12.6198
@@ -660,7 +660,7 @@ export const properties: Property[] = [
     title: 'Perugia City Apartment',
     description: 'Elegant apartment in a medieval building in Perugia\'s center',
     price: 155,
-    image: 'https://picsum.photos/seed/umbria2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.1107,
       lng: 12.3908
@@ -673,7 +673,7 @@ export const properties: Property[] = [
     title: 'Orvieto Countryside Villa',
     description: 'Spacious villa with pool surrounded by olive groves near Orvieto',
     price: 265,
-    image: 'https://picsum.photos/seed/umbria3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 42.7185,
       lng: 12.1108
@@ -687,7 +687,7 @@ export const properties: Property[] = [
     title: 'Turin Historic Apartment',
     description: 'Elegant apartment in a baroque building in Turin\'s city center',
     price: 175,
-    image: 'https://picsum.photos/seed/piedmont1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.0703,
       lng: 7.6869
@@ -700,7 +700,7 @@ export const properties: Property[] = [
     title: 'Langhe Vineyard Estate',
     description: 'Luxurious estate with wine cellar in the UNESCO-listed Langhe region',
     price: 320,
-    image: 'https://picsum.photos/seed/piedmont2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.6973,
       lng: 8.0359
@@ -713,7 +713,7 @@ export const properties: Property[] = [
     title: 'Lake Maggiore Lakefront Villa',
     description: 'Elegant villa with private dock on the shores of Lake Maggiore',
     price: 380,
-    image: 'https://picsum.photos/seed/piedmont3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.9275,
       lng: 8.5671
@@ -727,7 +727,7 @@ export const properties: Property[] = [
     title: 'Portofino Harbor View Apartment',
     description: 'Luxurious apartment overlooking the famous Portofino harbor',
     price: 340,
-    image: 'https://picsum.photos/seed/liguria1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.3018,
       lng: 9.2097
@@ -740,7 +740,7 @@ export const properties: Property[] = [
     title: 'Genoa Historic Palace Floor',
     description: 'Entire floor in a 16th-century palace in Genoa\'s historic center',
     price: 230,
-    image: 'https://picsum.photos/seed/liguria2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.4056,
       lng: 8.9463
@@ -753,7 +753,7 @@ export const properties: Property[] = [
     title: 'San Remo Seaside Villa',
     description: 'Mediterranean villa with garden and sea views in the city of flowers',
     price: 290,
-    image: 'https://picsum.photos/seed/liguria3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.8162,
       lng: 7.7762
@@ -767,7 +767,7 @@ export const properties: Property[] = [
     title: 'Bologna Medieval Tower Apartment',
     description: 'Unique apartment in a restored medieval tower in Bologna\'s center',
     price: 195,
-    image: 'https://picsum.photos/seed/emilia1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.4949,
       lng: 11.3426
@@ -780,7 +780,7 @@ export const properties: Property[] = [
     title: 'Parma Countryside Farmhouse',
     description: 'Traditional farmhouse with cooking facilities in the food valley of Parma',
     price: 210,
-    image: 'https://picsum.photos/seed/emilia2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.8015,
       lng: 10.3279
@@ -793,7 +793,7 @@ export const properties: Property[] = [
     title: 'Ravenna Byzantine Apartment',
     description: 'Stylish apartment steps away from Ravenna\'s UNESCO mosaics',
     price: 165,
-    image: 'https://picsum.photos/seed/emilia3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 44.4183,
       lng: 12.2035
@@ -807,7 +807,7 @@ export const properties: Property[] = [
     title: 'Urbino Renaissance Apartment',
     description: 'Elegant apartment in a historic building in the UNESCO city of Urbino',
     price: 150,
-    image: 'https://picsum.photos/seed/marche1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.7262,
       lng: 12.6365
@@ -820,7 +820,7 @@ export const properties: Property[] = [
     title: 'Conero Riviera Beach House',
     description: 'Modern house with direct beach access in the Conero Natural Park',
     price: 240,
-    image: 'https://picsum.photos/seed/marche2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 43.5507,
       lng: 13.6203
@@ -833,7 +833,7 @@ export const properties: Property[] = [
     title: 'Ascoli Piceno Historic Home',
     description: 'Charming home in the travertine-built historic center of Ascoli',
     price: 145,
-    image: 'https://picsum.photos/seed/marche3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 42.8537,
       lng: 13.5749
@@ -847,7 +847,7 @@ export const properties: Property[] = [
     title: 'Venice Canal View Apartment',
     description: 'Romantic apartment with views of a quiet canal in authentic Venice',
     price: 260,
-    image: 'https://picsum.photos/seed/veneto1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4408,
       lng: 12.3155
@@ -860,7 +860,7 @@ export const properties: Property[] = [
     title: 'Verona Juliet\'s Balcony Suite',
     description: 'Luxurious suite steps away from Juliet\'s famous balcony',
     price: 220,
-    image: 'https://picsum.photos/seed/veneto2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.4384,
       lng: 10.9916
@@ -873,7 +873,7 @@ export const properties: Property[] = [
     title: 'Prosecco Hills Vineyard Cottage',
     description: 'Cozy cottage surrounded by vineyards in the UNESCO Prosecco Hills',
     price: 185,
-    image: 'https://picsum.photos/seed/veneto3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.9075,
       lng: 12.1993
@@ -887,7 +887,7 @@ export const properties: Property[] = [
     title: 'Tropea Beachfront Apartment',
     description: 'Modern apartment with direct access to Tropea\'s white sandy beaches',
     price: 170,
-    image: 'https://picsum.photos/seed/calabria1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 38.6725,
       lng: 15.8963
@@ -900,7 +900,7 @@ export const properties: Property[] = [
     title: 'Scilla Fisherman\'s House',
     description: 'Traditional house in the picturesque fishing village of Chianalea',
     price: 145,
-    image: 'https://picsum.photos/seed/calabria2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 38.2513,
       lng: 15.7149
@@ -913,7 +913,7 @@ export const properties: Property[] = [
     title: 'Sila National Park Mountain Cabin',
     description: 'Rustic cabin surrounded by pine forests in the Sila mountains',
     price: 130,
-    image: 'https://picsum.photos/seed/calabria3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 39.3304,
       lng: 16.4408
@@ -927,7 +927,7 @@ export const properties: Property[] = [
     title: 'Matera Cave Dwelling',
     description: 'Unique accommodation in a restored cave dwelling in the Sassi di Matera',
     price: 190,
-    image: 'https://picsum.photos/seed/basilicata1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.6654,
       lng: 16.6121
@@ -940,7 +940,7 @@ export const properties: Property[] = [
     title: 'Maratea Sea View Villa',
     description: 'Elegant villa overlooking the Tyrrhenian Sea in the pearl of the Mediterranean',
     price: 250,
-    image: 'https://picsum.photos/seed/basilicata2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 39.9935,
       lng: 15.7113
@@ -953,7 +953,7 @@ export const properties: Property[] = [
     title: 'Pollino National Park Retreat',
     description: 'Peaceful mountain retreat with hiking trails in Italy\'s largest national park',
     price: 140,
-    image: 'https://picsum.photos/seed/basilicata3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 39.9165,
       lng: 16.1769
@@ -967,7 +967,7 @@ export const properties: Property[] = [
     title: 'Trieste Harbor View Apartment',
     description: 'Elegant apartment with views of the harbor in the literary city of Trieste',
     price: 180,
-    image: 'https://picsum.photos/seed/friuli1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.6495,
       lng: 13.7768
@@ -980,7 +980,7 @@ export const properties: Property[] = [
     title: 'Udine Historic Center Home',
     description: 'Charming home in the Venetian-style historic center of Udine',
     price: 155,
-    image: 'https://picsum.photos/seed/friuli2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.0711,
       lng: 13.2346
@@ -993,7 +993,7 @@ export const properties: Property[] = [
     title: 'Julian Alps Mountain Chalet',
     description: 'Cozy wooden chalet with stunning views of the Julian Alps',
     price: 195,
-    image: 'https://picsum.photos/seed/friuli3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.3693,
       lng: 13.5808
@@ -1007,7 +1007,7 @@ export const properties: Property[] = [
     title: 'Trento Mountain View Apartment',
     description: 'Modern apartment with panoramic mountain views in the city of Trento',
     price: 175,
-    image: 'https://picsum.photos/seed/trentino1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.0748,
       lng: 11.1217
@@ -1020,7 +1020,7 @@ export const properties: Property[] = [
     title: 'Bolzano Vineyard Guesthouse',
     description: 'Charming guesthouse surrounded by vineyards and apple orchards',
     price: 190,
-    image: 'https://picsum.photos/seed/trentino2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.4983,
       lng: 11.3548
@@ -1033,7 +1033,7 @@ export const properties: Property[] = [
     title: 'Madonna di Campiglio Ski Chalet',
     description: 'Luxurious ski-in/ski-out chalet in the famous Dolomiti di Brenta resort',
     price: 320,
-    image: 'https://picsum.photos/seed/trentino3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 46.2316,
       lng: 10.8267
@@ -1047,7 +1047,7 @@ export const properties: Property[] = [
     title: 'Termoli Old Town Apartment',
     description: 'Cozy apartment in the walled old town overlooking the Adriatic',
     price: 130,
-    image: 'https://picsum.photos/seed/molise1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 42.0026,
       lng: 14.9957
@@ -1060,7 +1060,7 @@ export const properties: Property[] = [
     title: 'Campobasso Historic Home',
     description: 'Traditional home in the medieval center of Campobasso',
     price: 120,
-    image: 'https://picsum.photos/seed/molise2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.5603,
       lng: 14.6626
@@ -1073,7 +1073,7 @@ export const properties: Property[] = [
     title: 'Agnone Countryside Retreat',
     description: 'Peaceful retreat near the historic bell-making town of Agnone',
     price: 135,
-    image: 'https://picsum.photos/seed/molise3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.8115,
       lng: 14.3808
@@ -1087,7 +1087,7 @@ export const properties: Property[] = [
     title: 'Courmayeur Mont Blanc Chalet',
     description: 'Luxury chalet with views of Mont Blanc in the alpine resort of Courmayeur',
     price: 350,
-    image: 'https://picsum.photos/seed/aosta1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.7971,
       lng: 6.9694
@@ -1100,7 +1100,7 @@ export const properties: Property[] = [
     title: 'Aosta Roman Villa',
     description: 'Elegant villa near Roman ruins in the historic city of Aosta',
     price: 210,
-    image: 'https://picsum.photos/seed/aosta2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.7367,
       lng: 7.3217
@@ -1113,7 +1113,7 @@ export const properties: Property[] = [
     title: 'Cervinia Ski Apartment',
     description: 'Modern apartment with direct access to the Matterhorn ski area',
     price: 280,
-    image: 'https://picsum.photos/seed/aosta3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.9372,
       lng: 7.6326
@@ -1127,7 +1127,7 @@ export const properties: Property[] = [
     title: 'Civita di Bagnoregio Stone House',
     description: 'Unique stone house in the "dying city" accessible only by footbridge',
     price: 200,
-    image: 'https://picsum.photos/seed/lazio1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 42.6270,
       lng: 12.1139
@@ -1140,7 +1140,7 @@ export const properties: Property[] = [
     title: 'Sperlonga Beach Villa',
     description: 'Mediterranean villa with direct beach access in the white town of Sperlonga',
     price: 270,
-    image: 'https://picsum.photos/seed/lazio2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.2672,
       lng: 13.4279
@@ -1153,7 +1153,7 @@ export const properties: Property[] = [
     title: 'Tivoli Garden Apartment',
     description: 'Elegant apartment near the Renaissance gardens of Villa d\'Este',
     price: 160,
-    image: 'https://picsum.photos/seed/lazio3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 41.9633,
       lng: 12.7985
@@ -1167,7 +1167,7 @@ export const properties: Property[] = [
     title: 'Bergamo Upper City Apartment',
     description: 'Historic apartment in the medieval upper city of Bergamo',
     price: 165,
-    image: 'https://picsum.photos/seed/lombardy1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.7042,
       lng: 9.6625
@@ -1180,7 +1180,7 @@ export const properties: Property[] = [
     title: 'Mantua Renaissance Apartment',
     description: 'Elegant apartment in the Renaissance city of the Gonzaga family',
     price: 155,
-    image: 'https://picsum.photos/seed/lombardy2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.1564,
       lng: 10.7913
@@ -1193,7 +1193,7 @@ export const properties: Property[] = [
     title: 'Franciacorta Wine Country Villa',
     description: 'Luxurious villa surrounded by the vineyards of the Franciacorta region',
     price: 290,
-    image: 'https://picsum.photos/seed/lombardy3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 45.5952,
       lng: 9.9483
@@ -1207,7 +1207,7 @@ export const properties: Property[] = [
     title: 'Paestum Archaeological Site Villa',
     description: 'Elegant villa walking distance from the ancient Greek temples of Paestum',
     price: 220,
-    image: 'https://picsum.photos/seed/campania1/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.4230,
       lng: 15.0054
@@ -1220,7 +1220,7 @@ export const properties: Property[] = [
     title: 'Ischia Thermal Spa House',
     description: 'Charming house with private thermal pool on the volcanic island of Ischia',
     price: 260,
-    image: 'https://picsum.photos/seed/campania2/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.7308,
       lng: 13.9015
@@ -1233,7 +1233,7 @@ export const properties: Property[] = [
     title: 'Procida Colorful Fisherman\'s House',
     description: 'Vibrant house in the picturesque fishing village of Corricella',
     price: 190,
-    image: 'https://picsum.photos/seed/campania3/400/300',
+    image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
     location: {
       lat: 40.7512,
       lng: 14.0269
