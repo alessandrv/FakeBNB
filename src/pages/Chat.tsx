@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { format } from 'date-fns';
 // Import Heroicons
 import { Icon } from "@iconify/react";
-import {
+import { 
   Card,
   CardBody,
   Input,
@@ -91,19 +91,11 @@ const Chat: React.FC = () => {
   const { setHideNavbar } = useContext(NavbarContext);
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [forceRenderKey, setForceRenderKey] = useState<number>(0); // Dummy state to force re-render
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
   
-  // Debounce function to prevent rapid processing of the same message
-  const debounce = (func: Function, wait: number) => {
-    let timeout: NodeJS.Timeout;
-    return (...args: any[]) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), wait);
-    };
-  };
-
   // Check for mobile screen size
   useEffect(() => {
     const handleResize = () => {
@@ -230,61 +222,116 @@ const Chat: React.FC = () => {
           console.error('Socket reconnection failed');
         });
 
-        // Debounced message handler to prevent duplicate processing
-        const debouncedHandleNewMessage = debounce((message: any) => {
-          console.log('Processing debounced message:', message);
+        // Simplified message handler
+        const handleNewMessage = (message: any) => {
+          console.log('[PROCESS RAW MESSAGE] Processing message:', message);
           
-          // Check if we've already processed this message
-          if (processedMessageIds.current.has(message.id)) {
-            console.log('Message already processed, skipping:', message.id);
+          // Basic validation
+          if (!message || !message.id) {
+            console.error('❌ Invalid raw message received:', message);
             return;
           }
           
-          // Mark this message as processed
-          processedMessageIds.current.add(message.id);
-          
-          // If message doesn't have conversation_id, try to infer it
-          if (!message.conversation_id) {
-            console.log('Message missing conversation_id, attempting to infer it');
-            
-            // If we have a selected conversation, use its ID
-            if (selectedConversation) {
-              console.log('Using current conversation ID:', selectedConversation.id);
-              message.conversation_id = selectedConversation.id;
-            } else if (currentRoom && currentRoom.startsWith('conversation:')) {
-              // Use the current room to infer the conversation ID
-              const inferredId = parseInt(currentRoom.split(':')[1], 10);
-              if (!isNaN(inferredId)) {
-                console.log('Inferred conversation ID from current room:', inferredId);
-                message.conversation_id = inferredId;
-              }
-            }
-            
-            // If we still don't have a conversation_id, add to pending queue
-            if (!message.conversation_id) {
-              console.log('Could not infer conversation_id, adding to pending queue');
-              setPendingMessages(prev => [...prev, message]);
-              return;
-            }
+          // Check if we've already processed this message (use ref)
+          if (processedMessageIds.current.has(message.id)) {
+            console.log('⏩ Message already processed, skipping:', message.id);
+            return;
           }
           
-          // Process the message
-          processMessage(message);
-        }, 300); // 300ms debounce
+          // Mark this message as processed (use ref)
+          processedMessageIds.current.add(message.id);
+          
+          // Ensure conversation_id is a number
+          const conversationId = message.conversation_id ? Number(message.conversation_id) : null;
+          
+          if (!conversationId) {
+            console.error('❌ Message missing or invalid conversation_id:', message);
+            return;
+          }
+          
+          // Format the message
+          const formattedMessage: Message = {
+            id: message.id,
+            content: message.content || "",
+            created_at: message.created_at || new Date().toISOString(),
+            sender_id: message.sender_id,
+            conversation_id: conversationId,
+            sender: message.sender || {
+              id: message.sender_id || 0,
+              first_name: 'User',
+              last_name: '',
+              profile_picture: '' // Use profile_picture field
+            }
+          };
 
-        newSocket.on('new_message', (message: any) => {
-          console.log('Received new message event:', message);
-          debouncedHandleNewMessage(message);
-        });
+          // Use functional update for setMessages to ensure latest state
+          setMessages(prevMessages => {
+            console.log(`📝 Checking Message ID: ${formattedMessage.id} for Conv ID: ${formattedMessage.conversation_id}`);
+            console.log(`🎯 Current Selected Conv ID (inside setMessages): ${selectedConversation?.id}`);
+            
+            // Check if it's for the current conversation *inside* the functional update
+            if (selectedConversation && formattedMessage.conversation_id === selectedConversation.id) {
+              console.log(`✅ Message IS for current conversation (${selectedConversation.id}).`);
+              // Double-check for duplicates
+              const exists = prevMessages.some(msg => msg.id === formattedMessage.id);
+              if (exists) {
+                console.log('⚠️ Message already exists in state, skipping add.');
+                return prevMessages; // Return previous state if duplicate
+              }
+              console.log('➕ Adding message to state.');
+              // Ensure scroll happens after potential state update
+              setTimeout(scrollToBottom, 0);
+              return [...prevMessages, formattedMessage]; // Return new state
+            } else {
+              console.log(`⏩ Message NOT for current conversation.`);
+              return prevMessages; // Return previous state if not for current convo
+            }
+          });
+            
+          // FORCE RE-RENDER (keep this as a potential helper)
+          setForceRenderKey(prev => prev + 1);
+           
+          // Update the conversation list (this can remain outside setMessages)
+          setConversations(prevConversations => {
+            console.log('📋 Updating conversation list.');
+            let conversationUpdated = false;
+            const updatedConversations = prevConversations.map(conv => {
+              if (conv.id === formattedMessage.conversation_id) {
+                console.log('✨ Found matching conversation in list to update.');
+                conversationUpdated = true;
+                return {
+                  ...conv,
+                  last_message: {
+                    id: formattedMessage.id,
+                    content: formattedMessage.content,
+                    created_at: formattedMessage.created_at,
+                    sender_id: formattedMessage.sender_id
+                  },
+                  last_message_at: formattedMessage.created_at
+                };
+              }
+              return conv;
+            });
 
-        newSocket.on('disconnect', (reason) => {
-          console.log('Socket disconnected:', reason);
-        });
+            if (!conversationUpdated) {
+               console.log(`Conversation ${formattedMessage.conversation_id} not found in the current list.`);
+            }
+
+            return updatedConversations.sort((a, b) => 
+              new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime()
+            );
+          });
+        };
+
+        // Store the handler function in a ref to ensure we always remove the correct one
+        const currentMessageHandler = handleNewMessage;
+        newSocket.on('new_message', currentMessageHandler);
 
         setSocket(newSocket);
 
         return () => {
-          console.log('Cleaning up socket connection');
+          console.log('Cleaning up socket connection and message listener');
+          newSocket.off('new_message', currentMessageHandler); // Use the ref to remove the specific listener
           if (selectedConversation) {
             newSocket.emit('leave_conversation', selectedConversation.id);
           }
@@ -292,7 +339,7 @@ const Chat: React.FC = () => {
         };
       }
     }
-  }, [isAuthenticated, user, conversations]);
+  }, [isAuthenticated, user, selectedConversation]);
 
   // Handle conversation selection
   useEffect(() => {
@@ -317,17 +364,6 @@ const Chat: React.FC = () => {
       };
     }
   }, [socket, selectedConversation, currentRoom]);
-
-  // Join conversation rooms when conversations change
-  useEffect(() => {
-    if (socket && conversations.length > 0) {
-      console.log('Joining conversation rooms when conversations change');
-      conversations.forEach((conv: Conversation) => {
-        console.log(`Joining room: conversation:${conv.id}`);
-        socket.emit('join_conversation', conv.id);
-      });
-    }
-  }, [socket, conversations]);
 
   // Fetch conversations
   useEffect(() => {
@@ -355,10 +391,10 @@ const Chat: React.FC = () => {
             setConversations([]);
           }
           
-          setLoading(false);
-        } catch (error) {
-          console.error('Error fetching conversations:', error);
-          setLoading(false);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+        setLoading(false);
           
           // Handle rate limiting
           if (axios.isAxiosError(error) && error.response?.status === 429) {
@@ -376,10 +412,10 @@ const Chat: React.FC = () => {
         }
       }
     };
-
+    
     fetchConversations();
   }, [isAuthenticated]);
-
+  
   // Fetch messages when a conversation is selected
   useEffect(() => {
     const fetchMessages = async () => {
@@ -566,6 +602,7 @@ const Chat: React.FC = () => {
 
   // Process a message with conversation_id
   const processMessage = (message: any) => {
+    console.log('🔄 [PROCESS MESSAGE] Processing message:', message);
     // Ensure the message has the correct format
     const formattedMessage: Message = {
       id: message.id,
@@ -581,31 +618,31 @@ const Chat: React.FC = () => {
       }
     };
     
-    console.log('Processing formatted message:', formattedMessage);
-    console.log('Current conversation:', selectedConversation);
+    console.log('📝 [PROCESS MESSAGE] Formatted message:', formattedMessage);
+    console.log('💬 [PROCESS MESSAGE] Current selected conversation:', selectedConversation?.id);
     
     // Only add the message if it's for the current conversation
     if (selectedConversation && formattedMessage.conversation_id === selectedConversation.id) {
-      console.log('Adding message to current conversation:', formattedMessage);
+      console.log('✅ [PROCESS MESSAGE] Message IS for the current conversation. Attempting to add to UI.');
       setMessages(prevMessages => {
         // Check if message already exists to prevent duplicates
-        // Use both ID and created_at to ensure uniqueness
         const exists = prevMessages.some(msg => 
           msg.id === formattedMessage.id && 
           msg.created_at === formattedMessage.created_at
         );
         
         if (exists) {
-          console.log('Message already exists, not adding again');
+          console.log('⚠️ [PROCESS MESSAGE] Message already exists in UI state, not adding again');
           return prevMessages;
         }
         
-        console.log('Adding new message to state');
+        console.log('➕ [PROCESS MESSAGE] Adding new message to messages state');
         return [...prevMessages, formattedMessage];
       });
+      console.log('➡️ [PROCESS MESSAGE] Scheduled scrollToBottom');
       scrollToBottom();
     } else {
-      console.log('Message not for current conversation or no conversation selected');
+      console.log('⏩ [PROCESS MESSAGE] Message not for current conversation or no conversation selected');
       
       // If this is a new conversation, add it to the list
       if (!conversations.some(conv => conv.id === formattedMessage.conversation_id)) {
@@ -661,20 +698,21 @@ const Chat: React.FC = () => {
                 console.error('Authentication error');
               } else if (error.response?.status === 500) {
                 console.error('Server error');
-              }
-            }
           }
-        };
-        
+        }
+      }
+    };
+    
         fetchConversation();
       }
     }
     
     // Update the conversation list to show the latest message
     setConversations(prevConversations => {
+      console.log('📋 [PROCESS MESSAGE] Updating conversation list with new message');
       return prevConversations.map(conv => {
         if (conv.id === formattedMessage.conversation_id) {
-          console.log('Updating conversation in list:', conv.id);
+          console.log('✨ [PROCESS MESSAGE] Found matching conversation in list to update:', conv.id);
           return {
             ...conv,
             last_message: {
@@ -695,127 +733,81 @@ const Chat: React.FC = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newMessage.trim() || !selectedConversation || !isAuthenticated) {
+    if (!newMessage.trim() || !selectedConversation || !isAuthenticated || !socket || !socket.connected) {
+      console.error('Cannot send message: Missing data or socket not connected');
+      // Optionally, show an error message to the user
       return;
     }
     
-    try {
-      const token = localStorage.getItem('accessToken');
-      
-      // Create a temporary message ID for optimistic UI update
-      const tempId = Date.now();
-      const tempMessage = {
-        id: tempId,
-        content: newMessage,
-        created_at: new Date().toISOString(),
-        sender_id: user?.id || 0,
-        conversation_id: selectedConversation.id,
-        sender: {
-          id: user?.id || 0,
-          first_name: user?.first_name || '',
-          last_name: user?.last_name || '',
-          profilePic: user?.profilePic
+    const messageContent = newMessage.trim();
+    const conversationId = selectedConversation.id;
+    
+    // Optimistic UI Update
+    const tempId = Date.now();
+    const tempMessage = {
+      id: tempId,
+      content: messageContent,
+      created_at: new Date().toISOString(),
+      sender_id: user?.id || 0,
+      conversation_id: conversationId,
+      sender: {
+        id: user?.id || 0,
+        first_name: user?.first_name || '',
+        last_name: user?.last_name || '',
+        profilePic: user?.profilePic
+      }
+    };
+    
+    console.log('➕ Adding temporary message to UI:', tempMessage);
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
+    setNewMessage('');
+    scrollToBottom();
+    
+    // Update conversation list optimistically
+    setConversations(prevConversations => {
+      return prevConversations.map(conv => {
+        if (conv.id === conversationId) {
+          return {
+            ...conv,
+            last_message: {
+              id: tempId,
+              content: messageContent,
+              created_at: new Date().toISOString(),
+              sender_id: user?.id || 0
+            },
+            last_message_at: new Date().toISOString()
+          };
         }
-      };
-      
-      // Add the temporary message to the UI immediately
-      setMessages(prevMessages => {
-        // Check if a similar message already exists
-        const exists = prevMessages.some(msg => 
-          msg.content === newMessage && 
-          msg.sender_id === user?.id && 
-          msg.conversation_id === selectedConversation.id &&
-          // Only consider it a duplicate if it was sent in the last 5 seconds
-          Math.abs(new Date().getTime() - new Date(msg.created_at).getTime()) < 5000
-        );
-        
-        if (exists) {
-          console.log('Similar message already exists, not adding temporary message');
-          return prevMessages;
-        }
-        
-        return [...prevMessages, tempMessage];
+        return conv;
       });
-      
-      setNewMessage('');
-      scrollToBottom();
-      
-      // Update the conversation list with the temporary message
-      setConversations(prevConversations => {
-        return prevConversations.map(conv => {
-          if (conv.id === selectedConversation.id) {
-            return {
-              ...conv,
-              last_message: {
-                id: tempId,
-                content: newMessage,
-                created_at: new Date().toISOString(),
-                sender_id: user?.id || 0
-              },
-              last_message_at: new Date().toISOString()
-            };
-          }
-          return conv;
-        });
-      });
-      
-      // Send the message to the server
-      const response = await axios.post(
-        `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
-        { content: newMessage },
-        { 
-          withCredentials: true,
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      
-      // Add the real message ID to our processed set
-      processedMessageIds.current.add(response.data.id);
-      
-      // Replace the temporary message with the real one from the server
-      setMessages(prevMessages => {
-        // Check if the real message already exists
-        const exists = prevMessages.some(msg => 
-          msg.id === response.data.id && 
-          msg.created_at === response.data.created_at
-        );
+    });
+    
+    // Add temp ID to processed set (important for sender)
+    processedMessageIds.current.add(tempId);
+    
+    // Emit message via Socket
+    console.log(`📤 Emitting 'message:send' via socket for conversation ${conversationId}`);
+    socket.emit('message:send', { conversationId, content: messageContent }, (ack: { error?: string; success?: boolean; messageId?: number } | null) => {
+      // Optional: Handle acknowledgment from the server
+      if (ack?.error) {
+        console.error('Server acknowledged message send error:', ack.error);
+        // Remove the temporary message on error
+        setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        // Maybe show user an error
+      } else if (ack?.success && ack.messageId) {
+        console.log(`✅ Server acknowledged message send success. Real ID: ${ack.messageId}`);
+        // Replace temp ID with real ID in processed set
+        processedMessageIds.current.delete(tempId);
+        processedMessageIds.current.add(ack.messageId);
         
-        if (exists) {
-          console.log('Real message already exists, not replacing temporary message');
-          return prevMessages;
-        }
-        
-        // Remove the temporary message and add the real one
-        return prevMessages
-          .filter(msg => msg.id !== tempId)
-          .concat(response.data);
-      });
-      
-      // Update the conversation list with the real message
-      setConversations(prevConversations => {
-        return prevConversations.map(conv => {
-          if (conv.id === selectedConversation.id) {
-            return {
-              ...conv,
-              last_message: {
-                id: response.data.id,
-                content: response.data.content,
-                created_at: response.data.created_at,
-                sender_id: response.data.sender_id
-              },
-              last_message_at: response.data.created_at
-            };
-          }
-          return conv;
-        });
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Remove the temporary message if there was an error
-      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== Date.now()));
-    }
+        // Update the message in the UI with the real ID (optional, but good practice)
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempId ? { ...msg, id: ack.messageId as number } : msg
+        ));
+      } else {
+        console.log('Server acknowledgment received:', ack);
+      }
+    });
   };
 
   // Handle starting a new conversation
@@ -983,7 +975,7 @@ const Chat: React.FC = () => {
   if (loading) {
     return <div className="p-4 text-center">Loading conversations...</div>;
   }
-
+  
   return (
     <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
       {/* Conversations List */}
@@ -1001,9 +993,9 @@ const Chat: React.FC = () => {
               startContent={<Icon icon="lucide:search" className="text-default-400" />}
               size="sm"
               radius="lg"
-            />
-          </div>
-          
+        />
+      </div>
+
           <ScrollShadow className="h-[calc(100%-65px)]">
             <div className="p-2 space-y-1">
               {conversations.map((conversation) => (
@@ -1136,8 +1128,8 @@ const Chat: React.FC = () => {
                   </Button>
                 </form>
               </div>
-            </>
-          ) : (
+                </>
+              ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-4">
                 <Icon
@@ -1147,13 +1139,13 @@ const Chat: React.FC = () => {
                 <p className="text-default-500">
                   Select a conversation to start chatting
                 </p>
-              </div>
-            </div>
-          )}
+          </div>
+          </div>
+        )}
         </CardBody>
       </Card>
     </div>
   );
-};
+}; 
 
 export default Chat; 
