@@ -889,9 +889,10 @@ const Chat: React.FC = () => {
 
   // Handle sending a message - modified to prevent keyboard closing on mobile
   const handleSendMessage = async (e: React.FormEvent) => {
+    // Prevent default form submission behavior which causes page refresh
     e.preventDefault();
     
-    // Get the input element and focus it to keep keyboard open
+    // Get the input field
     const inputElement = document.getElementById('message-input') as HTMLInputElement;
     
     if (!newMessage.trim() || !selectedConversation || !isAuthenticated) {
@@ -901,11 +902,14 @@ const Chat: React.FC = () => {
     try {
       const token = localStorage.getItem('accessToken');
       
+      // Store the message content before clearing it
+      const messageToBeSent = newMessage;
+      
       // Create a temporary message ID for optimistic UI update
       const tempId = Date.now();
       const tempMessage = {
         id: tempId,
-        content: newMessage,
+        content: messageToBeSent,
         created_at: new Date().toISOString(),
         sender_id: user?.id || 0,
         conversation_id: selectedConversation.id,
@@ -920,18 +924,17 @@ const Chat: React.FC = () => {
       // Generate cosmic particles for this message
       generateParticles(tempId);
       
-      // Get current input value before clearing
-      const messageToBeSent = newMessage;
-      
-      // Clear input but maintain focus to keep keyboard open
+      // Clear the input value but keep focus on the input
       setNewMessage('');
       
-      // Re-focus the input element after a small delay
-      setTimeout(() => {
-        if (inputElement) {
+      // Keep focus on the input field to prevent keyboard from closing
+      if (inputElement) {
+        // This is critical - we need to ensure we don't lose focus during the state update
+        // Schedule this at the end of the event loop to ensure React's state updates complete first
+        window.setTimeout(() => {
           inputElement.focus();
-        }
-      }, 20);
+        }, 0);
+      }
       
       // Add the temporary message to the UI immediately
       setMessages(prevMessages => {
@@ -1021,6 +1024,13 @@ const Chat: React.FC = () => {
           .filter(msg => msg.id !== tempId)
           .concat(response.data);
       });
+      
+      // Ensure input still has focus after all operations complete
+      if (inputElement) {
+        window.setTimeout(() => {
+          inputElement.focus();
+        }, 50);
+      }
       
       // Update the conversation list with the real message
       setConversations(prevConversations => {
