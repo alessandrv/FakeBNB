@@ -231,17 +231,6 @@ const Chat: React.FC = () => {
             console.error('❌ Invalid raw message received:', message);
             return;
           }
-
-          // --- NEW: Ignore messages sent by the current user --- 
-          if (message.sender_id === user?.id) {
-            console.log('⏩ Ignoring own message received via socket:', message.id);
-            // Still need to mark as processed if the server ack hasn't arrived yet
-            if (!processedMessageIds.current.has(message.id)) {
-              processedMessageIds.current.add(message.id);
-            }
-            return; 
-          }
-          // --- End Ignore Own Message --- 
           
           // Check if we've already processed this message (use ref)
           if (processedMessageIds.current.has(message.id)) {
@@ -798,7 +787,7 @@ const Chat: React.FC = () => {
     
     // Emit message via Socket
     console.log(`📤 Emitting 'message:send' via socket for conversation ${conversationId}`);
-    socket.emit('message:send', { conversationId, content: messageContent }, (ack: { error?: string; success?: boolean; messageId?: number; created_at?: string } | null) => {
+    socket.emit('message:send', { conversationId, content: messageContent }, (ack: { error?: string; success?: boolean; messageId?: number } | null) => {
       // Optional: Handle acknowledgment from the server
       if (ack?.error) {
         console.error('Server acknowledged message send error:', ack.error);
@@ -811,13 +800,9 @@ const Chat: React.FC = () => {
         processedMessageIds.current.delete(tempId);
         processedMessageIds.current.add(ack.messageId);
         
-        // Update the message in the UI with the real ID AND the server's timestamp
+        // Update the message in the UI with the real ID (optional, but good practice)
         setMessages(prev => prev.map(msg => 
-          msg.id === tempId ? { 
-            ...msg, 
-            id: ack.messageId as number, 
-            created_at: ack.created_at || msg.created_at // Use server time, fallback to optimistic time
-          } : msg
+          msg.id === tempId ? { ...msg, id: ack.messageId as number } : msg
         ));
       } else {
         console.log('Server acknowledgment received:', ack);
