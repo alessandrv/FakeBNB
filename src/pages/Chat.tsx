@@ -231,6 +231,17 @@ const Chat: React.FC = () => {
             console.error('❌ Invalid raw message received:', message);
             return;
           }
+
+          // --- NEW: Ignore messages sent by the current user --- 
+          if (message.sender_id === user?.id) {
+            console.log('⏩ Ignoring own message received via socket:', message.id);
+            // Still need to mark as processed if the server ack hasn't arrived yet
+            if (!processedMessageIds.current.has(message.id)) {
+              processedMessageIds.current.add(message.id);
+            }
+            return; 
+          }
+          // --- End Ignore Own Message --- 
           
           // Check if we've already processed this message (use ref)
           if (processedMessageIds.current.has(message.id)) {
