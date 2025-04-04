@@ -16,6 +16,24 @@ import {
   User,
   Tooltip
 } from "@heroui/react";
+// Add styles for message animations
+const messageAnimationStyles = `
+  @keyframes messageAppear {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .message-new {
+    animation: messageAppear 0.3s ease-out forwards;
+  }
+`;
+
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -91,6 +109,7 @@ const Chat: React.FC = () => {
   const { setHideNavbar } = useContext(NavbarContext);
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [newMessageIds, setNewMessageIds] = useState<Set<number>>(new Set());
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
@@ -601,6 +620,8 @@ const Chat: React.FC = () => {
         }
         
         console.log('Adding new message to state');
+        // Add message id to newMessageIds set for animation
+        setNewMessageIds(prev => new Set(prev).add(formattedMessage.id));
         return [...prevMessages, formattedMessage];
       });
       scrollToBottom();
@@ -734,6 +755,8 @@ const Chat: React.FC = () => {
           return prevMessages;
         }
         
+        // Add tempId to newMessageIds for animation
+        setNewMessageIds(prev => new Set(prev).add(tempId));
         return [...prevMessages, tempMessage];
       });
       
@@ -976,6 +999,17 @@ const Chat: React.FC = () => {
     </div>
   };
 
+  // Clear animation classes after they've run
+  useEffect(() => {
+    if (newMessageIds.size > 0) {
+      const timer = setTimeout(() => {
+        setNewMessageIds(new Set());
+      }, 1000); // Clear after animations complete
+      
+      return () => clearTimeout(timer);
+    }
+  }, [newMessageIds]);
+
   if (!isAuthenticated) {
     return <div className="p-4 text-center">Please log in to use the chat.</div>;
   }
@@ -985,173 +1019,180 @@ const Chat: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
-      {/* Conversations List */}
-      <Card 
-        className={`${
-          isMobile 
-            ? showConversations ? "w-full" : "hidden" 
-            : "w-[380px]"
-        } p-0 h-full`}
-      >
-        <CardBody className="p-0 h-full">
-          <div className="p-4 border-b border-divider">
-            <Input
-              placeholder="Search conversations..."
-              startContent={<Icon icon="lucide:search" className="text-default-400" />}
-              size="sm"
-              radius="lg"
-            />
-          </div>
-          
-          <ScrollShadow className="h-[calc(100%-65px)]">
-            <div className="p-2 space-y-1">
-              {conversations.map((conversation) => (
-                <Button
-                  key={conversation.id}
-                  className="w-full justify-start p-2 h-auto"
-                  color={selectedConversation?.id === conversation.id ? "primary" : "default"}
-                  variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
-                  onPress={() => handleConversationSelect(conversation)}
-                >
+    <>
+      {/* Add the animation styles */}
+      <style>{messageAnimationStyles}</style>
+      
+      <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
+        {/* Conversations List */}
+        <Card 
+          className={`${
+            isMobile 
+              ? showConversations ? "w-full" : "hidden" 
+              : "w-[380px]"
+          } p-0 h-full`}
+        >
+          <CardBody className="p-0 h-full">
+            <div className="p-4 border-b border-divider">
+              <Input
+                placeholder="Search conversations..."
+                startContent={<Icon icon="lucide:search" className="text-default-400" />}
+                size="sm"
+                radius="lg"
+              />
+            </div>
+            
+            <ScrollShadow className="h-[calc(100%-65px)]">
+              <div className="p-2 space-y-1">
+                {conversations.map((conversation) => (
+                  <Button
+                    key={conversation.id}
+                    className="w-full justify-start p-2 h-auto"
+                    color={selectedConversation?.id === conversation.id ? "primary" : "default"}
+                    variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
+                    onPress={() => handleConversationSelect(conversation)}
+                  >
+                    <User
+                      name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                      description={conversation.last_message?.content || "No messages yet"}
+                      avatarProps={{
+                        src: conversation.other_user.profile_picture,
+                        name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
+                        size: "sm"
+                      }}
+                    />
+                  </Button>
+                ))}
+              </div>
+            </ScrollShadow>
+          </CardBody>
+        </Card>
+
+        {/* Chat Area */}
+        <Card 
+          className={`${
+            isMobile 
+              ? showConversations ? "hidden" : "w-full" 
+              : "flex-1"
+          } p-0 h-full`}
+        >
+          <CardBody className="p-0 h-full flex flex-col">
+            {selectedConversation ? (
+              <>
+                {/* Chat Header */}
+                <div className="p-4 border-b border-divider flex items-center gap-2">
+                  {isMobile && (
+                    <Button
+                      isIconOnly
+                      variant="light"
+                      onPress={handleBackToList}
+                      className="mr-2"
+                    >
+                      <Icon icon="lucide:chevron-left" width={24} />
+                    </Button>
+                  )}
                   <User
-                    name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
-                    description={conversation.last_message?.content || "No messages yet"}
+                    name={`${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`}
+                    description="Active now"
                     avatarProps={{
-                      src: conversation.other_user.profile_picture,
-                      name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
-                      size: "sm"
+                      src: selectedConversation.other_user.profile_picture,
+                      name: `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
                     }}
                   />
-                </Button>
-              ))}
-            </div>
-          </ScrollShadow>
-        </CardBody>
-      </Card>
-
-      {/* Chat Area */}
-      <Card 
-        className={`${
-          isMobile 
-            ? showConversations ? "hidden" : "w-full" 
-            : "flex-1"
-        } p-0 h-full`}
-      >
-        <CardBody className="p-0 h-full flex flex-col">
-          {selectedConversation ? (
-            <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-divider flex items-center gap-2">
-                {isMobile && (
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    onPress={handleBackToList}
-                    className="mr-2"
-                  >
-                    <Icon icon="lucide:chevron-left" width={24} />
-                  </Button>
-                )}
-                <User
-                  name={`${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`}
-                  description="Active now"
-                  avatarProps={{
-                    src: selectedConversation.other_user.profile_picture,
-                    name: `${selectedConversation.other_user.first_name} ${selectedConversation.other_user.last_name}`
-                  }}
-                />
-              </div>
-
-              {/* Messages Area */}
-              <ScrollShadow 
-                className="flex-1 p-4" 
-                ref={messageContainerRef}
-                onScroll={handleMessagesScroll}
-              >
-                <div className="space-y-4">
-                  {loadingMore && (
-                    <div className="flex justify-center py-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
-                    </div>
-                  )}
-                  <div ref={messagesStartRef} />
-                  {messages.map((message) => {
-                    const isMyMessage = message.sender_id === user?.id;
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                            isMyMessage
-                              ? "bg-primary text-primary-foreground rounded-br-sm"
-                              : "bg-default-100 rounded-bl-sm"
-                          }`}
-                        >
-                          <p>{message.content}</p>
-                          <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                            {format(new Date(message.created_at), "h:mm a")}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={messagesEndRef} />
                 </div>
-              </ScrollShadow>
 
-              {/* Message Input */}
-              <div className="p-4 border-t border-divider">
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <Input
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    size="lg"
-                    radius="lg"
-                    startContent={
-                      <Tooltip content="Add attachment">
-                        <Button
-                          isIconOnly
-                          variant="light"
-                          size="sm"
-                          className="text-default-400"
+                {/* Messages Area */}
+                <ScrollShadow 
+                  className="flex-1 p-4" 
+                  ref={messageContainerRef}
+                  onScroll={handleMessagesScroll}
+                >
+                  <div className="space-y-4">
+                    {loadingMore && (
+                      <div className="flex justify-center py-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
+                      </div>
+                    )}
+                    <div ref={messagesStartRef} />
+                    {messages.map((message) => {
+                      const isMyMessage = message.sender_id === user?.id;
+                      const isNewMessage = newMessageIds.has(message.id);
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"} ${isNewMessage ? "message-new" : ""}`}
                         >
-                          <Icon icon="lucide:paperclip" width={20} />
-                        </Button>
-                      </Tooltip>
-                    }
+                          <div
+                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                              isMyMessage
+                                ? "bg-primary text-primary-foreground rounded-br-sm"
+                                : "bg-default-100 rounded-bl-sm"
+                            }`}
+                          >
+                            <p>{message.content}</p>
+                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                              {format(new Date(message.created_at), "h:mm a")}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollShadow>
+
+                {/* Message Input */}
+                <div className="p-4 border-t border-divider">
+                  <form onSubmit={handleSendMessage} className="flex gap-2">
+                    <Input
+                      placeholder="Type a message..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      size="lg"
+                      radius="lg"
+                      startContent={
+                        <Tooltip content="Add attachment">
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            size="sm"
+                            className="text-default-400"
+                          >
+                            <Icon icon="lucide:paperclip" width={20} />
+                          </Button>
+                        </Tooltip>
+                      }
+                    />
+                    <Button
+                      type="submit"
+                      color="primary"
+                      size="lg"
+                      isIconOnly
+                      radius="lg"
+                    >
+                      <Icon icon="lucide:send" width={20} />
+                    </Button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center space-y-4">
+                  <Icon
+                    icon="lucide:message-square"
+                    className="w-12 h-12 mx-auto text-default-400"
                   />
-                  <Button
-                    type="submit"
-                    color="primary"
-                    size="lg"
-                    isIconOnly
-                    radius="lg"
-                  >
-                    <Icon icon="lucide:send" width={20} />
-                  </Button>
-                </form>
+                  <p className="text-default-500">
+                    Select a conversation to start chatting
+                  </p>
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <Icon
-                  icon="lucide:message-square"
-                  className="w-12 h-12 mx-auto text-default-400"
-                />
-                <p className="text-default-500">
-                  Select a conversation to start chatting
-                </p>
-              </div>
-            </div>
-          )}
-        </CardBody>
-      </Card>
-    </div>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </>
   );
 };
 
