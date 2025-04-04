@@ -128,10 +128,10 @@ const Chat: React.FC = () => {
     };
   }, [isMobile, selectedConversation, showConversations, setHideNavbar]);
 
-  // Scroll to bottom of messages
+  // Scroll to bottom of messages without animation
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
     }
   };
 
@@ -142,6 +142,16 @@ const Chat: React.FC = () => {
       scrollToBottom();
     }
   }, [messages]);
+
+  // Ensure we scroll to bottom when conversation is selected
+  useEffect(() => {
+    if (selectedConversation) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [selectedConversation]);
 
   // Initialize socket connection
   useEffect(() => {
