@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
 import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 // Import Heroicons
 import { Icon } from "@iconify/react";
 import { 
@@ -538,8 +539,7 @@ const Chat: React.FC = () => {
           },
           params: {
             limit: 50,
-            offset: messageOffset,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            offset: messageOffset
           }
         }
       );
@@ -1097,7 +1097,7 @@ const Chat: React.FC = () => {
                         >
                           <p>{message.content}</p>
                           <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                            {format(new Date(message.created_at), "h:mm a")}
+                            {formatInTimeZone(new Date(message.created_at), 'Europe/Rome', 'HH:mm')}
                           </span>
                         </div>
                       </div>
