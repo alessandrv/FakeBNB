@@ -953,7 +953,7 @@ const Chat: React.FC = () => {
               <ScrollShadow className="flex-1 p-4">
                 <div className="space-y-4">
                   {messages.map((message) => {
-                    const isMyMessage = message.sender_id === 1; // Replace 1 with actual user ID
+                    const isMyMessage = message.sender_id === user?.id;
                     return (
                       <div
                         key={message.id}
