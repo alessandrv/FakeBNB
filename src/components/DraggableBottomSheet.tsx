@@ -42,6 +42,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
   // Get the exact searchbar height to ensure we don't go past it
   const searchBarRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
   
   // State for sheet
   const [sheetState, setSheetState] = useState<'collapsed' | 'full'>('collapsed');
@@ -51,6 +52,32 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
   const [startHeight, setStartHeight] = useState<number | string>(COLLAPSED_HEIGHT);
   // Track the current available height
   const [maxHeight, setMaxHeight] = useState(0);
+  // Tab state for new design
+  const [activeTab, setActiveTab] = useState<'list' | 'map'>('list');
+  // View mode for list - options: 'all' or 'favorites'
+  const [viewMode, setViewMode] = useState<'all' | 'favorites'>('all');
+  // State for sorting
+  const [sortOption, setSortOption] = useState<'price' | 'rating'>('price');
+  
+  // For simulating favorites - would be replaced with actual favorite tracking
+  const [favorites] = useState<Set<string>>(new Set());
+  
+  // Get featured houses (would typically come from API with featured flag)
+  const featuredHouses = houses.slice(0, Math.min(5, houses.length));
+  
+  // Filter houses based on view mode
+  const filteredHouses = viewMode === 'all' 
+    ? houses 
+    : houses.filter(house => favorites.has(house.id));
+  
+  // Sort houses based on sort option
+  const sortedHouses = [...filteredHouses].sort((a, b) => {
+    if (sortOption === 'price') {
+      return (a.price || 0) - (b.price || 0);
+    } else {
+      return (b.rating || 0) - (a.rating || 0);
+    }
+  });
   
   // Expose the collapseSheet method to the parent component
   useImperativeHandle(ref, () => ({
@@ -206,6 +233,15 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
     setSheetState(sheetState === 'collapsed' ? 'full' : 'collapsed');
   };
 
+  // Handle tab change
+  const handleTabChange = (tab: 'list' | 'map') => {
+    setActiveTab(tab);
+    // If user clicks "Map" tab, show the collapsed view with just the tab bar
+    if (tab === 'map') {
+      toggleSheetState();
+    }
+  };
+
   // Listen for viewport changes (like address bar showing/hiding)
   useEffect(() => {
     // Add event listener for viewport changes
@@ -277,17 +313,16 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
   };
 
   return (
-    
     <div
       ref={sheetRef}
-      className={` shadow-lg rounded-t-xl draggable-sheet bottom-0 absolute   inset-0 bg-background/60 backdrop-blur-md  border border-default-200/50  ${
+      className={`shadow-lg rounded-t-xl draggable-sheet bottom-0 absolute inset-0 bg-background/60 backdrop-blur-md border border-default-200/50 ${
         isDragging ? 'dragging' : 'transition-all duration-300 ease-out'
       } ${sheetState === 'full' ? 'sheet-full' : ''} ${inWrapper ? 'in-wrapper' : 'fixed left-0 right-0'}`}
       style={getPositionStyle()}
     >
-      {/* Drag handle - smaller */}
+      {/* Drag handle - subtle line */}
       <div
-        className="w-full h-4 flex items-center justify-center cursor-grab top-0"
+        className="w-full h-6 flex items-center justify-center cursor-grab top-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -296,168 +331,317 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <div className="w-12 h-1 rounded-full bg-gray-300"></div>
+        <div className="w-10 h-1 rounded-full bg-gray-300"></div>
       </div>
 
-      {/* Header with count badge and expand button - more compact */}
-      <div className="px-3 pb-1 flex justify-between items-center" >
-        <div className="flex items-center">
-          <span className="inline-flex items-center justify-center h-5 px-2 rounded-full bg-primary-100 text-primary-700 text-xs font-medium">
-            {houses.length} {houses.length === 1 ? 'property' : 'properties'}
-          </span>
-        </div>
-        {sheetState === 'full' && (
-          <div className="flex justify-center">
-            <Button 
-              color="primary" 
-              variant="flat" 
-              onClick={toggleSheetState}
-              className="font-medium text-xs h-7 px-2 bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
-              startContent={<Icon icon="lucide:map" className="text-xs" />}
+      {/* Header with search stats and view toggle */}
+      <div className="px-4 flex flex-col">
+        <div className="flex items-center justify-between">
+          {/* Property count */}
+          <div className="flex items-center">
+            <span className="font-medium text-sm text-default-700">
+              <span className="font-semibold text-gradient-first">{houses.length}</span> properties available
+            </span>
+          </div>
+          
+          {/* Map/List Toggle */}
+          <div className="flex items-center space-x-1 bg-default-100 rounded-full p-0.5">
+            <button
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                activeTab === 'list' 
+                  ? 'bg-white shadow-sm text-default-800' 
+                  : 'text-default-500 hover:text-default-700'
+              }`}
+              onClick={() => handleTabChange('list')}
             >
-              Show Map
-            </Button>
+              List
+            </button>
+            <button
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                activeTab === 'map' 
+                  ? 'bg-white shadow-sm text-default-800' 
+                  : 'text-default-500 hover:text-default-700'
+              }`}
+              onClick={() => handleTabChange('map')}
+            >
+              Map
+            </button>
+          </div>
+          
+          {/* Expand/collapse button */}
+          <button
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-default-100 text-default-600 hover:bg-default-200"
+            onClick={toggleSheetState}
+          >
+            <Icon 
+              icon={sheetState === 'collapsed' ? 'lucide:chevron-up' : 'lucide:chevron-down'} 
+              className="text-sm" 
+            />
+          </button>
+        </div>
+        
+        {/* Secondary toolbar - only visible when expanded */}
+        {sheetState === 'full' && (
+          <div className="flex items-center justify-between pt-3 pb-2 mt-1 border-b border-default-200/50">
+            <div className="flex items-center gap-2">
+              <button
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                  viewMode === 'all' 
+                    ? 'bg-gradient-first-50 text-gradient-first border-gradient-first' 
+                    : 'bg-white text-default-600 border-default-200 hover:border-default-300'
+                }`}
+                onClick={() => setViewMode('all')}
+              >
+                All
+              </button>
+              <button
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                  viewMode === 'favorites' 
+                    ? 'bg-gradient-first-50 text-gradient-first border-gradient-first' 
+                    : 'bg-white text-default-600 border-default-200 hover:border-default-300'
+                }`}
+                onClick={() => setViewMode('favorites')}
+              >
+                Favorites
+              </button>
+            </div>
+            
+            <div className="flex items-center">
+              <span className="text-xs text-default-500 mr-2">Sort:</span>
+              <select 
+                className="text-xs bg-white border border-default-200 rounded-md px-2 py-1"
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as 'price' | 'rating')}
+              >
+                <option value="price">Price</option>
+                <option value="rating">Rating</option>
+              </select>
+            </div>
           </div>
         )}
-        <Button
-          variant="light"
-          size="sm"
-          onClick={toggleSheetState}
-          className="text-xs px-1 h-7"
-        >
-          {sheetState === 'collapsed' ? 'View All' : 'Collapse'}
-          <Icon icon={sheetState === 'collapsed' ? 'lucide:chevron-up' : 'lucide:chevron-down'} className="ml-1 text-xs" />
-        </Button>
       </div>
 
       {/* Content - only visible when expanded */}
       <div 
-        className={`mt-4 overflow-y-auto px-2 pb-2 ${
+        className={`overflow-y-auto pb-4 ${
           sheetState === 'collapsed' 
             ? 'hidden' // Hide completely when collapsed
-            : 'h-[calc(100%-55px)]' // Adjusted to the new more compact header
+            : 'h-[calc(100%-80px)]' // Adjusted height for new header
         }`}
       >
         {houses.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32">
-            <Icon icon="lucide:search-x" className="text-3xl text-gray-400 mb-2" />
-            <p className="text-gray-500">No properties found in this area</p>
+          <div className="flex flex-col items-center justify-center h-40 mt-8">
+            <div className="w-16 h-16 rounded-full bg-default-100 flex items-center justify-center mb-3">
+              <Icon icon="lucide:search-x" className="text-2xl text-default-400" />
+            </div>
+            <p className="text-default-800 font-medium">No properties found in this area</p>
+            <p className="text-default-500 text-sm mt-1">Try adjusting your search criteria</p>
           </div>
         ) : (
           <>
-            {houses.map((house) => (
-              <Card key={house.id} className="mb-4 overflow-hidden border-1 border-default-200">
-                <CardBody className="p-0">
-                  {/* Image at top - square format with overlay elements */}
-                  <div className="relative w-full aspect-square">
-                    <img
-                      src={house.image}
-                      alt={house.address}
-                      className="h-full w-full object-cover"
-                    />
-                    {/* Favorite button - top right */}
-                    <Button
-                      isIconOnly
-                      className="absolute top-3 right-3 bg-white/80 backdrop-blur-md shadow-sm hover:bg-white"
-                      variant="flat"
-                      radius="full"
-                      size="sm"
-                      aria-label="Add to favorites"
-                    >
-                      <Icon icon="lucide:heart" className="text-danger" />
-                    </Button>
-                    {/* Price chip - bottom left */}
-                    {house.price && (
-                      <div className="absolute bottom-3 left-3">
-                        <Chip
-                          size="md" 
-                          className="font-semibold bg-white/80 backdrop-blur-md shadow-sm text-primary"
-                        >
-                          ${house.price}/mo
-                        </Chip>
-                      </div>
-                    )}
-                    {/* Rating badge - top left */}
-                    {house.rating && (
-                      <div className="absolute top-3 left-3">
-                        <Chip
-                          size="sm"
-                          className="bg-warning-50 backdrop-blur-sm font-medium text-warning-700 border border-warning-200"
-                          startContent={<Icon icon="lucide:star" className="text-warning text-xs" />}
-                        >
-                          {house.rating}
-                        </Chip>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Content section below image */}
-                  <div className="p-4">
-                    {/* Property title */}
-                    <h3 className="font-semibold text-medium mb-2 line-clamp-2">{house.address}</h3>
-                    
-                    {/* Features with icons */}
-                    <div className="flex gap-6 mb-3">
-                      {house.beds && (
-                        <div className="flex items-center gap-1">
-                          <Icon icon="lucide:bed" className="text-primary-400" />
-                          <span className="text-sm">{house.beds} beds</span>
-                        </div>
-                      )}
-                      {house.baths && (
-                        <div className="flex items-center gap-1">
-                          <Icon icon="lucide:bath" className="text-primary-400" />
-                          <span className="text-sm">{house.baths} baths</span>
-                        </div>
-                      )}
-                      {house.reviews && (
-                        <div className="flex items-center gap-1 ml-auto">
-                          <Icon icon="lucide:message-circle" className="text-default-400" />
-                          <span className="text-sm">{house.reviews}</span>
-                        </div>
-                      )}
+            {/* Featured Properties Carousel */}
+            {viewMode === 'all' && featuredHouses.length > 0 && (
+              <div className="px-4 mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-default-800 font-medium text-sm">Featured Properties</h3>
+                  <span className="text-xs text-gradient-first">View all</span>
+                </div>
+                
+                <div 
+                  ref={carouselRef}
+                  className="flex overflow-x-auto pb-2 -mx-1 hide-scrollbar"
+                >
+                  {featuredHouses.map((house) => (
+                    <div key={`featured-${house.id}`} className="w-64 flex-shrink-0 px-1">
+                      <Card className="border border-default-200 overflow-hidden hover:border-indigo-300 transition-all">
+                        <CardBody className="p-0">
+                          {/* Image with badges */}
+                          <div className="relative aspect-video w-full">
+                            <img 
+                              src={house.image} 
+                              alt={house.address} 
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-gradient-first/70 via-transparent to-transparent"></div>
+                            
+                            {/* Badges positioned at corners */}
+                            <div className="absolute top-2 left-2">
+                              {house.rating && (
+                                <Chip
+                                  size="sm"
+                                  className="bg-amber-500/90 backdrop-blur-sm text-white border-none text-xs"
+                                  startContent={<Icon icon="lucide:star" className="text-white text-xs" />}
+                                >
+                                  {house.rating}
+                                </Chip>
+                              )}
+                            </div>
+                            
+                            <div className="absolute top-2 right-2">
+                              <Button
+                                isIconOnly
+                                className="bg-white/80 backdrop-blur-sm shadow-sm hover:bg-white"
+                                variant="flat"
+                                radius="full"
+                                size="sm"
+                              >
+                                <Icon icon="lucide:heart" className="text-red-500" />
+                              </Button>
+                            </div>
+                            
+                            {/* Property info positioned at bottom */}
+                            <div className="absolute bottom-2 left-2 right-2">
+                              <div className="flex justify-between items-end">
+                                <div>
+                                  {house.price && (
+                                    <div className="text-white font-semibold text-sm mb-1">${house.price}/mo</div>
+                                  )}
+                                  <div className="text-white/90 text-xs line-clamp-1">{house.address}</div>
+                                </div>
+                                <Button 
+                                  size="sm"
+                                  variant="solid"
+                                  className="h-7 min-w-0 px-2 bg-gradient-to-tr from-gradient-first to-gradient-second text-white"
+                                  onClick={() => onViewDetails?.(house.id)}
+                                >
+                                  Details
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </CardBody>
+                      </Card>
                     </div>
-                    
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      <Link 
-                        to={`/property/${house.id}`} 
-                        className="col-span-1"
-                        onClick={() => onViewDetails?.(house.id)}
-                      >
-                        <Button 
-                          size="md"
-                          variant="solid" 
-                          color="primary"
-                          className="w-full bg-gradient-to-tr from-gradient-first to-gradient-second"
-                          startContent={<Icon icon="lucide:info" />}
-                        >
-                          Details
-                        </Button>
-                      </Link>
-                      {onFindOnMap && house.location && (
-                        <Button 
-                          size="md"
-                          variant="flat" 
-                          color="primary"
-                          className="col-span-1"
-                          startContent={<Icon icon="lucide:map-pin" />}
-                          onClick={() => {
-                            onFindOnMap(house.location!);
-                            onViewDetails?.(house.id);
-                            setSheetState('collapsed');
-                          }}
-                        >
-                          On map
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
-            {/* Add padding at the bottom to ensure space below the last card */}
-            <div className="h-4"></div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Regular Property List */}
+            <div className="px-4 mt-4">
+              {viewMode === 'all' && featuredHouses.length > 0 && (
+                <h3 className="text-default-800 font-medium text-sm mb-2">All Properties</h3>
+              )}
+              
+              <div className="grid grid-cols-1 gap-4">
+                {sortedHouses.map((house) => (
+                  <Card 
+                    key={house.id} 
+                    className="border border-default-200 overflow-hidden hover:border-indigo-300 transition-all"
+                  >
+                    <CardBody className="p-0">
+                      <div className="flex flex-col">
+                        {/* Large Image */}
+                        <div className="relative w-full aspect-[16/9]">
+                          <img 
+                            src={house.image} 
+                            alt={house.address} 
+                            className="h-full w-full object-cover"
+                          />
+                          
+                          {/* Overlay gradient for better text visibility */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+                          
+                          {/* Rating badge */}
+                          {house.rating && (
+                            <div className="absolute top-3 left-3">
+                              <Chip
+                                size="sm"
+                                className="bg-amber-500/90 backdrop-blur-sm text-white border-none"
+                                startContent={<Icon icon="lucide:star" className="text-white text-xs" />}
+                              >
+                                {house.rating}
+                              </Chip>
+                            </div>
+                          )}
+                          
+                          {/* Favorite button */}
+                          <div className="absolute top-3 right-3">
+                            <Button
+                              isIconOnly
+                              className="bg-white/80 backdrop-blur-sm shadow-sm hover:bg-white"
+                              variant="flat"
+                              radius="full"
+                              size="sm"
+                            >
+                              <Icon icon="lucide:heart" className="text-red-500" />
+                            </Button>
+                          </div>
+                          
+                          {/* Price overlay */}
+                          {house.price && (
+                            <div className="absolute bottom-3 left-3">
+                              <Chip
+                                size="md"
+                                className="bg-gradient-to-tr from-gradient-first to-gradient-second backdrop-blur-sm text-white font-medium border-none"
+                              >
+                                ${house.price}/mo
+                              </Chip>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="p-4">
+                          <h3 className="font-medium text-default-800 text-base mb-2">{house.address}</h3>
+                          
+                          {/* Features */}
+                          <div className="flex items-center gap-x-6 text-sm text-default-600 mb-3">
+                            {house.beds && (
+                              <span className="flex items-center gap-1.5">
+                                <Icon icon="lucide:bed" className="text-indigo-500" />
+                                <span>{house.beds} beds</span>
+                              </span>
+                            )}
+                            {house.baths && (
+                              <span className="flex items-center gap-1.5">
+                                <Icon icon="lucide:bath" className="text-indigo-500" />
+                                <span>{house.baths} baths</span>
+                              </span>
+                            )}
+                            {house.reviews && (
+                              <span className="flex items-center gap-1.5 ml-auto">
+                                <Icon icon="lucide:message-circle" className="text-default-400" />
+                                <span>{house.reviews} reviews</span>
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Actions */}
+                          <div className="flex gap-3">
+                            <Button 
+                              size="md"
+                              variant="solid"
+                              color="primary"
+                              className="flex-1 bg-gradient-to-tr from-gradient-first to-gradient-second"
+                              startContent={<Icon icon="lucide:info" />}
+                              onClick={() => onViewDetails?.(house.id)}
+                            >
+                              View Details
+                            </Button>
+                            {onFindOnMap && house.location && (
+                              <Button 
+                                size="md"
+                                variant="flat"
+                                color="primary"
+                                className="flex-1"
+                                startContent={<Icon icon="lucide:map-pin" />}
+                                onClick={() => onFindOnMap(house.location!)}
+                              >
+                                Show on Map
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
+            </div>
+            
+            {/* Add padding at the bottom to ensure space below the last row */}
+            <div className="h-6"></div>
           </>
         )}
       </div>
