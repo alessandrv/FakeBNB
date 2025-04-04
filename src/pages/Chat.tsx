@@ -798,27 +798,29 @@ const Chat: React.FC = () => {
     
     // Emit message via Socket
     console.log(`📤 Emitting 'message:send' via socket for conversation ${conversationId}`);
-    socket.emit('message:send', { conversationId, content: messageContent }, (ack: { error?: string; success?: boolean; messageId?: number } | null) => {
-      // Handle acknowledgment from the server
+    socket.emit('message:send', { conversationId, content: messageContent }, (ack: { error?: string; success?: boolean; messageId?: number; created_at?: string } | null) => {
+      // Optional: Handle acknowledgment from the server
       if (ack?.error) {
-        console.error('❌ Server acknowledged message send error:', ack.error);
+        console.error('Server acknowledged message send error:', ack.error);
         // Remove the temporary message on error
         setMessages(prev => prev.filter(msg => msg.id !== tempId));
-        // TODO: Notify user of send failure
+        // Maybe show user an error
       } else if (ack?.success && ack.messageId) {
         console.log(`✅ Server acknowledged message send success. Real ID: ${ack.messageId}`);
-        // --- Update the existing temporary message with the real ID --- 
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempId ? { ...msg, id: ack.messageId as number } : msg
-        ));
-        // Remove tempId and add real ID to processed set AFTER UI update
+        // Replace temp ID with real ID in processed set
         processedMessageIds.current.delete(tempId);
         processedMessageIds.current.add(ack.messageId);
-        console.log(`🔄 Updated temp message ${tempId} with real ID ${ack.messageId}. Processed IDs:`, processedMessageIds.current);
+        
+        // Update the message in the UI with the real ID AND the server's timestamp
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempId ? { 
+            ...msg, 
+            id: ack.messageId as number, 
+            created_at: ack.created_at || msg.created_at // Use server time, fallback to optimistic time
+          } : msg
+        ));
       } else {
-        console.log('⚠️ Server acknowledgment received without success/ID or with unexpected format:', ack);
-        // Consider removing temp message if ack is unclear? 
-        // setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        console.log('Server acknowledgment received:', ack);
       }
     });
   };
@@ -1097,7 +1099,7 @@ const Chat: React.FC = () => {
                         >
                           <p>{message.content}</p>
                           <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                            {format(new Date(message.created_at), "p")}
+                            {format(new Date(message.created_at), "h:mm a")}
                           </span>
                         </div>
                       </div>
