@@ -16,6 +16,9 @@ import {
   User,
   Tooltip
 } from "@heroui/react";
+// Import Framer Motion for awesome animations
+import { motion, AnimatePresence } from "framer-motion";
+
 // Add styles for message animations
 const messageAnimationStyles = `
   @keyframes messageAppear {
@@ -583,6 +586,81 @@ const Chat: React.FC = () => {
     }
   };
 
+  // Message animations - variants for Framer Motion
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        staggerChildren: 0.07 
+      }
+    }
+  };
+
+  const messageVariants = {
+    initial: (isMyMessage: boolean) => ({
+      opacity: 0,
+      scale: 0.8,
+      y: 20,
+      x: isMyMessage ? 15 : -15,
+      rotateZ: isMyMessage ? 2 : -2,
+    }),
+    animate: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      x: 0,
+      rotateZ: 0,
+      transition: {
+        type: "spring",
+        damping: 12,
+        stiffness: 200,
+        mass: 0.8
+      }
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.8,
+      transition: {
+        duration: 0.2
+      }
+    },
+    hover: {
+      scale: 1.02,
+      boxShadow: "0px 5px 15px rgba(0,0,0,0.1)",
+      transition: {
+        type: "spring",
+        stiffness: 400,
+        damping: 10
+      }
+    }
+  };
+
+  // Special animation for brand new messages
+  const newMessageVariants = {
+    initial: (isMyMessage: boolean) => ({
+      opacity: 0,
+      scale: 0.5,
+      y: 50,
+      x: isMyMessage ? 40 : -40,
+      rotateZ: isMyMessage ? 5 : -5,
+    }),
+    animate: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      x: 0,
+      rotateZ: 0,
+      transition: {
+        type: "spring",
+        damping: 8,
+        stiffness: 100,
+        mass: 0.5,
+        bounce: 0.4
+      }
+    }
+  };
+
   // Process a message with conversation_id
   const processMessage = (message: any) => {
     // Ensure the message has the correct format
@@ -622,6 +700,16 @@ const Chat: React.FC = () => {
         console.log('Adding new message to state');
         // Add message id to newMessageIds set for animation
         setNewMessageIds(prev => new Set(prev).add(formattedMessage.id));
+        
+        // Clear new message status after animation completes
+        setTimeout(() => {
+          setNewMessageIds(prev => {
+            const updated = new Set(prev);
+            updated.delete(formattedMessage.id);
+            return updated;
+          });
+        }, 2000);
+        
         return [...prevMessages, formattedMessage];
       });
       scrollToBottom();
@@ -757,6 +845,16 @@ const Chat: React.FC = () => {
         
         // Add tempId to newMessageIds for animation
         setNewMessageIds(prev => new Set(prev).add(tempId));
+        
+        // Clear new message status after animation completes
+        setTimeout(() => {
+          setNewMessageIds(prev => {
+            const updated = new Set(prev);
+            updated.delete(tempId);
+            return updated;
+          });
+        }, 2000);
+        
         return [...prevMessages, tempMessage];
       });
       
@@ -999,17 +1097,6 @@ const Chat: React.FC = () => {
     </div>
   };
 
-  // Clear animation classes after they've run
-  useEffect(() => {
-    if (newMessageIds.size > 0) {
-      const timer = setTimeout(() => {
-        setNewMessageIds(new Set());
-      }, 1000); // Clear after animations complete
-      
-      return () => clearTimeout(timer);
-    }
-  }, [newMessageIds]);
-
   if (!isAuthenticated) {
     return <div className="p-4 text-center">Please log in to use the chat.</div>;
   }
@@ -1107,39 +1194,59 @@ const Chat: React.FC = () => {
                   ref={messageContainerRef}
                   onScroll={handleMessagesScroll}
                 >
-                  <div className="space-y-4">
+                  <motion.div 
+                    className="space-y-4"
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                  >
                     {loadingMore && (
                       <div className="flex justify-center py-2">
-                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
+                        <motion.div 
+                          className="rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        ></motion.div>
                       </div>
                     )}
                     <div ref={messagesStartRef} />
-                    {messages.map((message) => {
-                      const isMyMessage = message.sender_id === user?.id;
-                      const isNewMessage = newMessageIds.has(message.id);
-                      
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"} ${isNewMessage ? "message-new" : ""}`}
-                        >
-                          <div
-                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                              isMyMessage
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-default-100 rounded-bl-sm"
-                            }`}
+                    
+                    <AnimatePresence>
+                      {messages.map((message) => {
+                        const isMyMessage = message.sender_id === user?.id;
+                        const isNewMessage = newMessageIds.has(message.id);
+                        
+                        return (
+                          <motion.div
+                            key={message.id}
+                            className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                            custom={isMyMessage}
+                            variants={isNewMessage ? newMessageVariants : messageVariants}
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            layout
                           >
-                            <p>{message.content}</p>
-                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                              {format(new Date(message.created_at), "h:mm a")}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                            <motion.div
+                              className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                                isMyMessage
+                                  ? "bg-primary text-primary-foreground rounded-br-sm"
+                                  : "bg-default-100 rounded-bl-sm"
+                              }`}
+                              whileHover="hover"
+                            >
+                              <p>{message.content}</p>
+                              <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                                {format(new Date(message.created_at), "h:mm a")}
+                              </span>
+                            </motion.div>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                    
                     <div ref={messagesEndRef} />
-                  </div>
+                  </motion.div>
                 </ScrollShadow>
 
                 {/* Message Input */}
@@ -1164,29 +1271,57 @@ const Chat: React.FC = () => {
                         </Tooltip>
                       }
                     />
-                    <Button
-                      type="submit"
-                      color="primary"
-                      size="lg"
-                      isIconOnly
-                      radius="lg"
+                    <motion.div
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                     >
-                      <Icon icon="lucide:send" width={20} />
-                    </Button>
+                      <Button
+                        type="submit"
+                        color="primary"
+                        size="lg"
+                        isIconOnly
+                        radius="lg"
+                      >
+                        <Icon icon="lucide:send" width={20} />
+                      </Button>
+                    </motion.div>
                   </form>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">
-                <div className="text-center space-y-4">
-                  <Icon
-                    icon="lucide:message-square"
-                    className="w-12 h-12 mx-auto text-default-400"
-                  />
+                <motion.div 
+                  className="text-center space-y-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ 
+                    opacity: 1, 
+                    y: 0,
+                    transition: {
+                      type: "spring",
+                      damping: 12
+                    }
+                  }}
+                >
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.1, 1],
+                      rotate: [0, 5, 0, -5, 0]
+                    }}
+                    transition={{ 
+                      duration: 3,
+                      repeat: Infinity,
+                      repeatType: "reverse"
+                    }}
+                  >
+                    <Icon
+                      icon="lucide:message-square"
+                      className="w-12 h-12 mx-auto text-default-400"
+                    />
+                  </motion.div>
                   <p className="text-default-500">
                     Select a conversation to start chatting
                   </p>
-                </div>
+                </motion.div>
               </div>
             )}
           </CardBody>
