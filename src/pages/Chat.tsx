@@ -16,7 +16,6 @@ import {
   User,
   Tooltip
 } from "@heroui/react";
-import GooeyNav from '../components/GooeyNav';
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -1084,24 +1083,18 @@ const Chat: React.FC = () => {
                         key={message.id}
                         className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
                       >
-                        <GooeyNav
-                          particleCount={10}
-                          particleDistances={[60, 5]}
-                          colors={isMyMessage ? [1, 2, 3] : [3, 4, 5]}
+                        <div
+                          className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                            isMyMessage
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-default-100 rounded-bl-sm"
+                          }`}
                         >
-                          <div
-                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                              isMyMessage
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-default-100 rounded-bl-sm"
-                            }`}
-                          >
-                            <p>{message.content}</p>
-                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                              {format(new Date(message.created_at), "h:mm a")}
-                            </span>
-                          </div>
-                        </GooeyNav>
+                          <p>{message.content}</p>
+                          <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                            {format(new Date(message.created_at), "h:mm a")}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
