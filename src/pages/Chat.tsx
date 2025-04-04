@@ -887,23 +887,51 @@ const Chat: React.FC = () => {
     });
   };
 
-  // Handle sending a message - modified to prevent keyboard closing on mobile
-  const handleSendMessage = async (e: React.FormEvent) => {
-    // Prevent default form submission behavior which causes page refresh
-    e.preventDefault();
+  // Create a ref for the input element
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Function to maintain focus on input to prevent keyboard from closing
+  const maintainInputFocus = () => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  // Setup touchend event listener for the send button to prevent default behavior
+  useEffect(() => {
+    const sendButton = document.getElementById('send-button');
     
-    // Get the input field
-    const inputElement = document.getElementById('message-input') as HTMLInputElement;
+    if (sendButton) {
+      const handleTouchEnd = (e: TouchEvent) => {
+        e.preventDefault(); // Prevent default which would cause the keyboard to close
+        // Don't call handle send here as it will be called by the button's onClick
+      };
+      
+      sendButton.addEventListener('touchend', handleTouchEnd);
+      
+      return () => {
+        sendButton.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, []);
+  
+  // Handle sending a message
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
     
     if (!newMessage.trim() || !selectedConversation || !isAuthenticated) {
       return;
     }
     
+    // Store message content before clearing
+    const messageToBeSent = newMessage;
+    
+    // Clear the input but maintain focus
+    setNewMessage('');
+    maintainInputFocus();
+    
     try {
       const token = localStorage.getItem('accessToken');
-      
-      // Store the message content before clearing it
-      const messageToBeSent = newMessage;
       
       // Create a temporary message ID for optimistic UI update
       const tempId = Date.now();
@@ -923,18 +951,6 @@ const Chat: React.FC = () => {
       
       // Generate cosmic particles for this message
       generateParticles(tempId);
-      
-      // Clear the input value but keep focus on the input
-      setNewMessage('');
-      
-      // Keep focus on the input field to prevent keyboard from closing
-      if (inputElement) {
-        // This is critical - we need to ensure we don't lose focus during the state update
-        // Schedule this at the end of the event loop to ensure React's state updates complete first
-        window.setTimeout(() => {
-          inputElement.focus();
-        }, 0);
-      }
       
       // Add the temporary message to the UI immediately
       setMessages(prevMessages => {
@@ -969,6 +985,9 @@ const Chat: React.FC = () => {
       
       scrollToBottom();
       
+      // Ensure focus is maintained after UI updates
+      setTimeout(maintainInputFocus, 0);
+      
       // Update the conversation list with the temporary message
       setConversations(prevConversations => {
         return prevConversations.map(conv => {
@@ -1000,6 +1019,9 @@ const Chat: React.FC = () => {
         }
       );
       
+      // Ensure focus is still maintained after network request
+      maintainInputFocus();
+      
       // Add the real message ID to our processed set
       processedMessageIds.current.add(response.data.id);
       
@@ -1025,12 +1047,8 @@ const Chat: React.FC = () => {
           .concat(response.data);
       });
       
-      // Ensure input still has focus after all operations complete
-      if (inputElement) {
-        window.setTimeout(() => {
-          inputElement.focus();
-        }, 50);
-      }
+      // One final focus call to ensure keyboard stays open
+      setTimeout(maintainInputFocus, 50);
       
       // Update the conversation list with the real message
       setConversations(prevConversations => {
@@ -1054,6 +1072,8 @@ const Chat: React.FC = () => {
       console.error('Error sending message:', error);
       // Remove the temporary message if there was an error
       setMessages(prevMessages => prevMessages.filter(msg => msg.id !== Date.now()));
+      // Still maintain focus even on error
+      maintainInputFocus();
     }
   };
 
@@ -1403,6 +1423,7 @@ const Chat: React.FC = () => {
                 <div className="p-4 border-t border-divider">
                   <form onSubmit={handleSendMessage} className="flex gap-2">
                     <Input
+                      ref={inputRef}
                       id="message-input"
                       placeholder="Type a message..."
                       value={newMessage}
@@ -1410,6 +1431,8 @@ const Chat: React.FC = () => {
                       size="lg"
                       radius="lg"
                       autoComplete="off"
+                      autoFocus
+                      onBlur={() => setTimeout(maintainInputFocus, 10)} // Try to regain focus if lost
                       startContent={
                         <Tooltip content="Add attachment">
                           <Button
@@ -1428,11 +1451,17 @@ const Chat: React.FC = () => {
                       whileTap={{ scale: 0.9 }}
                     >
                       <Button
+                        id="send-button"
                         type="submit"
                         color="primary"
                         size="lg"
                         isIconOnly
                         radius="lg"
+                        onTouchEnd={(e) => {
+                          e.preventDefault();
+                          setTimeout(maintainInputFocus, 0);
+                        }}
+                        onClick={() => setTimeout(maintainInputFocus, 0)}
                       >
                         <Icon icon="lucide:send" width={20} />
                       </Button>
