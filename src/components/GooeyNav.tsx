@@ -104,7 +104,6 @@ const GooeyNav: React.FC<GooeyNavProps> = ({
     const styles = {
       left: `${pos.x - containerRect.x}px`,
       top: `${pos.y - containerRect.y}px`,
-      width: `${pos.width}px`,
       height: `${pos.height}px`,
     };
     Object.assign(filterRef.current.style, styles);
