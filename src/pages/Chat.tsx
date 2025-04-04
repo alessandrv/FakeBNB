@@ -84,6 +84,7 @@ const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -771,16 +772,15 @@ const Chat: React.FC = () => {
         return [...prevMessages, tempMessage];
       });
       
-      // Clear the input while keeping focus
+      // Clear the input field but keep focus
       setNewMessage('');
       
-      // For mobile, ensure input stays focused
-      if (isMobile) {
-        const messageInput = document.getElementById('messageInput');
-        if (messageInput) {
-          messageInput.focus();
+      // Ensure input field maintains focus after sending
+      setTimeout(() => {
+        if (messageInputRef.current) {
+          messageInputRef.current.focus();
         }
-      }
+      }, 0);
       
       scrollToBottom();
       
@@ -861,6 +861,13 @@ const Chat: React.FC = () => {
       setMessages(prevMessages => prevMessages.filter(msg => msg.id !== Date.now()));
     }
   };
+
+  // Focus the input field when the component mounts or conversation changes
+  useEffect(() => {
+    if (messageInputRef.current && selectedConversation) {
+      messageInputRef.current.focus();
+    }
+  }, [selectedConversation]);
 
   // Handle starting a new conversation
   const handleStartConversation = async () => {
@@ -1150,12 +1157,13 @@ const Chat: React.FC = () => {
               <div className="p-4 border-t border-divider">
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <Input
-                    id="messageInput"
+                    ref={messageInputRef}
                     placeholder="Type a message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     size="lg"
                     radius="lg"
+                    autoComplete="off"
                     startContent={
                       <Tooltip content="Add attachment">
                         <Button
@@ -1175,7 +1183,19 @@ const Chat: React.FC = () => {
                     size="lg"
                     isIconOnly
                     radius="lg"
-                    className="do-not-hide-keyboard"
+                    onPress={() => {
+                      // Submit the form programmatically
+                      handleSendMessage({
+                        preventDefault: () => {}
+                      } as React.FormEvent);
+                      
+                      // Re-focus the input after submit
+                      setTimeout(() => {
+                        if (messageInputRef.current) {
+                          messageInputRef.current.focus();
+                        }
+                      }, 0);
+                    }}
                   >
                     <Icon icon="lucide:send" width={20} />
                   </Button>
