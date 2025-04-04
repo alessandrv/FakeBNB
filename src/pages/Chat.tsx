@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useContext, createContext } from 'r
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 // Import Heroicons
 import { Icon } from "@iconify/react";
@@ -1097,7 +1097,7 @@ const Chat: React.FC = () => {
                         >
                           <p>{message.content}</p>
                           <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                            {formatInTimeZone(new Date(message.created_at), 'Europe/Rome', 'HH:mm')}
+                            {formatInTimeZone(parseISO(message.created_at), 'Europe/Rome', 'HH:mm')}
                           </span>
                         </div>
                       </div>
