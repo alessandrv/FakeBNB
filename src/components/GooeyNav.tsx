@@ -139,7 +139,26 @@ const GooeyNav: React.FC<GooeyNavProps> = ({
     setIsActive(true);
   };
 
+  useEffect(() => {
+    if (!containerRef.current || !elementRef.current) return;
+    
+    updateEffectPosition(elementRef.current);
+    
+    const resizeObserver = new ResizeObserver(() => {
+      if (elementRef.current) {
+        updateEffectPosition(elementRef.current);
+      }
+    });
 
+    // Auto-trigger animation after 2 seconds
+  
+
+    resizeObserver.observe(containerRef.current);
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   return (
     <div style={{width: 'fit-content', height: 'fit-content'}} className="gooey-nav-container" ref={containerRef}>
