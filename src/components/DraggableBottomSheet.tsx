@@ -346,64 +346,90 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
         ) : (
           <>
             {houses.map((house) => (
-              <Card key={house.id} className="mb-3">
+              <Card key={house.id} className="mb-3 overflow-hidden border-1 border-default-200">
                 <CardBody className="p-0">
                   <div className="flex flex-row">
-                    {/* Left: Smaller Image */}
+                    {/* Left: Image with badge */}
                     <div className="relative w-1/3">
                       <img
                         src={house.image}
                         alt={house.address}
-                        className="h-full w-full object-cover rounded-l-lg"
+                        className="h-full w-full object-cover"
                       />
                       <Button
                         isIconOnly
-                        className="absolute top-1 right-1"
+                        className="absolute top-2 right-2 bg-white/80 backdrop-blur-md shadow-sm hover:bg-white"
                         variant="flat"
-                        color="default"
+                        radius="full"
                         size="sm"
+                        aria-label="Add to favorites"
                       >
-                        <Icon icon="lucide:heart" className="text-xs" />
+                        <Icon icon="lucide:heart" className="text-danger" />
                       </Button>
+                      {house.price && (
+                        <div className="absolute bottom-2 left-2">
+                          <Chip
+                            size="sm" 
+                            className="font-semibold bg-white/80 backdrop-blur-md shadow-sm text-primary"
+                          >
+                            ${house.price}/mo
+                          </Chip>
+                        </div>
+                      )}
                     </div>
                     
-                    {/* Right: Content */}
-                    <div className="w-2/3 p-2">
-                      <div className="flex justify-between items-start mb-1">
-                        <h3 className="font-semibold text-sm truncate pr-2">{house.address}</h3>
-                        <div className="flex items-center">
-                          <Icon icon="lucide:star" className="text-warning text-xs" />
-                          <span className="ml-1 text-xs">{house.rating}</span>
+                    {/* Right: Content with better spacing */}
+                    <div className="w-2/3 p-3 flex flex-col">
+                      {/* Header with address and rating */}
+                      <div className="flex justify-between items-start gap-2 mb-2">
+                        <h3 className="font-semibold text-sm line-clamp-2">{house.address}</h3>
+                        {house.rating && (
+                          <div className="flex items-center gap-1 bg-warning-50 px-1.5 py-0.5 rounded-md">
+                            <Icon icon="lucide:star" className="text-warning text-xs" />
+                            <span className="text-xs font-medium text-warning-700">{house.rating}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Features with icons */}
+                      <div className="flex gap-3 text-xs text-default-600 mb-2">
+                        {house.beds && (
+                          <div className="flex items-center gap-1">
+                            <Icon icon="lucide:bed" className="text-primary-400" />
+                            <span>{house.beds} beds</span>
+                          </div>
+                        )}
+                        {house.baths && (
+                          <div className="flex items-center gap-1">
+                            <Icon icon="lucide:bath" className="text-primary-400" />
+                            <span>{house.baths} baths</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Reviews */}
+                      {house.reviews && (
+                        <div className="flex items-center text-xs text-default-500 mb-auto">
+                          <Icon icon="lucide:message-circle" className="mr-1 text-default-400" />
+                          <span>{house.reviews} reviews</span>
                         </div>
-                      </div>
+                      )}
                       
-                      {/* Amenities */}
-                      <div className="flex gap-1 text-xs text-default-500">
-                        <span>{house.beds} beds</span>
-                        <span>•</span>
-                        <span>{house.baths} baths</span>
-                      </div>
-                      
-                      {/* Price and Reviews */}
-                      <div className="mt-1 flex justify-between items-center">
-                        <span className="font-semibold text-sm">${house.price}/month</span>
-                        <span className="text-xs text-default-500">{house.reviews} reviews</span>
-                      </div>
-                      
-                      {/* Buttons in a row */}
-                      <div className="mt-2 flex gap-1 justify-between">
+                      {/* Action buttons */}
+                      <div className="mt-2 grid grid-cols-2 gap-2">
                         <Link 
                           to={`/property/${house.id}`} 
-                          className="flex-1"
+                          className="col-span-1"
                           onClick={() => onViewDetails?.(house.id)}
                         >
                           <Button 
                             size="sm"
                             variant="solid" 
                             color="primary"
-                            className="w-full text-xs h-8 bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
+                            className="w-full text-xs h-8 bg-gradient-to-tr from-gradient-first to-gradient-second"
+                            startContent={<Icon icon="lucide:info" className="text-xs" />}
                           >
-                            View details
+                            Details
                           </Button>
                         </Link>
                         {onFindOnMap && house.location && (
@@ -411,7 +437,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
                             size="sm"
                             variant="flat" 
                             color="primary"
-                            className="flex-1 text-xs h-8"
+                            className="col-span-1 text-xs h-8"
                             startContent={<Icon icon="lucide:map-pin" className="text-xs" />}
                             onClick={() => {
                               onFindOnMap(house.location!);
@@ -419,7 +445,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
                               setSheetState('collapsed');
                             }}
                           >
-                            Find on map
+                            On map
                           </Button>
                         )}
                       </div>
