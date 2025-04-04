@@ -98,6 +98,8 @@ const Chat: React.FC = () => {
   const navigate = useNavigate();
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
+  // Add a reference for CSS animation
+  const animationCssRef = useRef<HTMLStyleElement | null>(null);
   
   // Debounce function to prevent rapid processing of the same message
   const debounce = (func: Function, wait: number) => {
@@ -107,6 +109,37 @@ const Chat: React.FC = () => {
       timeout = setTimeout(() => func(...args), wait);
     };
   };
+  
+  // Create and inject CSS animation rules
+  useEffect(() => {
+    // Create style element if it doesn't exist
+    if (!animationCssRef.current) {
+      const style = document.createElement('style');
+      style.type = 'text/css';
+      style.innerHTML = `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .message-enter {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        .message-container > div:last-child {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+      `;
+      document.head.appendChild(style);
+      animationCssRef.current = style;
+    }
+    
+    // Clean up style on unmount
+    return () => {
+      if (animationCssRef.current) {
+        document.head.removeChild(animationCssRef.current);
+        animationCssRef.current = null;
+      }
+    };
+  }, []);
 
   // Check for mobile screen size
   useEffect(() => {
@@ -661,7 +694,7 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Process a message with conversation_id
+  // Modify the process message function to handle animations
   const processMessage = (message: any) => {
     // Ensure the message has the correct format
     const formattedMessage: Message = {
@@ -698,9 +731,19 @@ const Chat: React.FC = () => {
         }
         
         console.log('Adding new message to state');
-        return [...prevMessages, formattedMessage];
+        // Add the message with an animation class
+        const newMessage = {
+          ...formattedMessage,
+          _isNew: true // Flag for animation
+        };
+        
+        // After a small delay, scroll to bottom without interrupting animation
+        setTimeout(() => {
+          scrollToBottom();
+        }, 50);
+        
+        return [...prevMessages, newMessage];
       });
-      scrollToBottom();
     } else {
       console.log('Message not for current conversation or no conversation selected');
       
@@ -788,7 +831,7 @@ const Chat: React.FC = () => {
     });
   };
 
-  // Handle sending a message
+  // Handle sending a message with animation
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -812,7 +855,8 @@ const Chat: React.FC = () => {
           first_name: user?.first_name || '',
           last_name: user?.last_name || '',
           profilePic: user?.profilePic
-        }
+        },
+        _isNew: true // Flag for animation
       };
       
       // Add the temporary message to the UI immediately
@@ -1159,7 +1203,7 @@ const Chat: React.FC = () => {
           isMobile 
             ? showConversations ? "hidden" : "w-full" 
             : "flex-1"
-        } p-0 h-full transition-all duration-200 ease-in-out`}
+        } p-0 h-full`}
       >
         <CardBody className="p-0 h-full flex flex-col">
           {selectedConversation ? (
@@ -1192,7 +1236,7 @@ const Chat: React.FC = () => {
                 ref={messageContainerRef}
                 onScroll={handleMessagesScroll}
               >
-                <div className="space-y-4 relative min-h-[200px]">
+                <div className="space-y-4 message-container">
                   {loadingMore && (
                     <div className="flex justify-center py-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
@@ -1211,12 +1255,13 @@ const Chat: React.FC = () => {
                       <p className="text-tiny text-default-400">Start the conversation by sending a message</p>
                     </div>
                   ) : (
-                    messages.map((message) => {
+                    messages.map((message: any) => {
                       const isMyMessage = message.sender_id === user?.id;
+                      const isNewMessage = message._isNew;
                       return (
                         <div
                           key={message.id}
-                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"} ${isNewMessage ? "message-enter" : ""}`}
                         >
                           <div
                             className={`max-w-[70%] px-4 py-2 rounded-xl ${
