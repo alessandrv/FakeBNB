@@ -84,7 +84,6 @@ const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
-  const messageInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -692,6 +691,40 @@ const Chat: React.FC = () => {
     });
   };
 
+  // Helper to check if element accepts input
+  const acceptsInput = (elem: HTMLElement | null) => {
+    if (!elem) return false;
+    
+    const tag = elem.tagName;
+    return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || 
+           elem.isContentEditable || (elem.tabIndex !== undefined && elem.tabIndex >= 0);
+  };
+  
+  // Set up the keyboard event listener for mobile
+  useEffect(() => {
+    const handleTouchEnd = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      const dontDiscardKeyboard = target.classList.contains('do-not-hide-keyboard');
+      
+      if (dontDiscardKeyboard) {
+        // Prevent default behavior but allow the click to proceed
+        e.preventDefault();
+        // We'll let the normal click handler process the action
+      } else if (!acceptsInput(target)) {
+        // If clicking outside of input elements, hide keyboard
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }
+    };
+    
+    document.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
+
   // Handle sending a message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -738,15 +771,18 @@ const Chat: React.FC = () => {
         return [...prevMessages, tempMessage];
       });
       
+      // Clear the input while keeping focus
       setNewMessage('');
-      scrollToBottom();
       
-      // Keep focus on the input to keep the virtual keyboard open on mobile
-      setTimeout(() => {
-        if (messageInputRef.current) {
-          messageInputRef.current.focus();
+      // For mobile, ensure input stays focused
+      if (isMobile) {
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+          messageInput.focus();
         }
-      }, 0);
+      }
+      
+      scrollToBottom();
       
       // Update the conversation list with the temporary message
       setConversations(prevConversations => {
@@ -1114,12 +1150,12 @@ const Chat: React.FC = () => {
               <div className="p-4 border-t border-divider">
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <Input
+                    id="messageInput"
                     placeholder="Type a message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     size="lg"
                     radius="lg"
-                    ref={messageInputRef}
                     startContent={
                       <Tooltip content="Add attachment">
                         <Button
@@ -1139,6 +1175,7 @@ const Chat: React.FC = () => {
                     size="lg"
                     isIconOnly
                     radius="lg"
+                    className="do-not-hide-keyboard"
                   >
                     <Icon icon="lucide:send" width={20} />
                   </Button>
