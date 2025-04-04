@@ -1096,7 +1096,7 @@ const Chat: React.FC = () => {
                         >
                           <p>{message.content}</p>
                           <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                            {format(new Date(message.created_at), "h:mm a")}
+                            {format(new Date(message.created_at), "h:mm a", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })}
                           </span>
                         </div>
                       </div>
