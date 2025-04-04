@@ -82,10 +82,15 @@ const Chat: React.FC = () => {
   const [currentRoom, setCurrentRoom] = useState<string | null>(null);
   const [pendingMessages, setPendingMessages] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesStartRef = useRef<HTMLDivElement>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showConversations, setShowConversations] = useState(true);
   const { setHideNavbar } = useContext(NavbarContext);
+  const [messageOffset, setMessageOffset] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
@@ -379,12 +384,17 @@ const Chat: React.FC = () => {
             return;
           }
           
+          setLoading(true);
           const response = await axios.get(
             `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
             { 
               withCredentials: true,
               headers: {
                 Authorization: `Bearer ${token}`
+              },
+              params: {
+                limit: 50,
+                offset: 0
               }
             }
           );
@@ -412,6 +422,8 @@ const Chat: React.FC = () => {
             }, []);
             
             setMessages(uniqueMessages.reverse());
+            setMessageOffset(50);
+            setHasMoreMessages(response.data.length >= 50);
 
             // Add a small delay to ensure the DOM has updated before scrolling
             setTimeout(() => {
@@ -420,7 +432,10 @@ const Chat: React.FC = () => {
           } else {
             console.error('Invalid response format for messages:', response.data);
             setMessages([]);
+            setHasMoreMessages(false);
           }
+          
+          setLoading(false);
           
           // On mobile, hide conversations when a chat is selected
           if (isMobile) {
@@ -428,6 +443,7 @@ const Chat: React.FC = () => {
           }
         } catch (error) {
           console.error('Error fetching messages:', error);
+          setLoading(false);
           
           // Handle rate limiting
           if (axios.isAxiosError(error) && error.response?.status === 429) {
@@ -449,6 +465,103 @@ const Chat: React.FC = () => {
 
     fetchMessages();
   }, [selectedConversation, isAuthenticated, isMobile]);
+
+  // Function to load more messages when scrolling up
+  const loadMoreMessages = async () => {
+    if (!selectedConversation || !hasMoreMessages || loadingMore) {
+      return;
+    }
+    
+    try {
+      setLoadingMore(true);
+      const token = localStorage.getItem('accessToken');
+      
+      if (!token) {
+        console.error('No access token found');
+        setLoadingMore(false);
+        return;
+      }
+      
+      // Save scroll position and height before loading more messages
+      const container = messageContainerRef.current;
+      const oldScrollHeight = container?.scrollHeight || 0;
+      
+      const response = await axios.get(
+        `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
+        { 
+          withCredentials: true,
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          params: {
+            limit: 50,
+            offset: messageOffset
+          }
+        }
+      );
+      
+      if (response.data && Array.isArray(response.data)) {
+        // Process new messages
+        const newMessages = response.data.reduce((acc: Message[], message: Message) => {
+          // Check if already processed
+          if (processedMessageIds.current.has(message.id)) {
+            return acc;
+          }
+          
+          // Add to processed set
+          processedMessageIds.current.add(message.id);
+          
+          acc.push(message);
+          return acc;
+        }, []);
+        
+        // Update hasMoreMessages flag
+        setHasMoreMessages(response.data.length >= 50);
+        
+        if (newMessages.length > 0) {
+          // Add new messages to the beginning of the array (older messages)
+          setMessages(prevMessages => [...newMessages.reverse(), ...prevMessages]);
+          setMessageOffset(messageOffset + 50);
+          
+          // Restore scroll position after new messages are added
+          setTimeout(() => {
+            if (container) {
+              const newScrollHeight = container.scrollHeight;
+              const heightDifference = newScrollHeight - oldScrollHeight;
+              container.scrollTop = heightDifference;
+            }
+          }, 50);
+        } else {
+          // No new messages
+          setHasMoreMessages(false);
+        }
+      } else {
+        console.error('Invalid response format for older messages:', response.data);
+        setHasMoreMessages(false);
+      }
+    } catch (error) {
+      console.error('Error loading more messages:', error);
+      
+      // Handle specific errors
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 429) {
+          console.log('Rate limited, try again later');
+        } else if (error.response?.status === 401) {
+          console.error('Authentication error');
+        }
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Handle scroll event to detect when user reaches top of messages
+  const handleMessagesScroll = () => {
+    const container = messageContainerRef.current;
+    if (container && container.scrollTop <= 20 && hasMoreMessages && !loadingMore) {
+      loadMoreMessages();
+    }
+  };
 
   // Process a message with conversation_id
   const processMessage = (message: any) => {
@@ -950,8 +1063,18 @@ const Chat: React.FC = () => {
               </div>
 
               {/* Messages Area */}
-              <ScrollShadow className="flex-1 p-4">
+              <ScrollShadow 
+                className="flex-1 p-4" 
+                ref={messageContainerRef}
+                onScroll={handleMessagesScroll}
+              >
                 <div className="space-y-4">
+                  {loadingMore && (
+                    <div className="flex justify-center py-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
+                    </div>
+                  )}
+                  <div ref={messagesStartRef} />
                   {messages.map((message) => {
                     const isMyMessage = message.sender_id === user?.id;
                     return (
