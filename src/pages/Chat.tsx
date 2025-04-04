@@ -1130,7 +1130,6 @@ const Chat: React.FC = () => {
                     size="lg"
                     isIconOnly
                     radius="lg"
-                    className="do-not-hide-keyboard"
                     onMouseDown={(e) => e.preventDefault()}
                   >
                     <Icon icon="lucide:send" width={20} />
