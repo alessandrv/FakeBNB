@@ -19,21 +19,47 @@ import {
 // Import Framer Motion for awesome animations
 import { motion, AnimatePresence } from "framer-motion";
 
-// Add styles for message animations
-const messageAnimationStyles = `
-  @keyframes messageAppear {
-    from {
+// Define cosmic materialization animation styles
+const cosmicAnimationStyles = `
+  @keyframes particleFadeIn {
+    0% {
       opacity: 0;
-      transform: translateY(20px);
     }
-    to {
+    100% {
       opacity: 1;
-      transform: translateY(0);
     }
   }
-
-  .message-new {
-    animation: messageAppear 0.3s ease-out forwards;
+  
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+    animation: particleFadeIn 0.8s forwards;
+  }
+  
+  .message-container {
+    position: relative;
+    overflow: visible;
+  }
+  
+  .cosmic-material {
+    position: relative;
+    overflow: visible;
+    backdrop-filter: blur(8px);
+  }
+  
+  .cosmic-material::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: inherit;
+    filter: blur(10px);
+    opacity: 0.7;
+    z-index: -1;
+    border-radius: inherit;
   }
 `;
 
@@ -113,6 +139,7 @@ const Chat: React.FC = () => {
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [newMessageIds, setNewMessageIds] = useState<Set<number>>(new Set());
+  const [particles, setParticles] = useState<{ id: string; x: number; y: number; size: number; delay: number; opacity: number }[]>([]);
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
@@ -586,79 +613,136 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Message animations - variants for Framer Motion
-  const containerVariants = {
+  // Function to generate cosmic particles for a message
+  const generateParticles = (messageId: number) => {
+    // Generate 15-25 random particles
+    const particleCount = Math.floor(Math.random() * 10) + 15;
+    const newParticles: { id: string; x: number; y: number; size: number; delay: number; opacity: number }[] = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+      newParticles.push({
+        id: `${messageId}-${i}`,
+        x: Math.random() * 200 - 100, // Position around the message (-100 to 100)
+        y: Math.random() * 200 - 100,
+        size: Math.random() * 6 + 2, // Size between 2-8px
+        delay: Math.random() * 0.5,
+        opacity: Math.random() * 0.7 + 0.3
+      });
+    }
+    
+    setParticles(prev => [...prev, ...newParticles]);
+    
+    // Remove particles after animation completes
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => !p.id.startsWith(`${messageId}-`)));
+    }, 2000);
+  };
+  
+  // Advanced cosmic materialization variants
+  const cosmicContainerVariants = {
     hidden: { opacity: 0 },
     visible: { 
       opacity: 1,
       transition: { 
-        staggerChildren: 0.07 
+        staggerChildren: 0.08,
+        delayChildren: 0.1
       }
     }
   };
 
-  const messageVariants = {
-    initial: (isMyMessage: boolean) => ({
+  const cosmicMessageVariants = {
+    hidden: (isMyMessage: boolean) => ({
       opacity: 0,
-      scale: 0.8,
-      y: 20,
-      x: isMyMessage ? 15 : -15,
-      rotateZ: isMyMessage ? 2 : -2,
+      scale: 0.1,
+      x: isMyMessage ? 50 : -50,
+      y: 30,
+      rotate: isMyMessage ? 20 : -20,
+      filter: "blur(20px) brightness(1.5)",
+      boxShadow: "0 0 30px rgba(255,255,255,0.8)"
     }),
-    animate: {
+    visible: {
       opacity: 1,
       scale: 1,
-      y: 0,
       x: 0,
-      rotateZ: 0,
+      y: 0,
+      rotate: 0,
+      filter: "blur(0px) brightness(1)",
+      boxShadow: "0 0 0px rgba(255,255,255,0)",
       transition: {
         type: "spring",
-        damping: 12,
-        stiffness: 200,
-        mass: 0.8
-      }
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.8,
-      transition: {
-        duration: 0.2
+        damping: 10,
+        stiffness: 80,
+        mass: 0.8,
+        duration: 1.2
       }
     },
     hover: {
       scale: 1.02,
-      boxShadow: "0px 5px 15px rgba(0,0,0,0.1)",
+      boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
+      transition: {
+        duration: 0.3
+      }
+    }
+  };
+  
+  // Content animation for text appearing letter by letter
+  const textContentVariants = {
+    hidden: {
+      opacity: 0
+    },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.02,
+        delayChildren: 0.2
+      }
+    }
+  };
+  
+  const letterVariants = {
+    hidden: {
+      opacity: 0,
+      y: 20,
+      rotate: Math.random() * 30 - 15,
+      filter: "blur(10px)"
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      rotate: 0,
+      filter: "blur(0px)",
       transition: {
         type: "spring",
-        stiffness: 400,
-        damping: 10
+        damping: 12,
+        stiffness: 100
       }
     }
   };
 
-  // Special animation for brand new messages
-  const newMessageVariants = {
-    initial: (isMyMessage: boolean) => ({
-      opacity: 0,
-      scale: 0.5,
-      y: 50,
-      x: isMyMessage ? 40 : -40,
-      rotateZ: isMyMessage ? 5 : -5,
-    }),
-    animate: {
-      opacity: 1,
-      scale: 1,
-      y: 0,
-      x: 0,
-      rotateZ: 0,
-      transition: {
-        type: "spring",
-        damping: 8,
-        stiffness: 100,
-        mass: 0.5,
-        bounce: 0.4
-      }
-    }
+  // Render text with letter-by-letter animation
+  const AnimatedText = ({ text }: { text: string }) => {
+    return (
+      <motion.span
+        variants={textContentVariants}
+        initial="hidden"
+        animate="visible"
+        className="inline-block"
+      >
+        {text.split('').map((char, index) => (
+          <motion.span
+            key={index}
+            variants={letterVariants}
+            className="inline-block"
+            style={{ 
+              display: char === ' ' ? 'inline' : 'inline-block',
+              whiteSpace: 'pre-wrap' 
+            }}
+          >
+            {char}
+          </motion.span>
+        ))}
+      </motion.span>
+    );
   };
 
   // Process a message with conversation_id
@@ -701,6 +785,9 @@ const Chat: React.FC = () => {
         // Add message id to newMessageIds set for animation
         setNewMessageIds(prev => new Set(prev).add(formattedMessage.id));
         
+        // Generate cosmic particles for this new message
+        generateParticles(formattedMessage.id);
+        
         // Clear new message status after animation completes
         setTimeout(() => {
           setNewMessageIds(prev => {
@@ -708,7 +795,7 @@ const Chat: React.FC = () => {
             updated.delete(formattedMessage.id);
             return updated;
           });
-        }, 2000);
+        }, 3000);
         
         return [...prevMessages, formattedMessage];
       });
@@ -800,9 +887,12 @@ const Chat: React.FC = () => {
     });
   };
 
-  // Handle sending a message
+  // Handle sending a message - modified to prevent keyboard closing on mobile
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Get the input element and focus it to keep keyboard open
+    const inputElement = document.getElementById('message-input') as HTMLInputElement;
     
     if (!newMessage.trim() || !selectedConversation || !isAuthenticated) {
       return;
@@ -827,11 +917,27 @@ const Chat: React.FC = () => {
         }
       };
       
+      // Generate cosmic particles for this message
+      generateParticles(tempId);
+      
+      // Get current input value before clearing
+      const messageToBeSent = newMessage;
+      
+      // Clear input but maintain focus to keep keyboard open
+      setNewMessage('');
+      
+      // Re-focus the input element after a small delay
+      setTimeout(() => {
+        if (inputElement) {
+          inputElement.focus();
+        }
+      }, 20);
+      
       // Add the temporary message to the UI immediately
       setMessages(prevMessages => {
         // Check if a similar message already exists
         const exists = prevMessages.some(msg => 
-          msg.content === newMessage && 
+          msg.content === messageToBeSent && 
           msg.sender_id === user?.id && 
           msg.conversation_id === selectedConversation.id &&
           // Only consider it a duplicate if it was sent in the last 5 seconds
@@ -853,12 +959,11 @@ const Chat: React.FC = () => {
             updated.delete(tempId);
             return updated;
           });
-        }, 2000);
+        }, 3000);
         
         return [...prevMessages, tempMessage];
       });
       
-      setNewMessage('');
       scrollToBottom();
       
       // Update the conversation list with the temporary message
@@ -869,7 +974,7 @@ const Chat: React.FC = () => {
               ...conv,
               last_message: {
                 id: tempId,
-                content: newMessage,
+                content: messageToBeSent,
                 created_at: new Date().toISOString(),
                 sender_id: user?.id || 0
               },
@@ -883,7 +988,7 @@ const Chat: React.FC = () => {
       // Send the message to the server
       const response = await axios.post(
         `${API_URL}/api/chat/conversations/${selectedConversation.id}/messages`,
-        { content: newMessage },
+        { content: messageToBeSent },
         { 
           withCredentials: true,
           headers: {
@@ -894,6 +999,9 @@ const Chat: React.FC = () => {
       
       // Add the real message ID to our processed set
       processedMessageIds.current.add(response.data.id);
+      
+      // Generate cosmic particles for the real message
+      generateParticles(response.data.id);
       
       // Replace the temporary message with the real one from the server
       setMessages(prevMessages => {
@@ -1107,8 +1215,8 @@ const Chat: React.FC = () => {
 
   return (
     <>
-      {/* Add the animation styles */}
-      <style>{messageAnimationStyles}</style>
+      {/* Add the cosmic animation styles */}
+      <style>{cosmicAnimationStyles}</style>
       
       <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
         {/* Conversations List */}
@@ -1190,13 +1298,31 @@ const Chat: React.FC = () => {
 
                 {/* Messages Area */}
                 <ScrollShadow 
-                  className="flex-1 p-4" 
+                  className="flex-1 p-4 relative overflow-hidden" 
                   ref={messageContainerRef}
                   onScroll={handleMessagesScroll}
                 >
+                  {/* Cosmic particles container */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {particles.map((particle) => (
+                      <div
+                        key={particle.id}
+                        className="particle"
+                        style={{
+                          width: `${particle.size}px`,
+                          height: `${particle.size}px`,
+                          left: `calc(50% + ${particle.x}px)`,
+                          top: `calc(50% + ${particle.y}px)`,
+                          opacity: particle.opacity,
+                          animationDelay: `${particle.delay}s`
+                        }}
+                      />
+                    ))}
+                  </div>
+                  
                   <motion.div 
-                    className="space-y-4"
-                    variants={containerVariants}
+                    className="space-y-4 z-10 relative"
+                    variants={cosmicContainerVariants}
                     initial="hidden"
                     animate="visible"
                   >
@@ -1204,8 +1330,18 @@ const Chat: React.FC = () => {
                       <div className="flex justify-center py-2">
                         <motion.div 
                           className="rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          animate={{ 
+                            rotate: 360,
+                            boxShadow: [
+                              "0 0 10px rgba(120, 120, 255, 0.7)",
+                              "0 0 20px rgba(120, 120, 255, 0.9)",
+                              "0 0 10px rgba(120, 120, 255, 0.7)"
+                            ]
+                          }}
+                          transition={{ 
+                            rotate: { duration: 1, repeat: Infinity, ease: "linear" },
+                            boxShadow: { duration: 1.5, repeat: Infinity, yoyo: true }
+                          }}
                         ></motion.div>
                       </div>
                     )}
@@ -1219,23 +1355,27 @@ const Chat: React.FC = () => {
                         return (
                           <motion.div
                             key={message.id}
-                            className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                            className={`flex ${isMyMessage ? "justify-end" : "justify-start"} message-container`}
                             custom={isMyMessage}
-                            variants={isNewMessage ? newMessageVariants : messageVariants}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
+                            variants={cosmicMessageVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="hidden"
                             layout
                           >
                             <motion.div
-                              className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                              className={`max-w-[70%] px-4 py-2 rounded-xl cosmic-material ${
                                 isMyMessage
                                   ? "bg-primary text-primary-foreground rounded-br-sm"
                                   : "bg-default-100 rounded-bl-sm"
                               }`}
                               whileHover="hover"
                             >
-                              <p>{message.content}</p>
+                              {isNewMessage ? (
+                                <AnimatedText text={message.content} />
+                              ) : (
+                                <p>{message.content}</p>
+                              )}
                               <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
                                 {format(new Date(message.created_at), "h:mm a")}
                               </span>
@@ -1253,11 +1393,13 @@ const Chat: React.FC = () => {
                 <div className="p-4 border-t border-divider">
                   <form onSubmit={handleSendMessage} className="flex gap-2">
                     <Input
+                      id="message-input"
                       placeholder="Type a message..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       size="lg"
                       radius="lg"
+                      autoComplete="off"
                       startContent={
                         <Tooltip content="Add attachment">
                           <Button
@@ -1292,30 +1434,34 @@ const Chat: React.FC = () => {
               <div className="flex-1 flex items-center justify-center">
                 <motion.div 
                   className="text-center space-y-4"
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, filter: "blur(20px)" }}
                   animate={{ 
                     opacity: 1, 
                     y: 0,
+                    filter: "blur(0px)",
                     transition: {
-                      type: "spring",
-                      damping: 12
+                      duration: 1,
+                      ease: "easeOut"
                     }
                   }}
                 >
                   <motion.div
                     animate={{ 
-                      scale: [1, 1.1, 1],
-                      rotate: [0, 5, 0, -5, 0]
+                      scale: [1, 1.2, 1],
+                      rotate: [0, 10, 0, -10, 0],
+                      filter: ["drop-shadow(0 0 0px rgba(120, 120, 255, 0))", 
+                              "drop-shadow(0 0 15px rgba(120, 120, 255, 0.8))",
+                              "drop-shadow(0 0 0px rgba(120, 120, 255, 0))"]
                     }}
                     transition={{ 
-                      duration: 3,
+                      duration: 4,
                       repeat: Infinity,
                       repeatType: "reverse"
                     }}
                   >
                     <Icon
                       icon="lucide:message-square"
-                      className="w-12 h-12 mx-auto text-default-400"
+                      className="w-16 h-16 mx-auto text-primary/60"
                     />
                   </motion.div>
                   <p className="text-default-500">
