@@ -98,8 +98,6 @@ const Chat: React.FC = () => {
   const navigate = useNavigate();
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
-  // Add a reference for CSS animation
-  const animationCssRef = useRef<HTMLStyleElement | null>(null);
   
   // Debounce function to prevent rapid processing of the same message
   const debounce = (func: Function, wait: number) => {
@@ -109,37 +107,6 @@ const Chat: React.FC = () => {
       timeout = setTimeout(() => func(...args), wait);
     };
   };
-  
-  // Create and inject CSS animation rules
-  useEffect(() => {
-    // Create style element if it doesn't exist
-    if (!animationCssRef.current) {
-      const style = document.createElement('style');
-      style.type = 'text/css';
-      style.innerHTML = `
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .message-enter {
-          animation: fadeIn 0.3s ease-out forwards;
-        }
-        .message-container > div:last-child {
-          animation: fadeIn 0.3s ease-out forwards;
-        }
-      `;
-      document.head.appendChild(style);
-      animationCssRef.current = style;
-    }
-    
-    // Clean up style on unmount
-    return () => {
-      if (animationCssRef.current) {
-        document.head.removeChild(animationCssRef.current);
-        animationCssRef.current = null;
-      }
-    };
-  }, []);
 
   // Check for mobile screen size
   useEffect(() => {
@@ -197,7 +164,6 @@ const Chat: React.FC = () => {
       if (token) {
         console.log('Connecting to socket with token');
         
-        // Create socket connection
         const newSocket = io(API_URL, {
           auth: { token },
           withCredentials: true,
@@ -224,29 +190,6 @@ const Chat: React.FC = () => {
           // If a conversation is already selected, join that room immediately
           if (selectedConversation) {
             console.log(`Joining selected conversation room on connect: conversation:${selectedConversation.id}`);
-            newSocket.emit('join_conversation', selectedConversation.id);
-          }
-        });
-
-        // Track connection status
-        newSocket.io.on("reconnect_attempt", () => {
-          console.log("Socket attempting to reconnect");
-        });
-        
-        newSocket.io.on("reconnect", () => {
-          console.log("Socket reconnected successfully");
-          
-          // Re-join conversation rooms after reconnection
-          if (conversations.length > 0) {
-            conversations.forEach((conv) => {
-              console.log(`Re-joining room after reconnect: conversation:${conv.id}`);
-              newSocket.emit('join_conversation', conv.id);
-            });
-          }
-          
-          // Ensure the selected conversation room is rejoined
-          if (selectedConversation) {
-            console.log(`Re-joining selected conversation after reconnect: conversation:${selectedConversation.id}`);
             newSocket.emit('join_conversation', selectedConversation.id);
           }
         });
@@ -293,20 +236,6 @@ const Chat: React.FC = () => {
         newSocket.on('reconnect_failed', () => {
           console.error('Socket reconnection failed');
         });
-
-        // Debug socket status periodically
-        const socketStatusInterval = setInterval(() => {
-          if (newSocket) {
-            console.log('Socket status check - Connected:', newSocket.connected);
-            console.log('Current room:', currentRoom);
-            
-            // If we have a selected conversation but not connected to its room, try to join
-            if (selectedConversation && (!currentRoom || currentRoom !== `conversation:${selectedConversation.id}`)) {
-              console.log('Re-joining room during status check:', selectedConversation.id);
-              newSocket.emit('join_conversation', selectedConversation.id);
-            }
-          }
-        }, 30000); // Check every 30 seconds
 
         // Debounced message handler to prevent duplicate processing
         const debouncedHandleNewMessage = debounce((message: any) => {
@@ -366,12 +295,11 @@ const Chat: React.FC = () => {
           if (selectedConversation) {
             newSocket.emit('leave_conversation', selectedConversation.id);
           }
-          clearInterval(socketStatusInterval);
           newSocket.disconnect();
         };
       }
     }
-  }, [isAuthenticated, user, conversations, selectedConversation, currentRoom]);
+  }, [isAuthenticated, user, conversations, selectedConversation]);
 
   // Ensure we join the conversation room when selected
   useEffect(() => {
@@ -386,20 +314,6 @@ const Chat: React.FC = () => {
       
       // Process any pending messages now that we have conversation context
       processPendingMessages();
-      
-      // Force a socket reconnection attempt if socket appears to be disconnected
-      if (!socket.connected) {
-        console.log('Socket appears disconnected, attempting to reconnect...');
-        socket.connect();
-        
-        // After a short delay, try joining the room again
-        setTimeout(() => {
-          if (socket.connected) {
-            console.log('Retrying room join after reconnection attempt');
-            socket.emit('join_conversation', selectedConversation.id);
-          }
-        }, 1000);
-      }
       
       return () => {
         console.log(`Leaving conversation room: conversation:${selectedConversation.id}`);
@@ -535,30 +449,7 @@ const Chat: React.FC = () => {
             // Ensure we're connected to the socket room for this conversation
             if (socket) {
               console.log(`Ensuring socket is connected for conversation: ${selectedConversation.id}`);
-              
-              // If socket isn't connected, try to reconnect
-              if (!socket.connected) {
-                console.log('Socket not connected, attempting to reconnect...');
-                socket.connect();
-              }
-              
-              // Join the conversation room
               socket.emit('join_conversation', selectedConversation.id);
-              
-              // Verify connection status
-              setTimeout(() => {
-                console.log('Checking socket connection status after room join:', socket.connected);
-                if (!socket.connected) {
-                  console.log('Socket still not connected, attempting another reconnect...');
-                  socket.connect();
-                  
-                  // Try joining one more time after a short delay
-                  setTimeout(() => {
-                    console.log('Second attempt to join room');
-                    socket.emit('join_conversation', selectedConversation.id);
-                  }, 1000);
-                }
-              }, 500);
             }
           } else {
             console.error('Invalid response format for messages:', response.data);
@@ -694,7 +585,7 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Modify the process message function to handle animations
+  // Process a message with conversation_id
   const processMessage = (message: any) => {
     // Ensure the message has the correct format
     const formattedMessage: Message = {
@@ -731,19 +622,9 @@ const Chat: React.FC = () => {
         }
         
         console.log('Adding new message to state');
-        // Add the message with an animation class
-        const newMessage = {
-          ...formattedMessage,
-          _isNew: true // Flag for animation
-        };
-        
-        // After a small delay, scroll to bottom without interrupting animation
-        setTimeout(() => {
-          scrollToBottom();
-        }, 50);
-        
-        return [...prevMessages, newMessage];
+        return [...prevMessages, formattedMessage];
       });
+      scrollToBottom();
     } else {
       console.log('Message not for current conversation or no conversation selected');
       
@@ -831,7 +712,7 @@ const Chat: React.FC = () => {
     });
   };
 
-  // Handle sending a message with animation
+  // Handle sending a message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -855,8 +736,7 @@ const Chat: React.FC = () => {
           first_name: user?.first_name || '',
           last_name: user?.last_name || '',
           profilePic: user?.profilePic
-        },
-        _isNew: true // Flag for animation
+        }
       };
       
       // Add the temporary message to the UI immediately
@@ -1140,6 +1020,17 @@ const Chat: React.FC = () => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Spinner size="lg" color="primary" />
+         
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-64px)] gap-4 p-4 bg-content1">
       {/* Conversations List */}
@@ -1203,7 +1094,7 @@ const Chat: React.FC = () => {
           isMobile 
             ? showConversations ? "hidden" : "w-full" 
             : "flex-1"
-        } p-0 h-full`}
+        } p-0 h-full transition-all duration-200 ease-in-out`}
       >
         <CardBody className="p-0 h-full flex flex-col">
           {selectedConversation ? (
@@ -1236,7 +1127,7 @@ const Chat: React.FC = () => {
                 ref={messageContainerRef}
                 onScroll={handleMessagesScroll}
               >
-                <div className="space-y-4 message-container">
+                <div className="space-y-4 relative min-h-[200px]">
                   {loadingMore && (
                     <div className="flex justify-center py-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
@@ -1255,13 +1146,12 @@ const Chat: React.FC = () => {
                       <p className="text-tiny text-default-400">Start the conversation by sending a message</p>
                     </div>
                   ) : (
-                    messages.map((message: any) => {
+                    messages.map((message) => {
                       const isMyMessage = message.sender_id === user?.id;
-                      const isNewMessage = message._isNew;
                       return (
                         <div
                           key={message.id}
-                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"} ${isNewMessage ? "message-enter" : ""}`}
+                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
                         >
                           <div
                             className={`max-w-[70%] px-4 py-2 rounded-xl ${
