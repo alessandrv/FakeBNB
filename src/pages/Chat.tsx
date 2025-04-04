@@ -84,7 +84,6 @@ const Chat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
-  const messageInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -692,40 +691,6 @@ const Chat: React.FC = () => {
     });
   };
 
-  // Helper to check if element accepts input
-  const acceptsInput = (elem: HTMLElement | null) => {
-    if (!elem) return false;
-    
-    const tag = elem.tagName;
-    return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || 
-           elem.isContentEditable || (elem.tabIndex !== undefined && elem.tabIndex >= 0);
-  };
-  
-  // Set up the keyboard event listener for mobile
-  useEffect(() => {
-    const handleTouchEnd = (e: TouchEvent) => {
-      const target = e.target as HTMLElement;
-      const dontDiscardKeyboard = target.classList.contains('do-not-hide-keyboard');
-      
-      if (dontDiscardKeyboard) {
-        // Prevent default behavior but allow the click to proceed
-        e.preventDefault();
-        // We'll let the normal click handler process the action
-      } else if (!acceptsInput(target)) {
-        // If clicking outside of input elements, hide keyboard
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-      }
-    };
-    
-    document.addEventListener('touchend', handleTouchEnd);
-    
-    return () => {
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, []);
-
   // Handle sending a message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -772,16 +737,7 @@ const Chat: React.FC = () => {
         return [...prevMessages, tempMessage];
       });
       
-      // Clear the input field but keep focus
       setNewMessage('');
-      
-      // Ensure input field maintains focus after sending
-      setTimeout(() => {
-        if (messageInputRef.current) {
-          messageInputRef.current.focus();
-        }
-      }, 0);
-      
       scrollToBottom();
       
       // Update the conversation list with the temporary message
@@ -861,13 +817,6 @@ const Chat: React.FC = () => {
       setMessages(prevMessages => prevMessages.filter(msg => msg.id !== Date.now()));
     }
   };
-
-  // Focus the input field when the component mounts or conversation changes
-  useEffect(() => {
-    if (messageInputRef.current && selectedConversation) {
-      messageInputRef.current.focus();
-    }
-  }, [selectedConversation]);
 
   // Handle starting a new conversation
   const handleStartConversation = async () => {
@@ -1157,13 +1106,11 @@ const Chat: React.FC = () => {
               <div className="p-4 border-t border-divider">
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <Input
-                    ref={messageInputRef}
                     placeholder="Type a message..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     size="lg"
                     radius="lg"
-                    autoComplete="off"
                     startContent={
                       <Tooltip content="Add attachment">
                         <Button
@@ -1183,19 +1130,8 @@ const Chat: React.FC = () => {
                     size="lg"
                     isIconOnly
                     radius="lg"
-                    onPress={() => {
-                      // Submit the form programmatically
-                      handleSendMessage({
-                        preventDefault: () => {}
-                      } as React.FormEvent);
-                      
-                      // Re-focus the input after submit
-                      setTimeout(() => {
-                        if (messageInputRef.current) {
-                          messageInputRef.current.focus();
-                        }
-                      }, 0);
-                    }}
+                    className="do-not-hide-keyboard"
+                    onMouseDown={(e) => e.preventDefault()}
                   >
                     <Icon icon="lucide:send" width={20} />
                   </Button>
