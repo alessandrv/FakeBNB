@@ -14,10 +14,8 @@ import {
   Divider,
   ScrollShadow,
   User,
-  Tooltip,
-  Spinner
+  Tooltip
 } from "@heroui/react";
-import { useNavigate } from 'react-router-dom';
 // Define API URL with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -87,15 +85,13 @@ const Chat: React.FC = () => {
   const messagesStartRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingConversations, setLoadingConversations] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showConversations, setShowConversations] = useState(true);
   const { setHideNavbar } = useContext(NavbarContext);
   const [messageOffset, setMessageOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const navigate = useNavigate();
+  
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<number>>(new Set());
   
@@ -132,10 +128,15 @@ const Chat: React.FC = () => {
     };
   }, [isMobile, selectedConversation, showConversations, setHideNavbar]);
 
-  // Scroll to bottom of messages without animation
+  // Scroll to bottom of messages
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    }
+    
+    // Alternative method to ensure we're at the bottom
+    if (messageContainerRef.current) {
+      messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
     }
   };
 
@@ -146,14 +147,12 @@ const Chat: React.FC = () => {
       scrollToBottom();
     }
   }, [messages]);
-
-  // Ensure we scroll to bottom when conversation is selected
+  
+  // Always scroll to bottom when conversation changes
   useEffect(() => {
     if (selectedConversation) {
-      // Small delay to ensure DOM has updated
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      // Use a very short timeout to ensure the DOM has updated
+      setTimeout(scrollToBottom, 0);
     }
   }, [selectedConversation]);
 
@@ -185,12 +184,6 @@ const Chat: React.FC = () => {
               console.log(`Joining room: conversation:${conv.id}`);
               newSocket.emit('join_conversation', conv.id);
             });
-          }
-          
-          // If a conversation is already selected, join that room immediately
-          if (selectedConversation) {
-            console.log(`Joining selected conversation room on connect: conversation:${selectedConversation.id}`);
-            newSocket.emit('join_conversation', selectedConversation.id);
           }
         });
 
@@ -299,14 +292,12 @@ const Chat: React.FC = () => {
         };
       }
     }
-  }, [isAuthenticated, user, conversations, selectedConversation]);
+  }, [isAuthenticated, user, conversations]);
 
-  // Ensure we join the conversation room when selected
+  // Handle conversation selection
   useEffect(() => {
     if (socket && selectedConversation) {
       console.log(`Joining conversation room: conversation:${selectedConversation.id}`);
-      
-      // Join the conversation room immediately when selected
       socket.emit('join_conversation', selectedConversation.id);
       
       // Update current room
@@ -327,16 +318,25 @@ const Chat: React.FC = () => {
     }
   }, [socket, selectedConversation, currentRoom]);
 
+  // Join conversation rooms when conversations change
+  useEffect(() => {
+    if (socket && conversations.length > 0) {
+      console.log('Joining conversation rooms when conversations change');
+      conversations.forEach((conv: Conversation) => {
+        console.log(`Joining room: conversation:${conv.id}`);
+        socket.emit('join_conversation', conv.id);
+      });
+    }
+  }, [socket, conversations]);
+
   // Fetch conversations
   useEffect(() => {
     const fetchConversations = async () => {
       if (isAuthenticated) {
         try {
-          setLoadingConversations(true);
           const token = localStorage.getItem('accessToken');
           if (!token) {
             console.error('No access token found');
-            setLoadingConversations(false);
             setLoading(false);
             return;
           }
@@ -349,17 +349,15 @@ const Chat: React.FC = () => {
           });
           
           if (response.data && Array.isArray(response.data)) {
-            setConversations(response.data);
+          setConversations(response.data);
           } else {
             console.error('Invalid response format for conversations:', response.data);
             setConversations([]);
           }
           
-          setLoadingConversations(false);
           setLoading(false);
         } catch (error) {
           console.error('Error fetching conversations:', error);
-          setLoadingConversations(false);
           setLoading(false);
           
           // Handle rate limiting
@@ -393,11 +391,9 @@ const Chat: React.FC = () => {
         }
         
         try {
-          setLoadingMessages(true);
           const token = localStorage.getItem('accessToken');
           if (!token) {
             console.error('No access token found');
-            setLoadingMessages(false);
             return;
           }
           
@@ -407,10 +403,6 @@ const Chat: React.FC = () => {
               withCredentials: true,
               headers: {
                 Authorization: `Bearer ${token}`
-              },
-              params: {
-                limit: 50,
-                offset: 0
               }
             }
           );
@@ -438,26 +430,13 @@ const Chat: React.FC = () => {
             }, []);
             
             setMessages(uniqueMessages.reverse());
-            setMessageOffset(50);
-            setHasMoreMessages(response.data.length >= 50);
 
-            // Add a small delay to ensure the DOM has updated before scrolling
-            setTimeout(() => {
-              scrollToBottom();
-            }, 100);
-            
-            // Ensure we're connected to the socket room for this conversation
-            if (socket) {
-              console.log(`Ensuring socket is connected for conversation: ${selectedConversation.id}`);
-              socket.emit('join_conversation', selectedConversation.id);
-            }
+            // Scroll to bottom immediately without animation
+            setTimeout(scrollToBottom, 0);
           } else {
             console.error('Invalid response format for messages:', response.data);
             setMessages([]);
-            setHasMoreMessages(false);
           }
-          
-          setLoadingMessages(false);
           
           // On mobile, hide conversations when a chat is selected
           if (isMobile) {
@@ -465,7 +444,7 @@ const Chat: React.FC = () => {
           }
         } catch (error) {
           console.error('Error fetching messages:', error);
-          setLoadingMessages(false);
+          setLoading(false);
           
           // Handle rate limiting
           if (axios.isAxiosError(error) && error.response?.status === 429) {
@@ -486,7 +465,7 @@ const Chat: React.FC = () => {
     };
 
     fetchMessages();
-  }, [selectedConversation, isAuthenticated, isMobile, socket]);
+  }, [selectedConversation, isAuthenticated, isMobile]);
 
   // Function to load more messages when scrolling up
   const loadMoreMessages = async () => {
@@ -998,37 +977,11 @@ const Chat: React.FC = () => {
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex min-h-[400px] w-full items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <Icon 
-            icon="lucide:lock" 
-            className="h-12 w-12 text-default-400"
-          />
-          <div className="text-lg font-medium text-default-600">
-            Please log in to use the chat
-          </div>
-          <Button 
-            color="primary" 
-            onPress={() => navigate('/login')}
-            startContent={<Icon icon="lucide:log-in" />}
-          >
-            Go to Login
-          </Button>
-        </div>
-      </div>
-    );
+    return <div className="p-4 text-center">Please log in to use the chat.</div>;
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-[400px] w-full items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <Spinner size="lg" color="primary" />
-         
-        </div>
-      </div>
-    );
+    return <div className="p-4 text-center">Loading conversations...</div>;
   }
 
   return (
@@ -1039,7 +992,7 @@ const Chat: React.FC = () => {
           isMobile 
             ? showConversations ? "w-full" : "hidden" 
             : "w-[380px]"
-        } p-0 h-full transition-all duration-200 ease-in-out`}
+        } p-0 h-full`}
       >
         <CardBody className="p-0 h-full">
           <div className="p-4 border-b border-divider">
@@ -1052,38 +1005,27 @@ const Chat: React.FC = () => {
           </div>
           
           <ScrollShadow className="h-[calc(100%-65px)]">
-            {loadingConversations ? (
-              <div className="flex h-full items-center justify-center p-6">
-                <Spinner size="sm" color="primary" />
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-                <Icon icon="lucide:message-square" className="mb-2 h-10 w-10 text-default-300" />
-                <p className="text-default-500">No conversations yet</p>
-              </div>
-            ) : (
-              <div className="p-2 space-y-1">
-                {conversations.map((conversation) => (
-                  <Button
-                    key={conversation.id}
-                    className="w-full justify-start p-2 h-auto transition-all duration-200"
-                    color={selectedConversation?.id === conversation.id ? "primary" : "default"}
-                    variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
-                    onPress={() => handleConversationSelect(conversation)}
-                  >
-                    <User
-                      name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
-                      description={conversation.last_message?.content || "No messages yet"}
-                      avatarProps={{
-                        src: conversation.other_user.profile_picture,
-                        name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
-                        size: "sm"
-                      }}
-                    />
-                  </Button>
-                ))}
-              </div>
-            )}
+            <div className="p-2 space-y-1">
+              {conversations.map((conversation) => (
+                <Button
+                  key={conversation.id}
+                  className="w-full justify-start p-2 h-auto"
+                  color={selectedConversation?.id === conversation.id ? "primary" : "default"}
+                  variant={selectedConversation?.id === conversation.id ? "flat" : "light"}
+                  onPress={() => handleConversationSelect(conversation)}
+                >
+                  <User
+                    name={`${conversation.other_user.first_name} ${conversation.other_user.last_name}`}
+                    description={conversation.last_message?.content || "No messages yet"}
+                    avatarProps={{
+                      src: conversation.other_user.profile_picture,
+                      name: `${conversation.other_user.first_name} ${conversation.other_user.last_name}`,
+                      size: "sm"
+                    }}
+                  />
+                </Button>
+              ))}
+            </div>
           </ScrollShadow>
         </CardBody>
       </Card>
@@ -1094,7 +1036,7 @@ const Chat: React.FC = () => {
           isMobile 
             ? showConversations ? "hidden" : "w-full" 
             : "flex-1"
-        } p-0 h-full transition-all duration-200 ease-in-out`}
+        } p-0 h-full`}
       >
         <CardBody className="p-0 h-full flex flex-col">
           {selectedConversation ? (
@@ -1127,48 +1069,35 @@ const Chat: React.FC = () => {
                 ref={messageContainerRef}
                 onScroll={handleMessagesScroll}
               >
-                <div className="space-y-4 relative min-h-[200px]">
+                <div className="space-y-4">
                   {loadingMore && (
                     <div className="flex justify-center py-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary"></div>
                     </div>
                   )}
                   <div ref={messagesStartRef} />
-                  
-                  {loadingMessages ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Spinner color="primary" size="md" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center py-12 text-center">
-                      <Icon icon="lucide:message-circle" className="mb-2 h-10 w-10 text-default-300" />
-                      <p className="text-default-500">No messages yet</p>
-                      <p className="text-tiny text-default-400">Start the conversation by sending a message</p>
-                    </div>
-                  ) : (
-                    messages.map((message) => {
-                      const isMyMessage = message.sender_id === user?.id;
-                      return (
+                  {messages.map((message) => {
+                    const isMyMessage = message.sender_id === user?.id;
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                      >
                         <div
-                          key={message.id}
-                          className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                          className={`max-w-[70%] px-4 py-2 rounded-xl ${
+                            isMyMessage
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-default-100 rounded-bl-sm"
+                          }`}
                         >
-                          <div
-                            className={`max-w-[70%] px-4 py-2 rounded-xl ${
-                              isMyMessage
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-default-100 rounded-bl-sm"
-                            }`}
-                          >
-                            <p>{message.content}</p>
-                            <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
-                              {format(new Date(message.created_at), "h:mm a")}
-                            </span>
-                          </div>
+                          <p>{message.content}</p>
+                          <span className={`text-tiny ${isMyMessage ? "text-primary-foreground/70" : "text-default-400"}`}>
+                            {format(new Date(message.created_at), "h:mm a")}
+                          </span>
                         </div>
-                      );
-                    })
-                  )}
+                      </div>
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollShadow>
