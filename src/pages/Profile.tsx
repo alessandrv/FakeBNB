@@ -66,44 +66,88 @@ export const Profile = () => {
   const [swipeDirection, setSwipeDirection] = useState<string | null>(null);
   const contentControls = useAnimation();
   const contentRef = useRef<HTMLDivElement>(null);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [touchEndY, setTouchEndY] = useState<number | null>(null);
   
   // Define tab order for swipe navigation
   const tabOrder = ['account', 'houses', 'security', 'preferences'];
   
   // The minimum swipe distance required (in px)
-  const minSwipeDistance = 50;
+  const minSwipeDistance = 80; // Increased for more intentional swipes
   
   // Handle touch start
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null); // Reset touchEnd
-    setTouchStart(e.targetTouches[0].clientX);
+    setTouchEndX(null); // Reset touchEnd values
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
   };
   
   // Handle touch move
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
   };
   
   // Handle touch end
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
     
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
+    const horizontalDistance = touchStartX - touchEndX;
+    const verticalDistance = Math.abs(touchStartY - touchEndY);
+    
+    // Only register horizontal swipes when:
+    // 1. Horizontal distance is greater than minimum threshold
+    // 2. Horizontal movement is at least 2x the vertical movement
+    // 3. Vertical movement is not too large (prevents swipes during scrolling)
+    const isHorizontalSwipe = 
+      Math.abs(horizontalDistance) > minSwipeDistance && 
+      Math.abs(horizontalDistance) > verticalDistance * 2 &&
+      verticalDistance < 50;
     
     // Find current tab index
     const currentIndex = tabOrder.indexOf(activeTab);
     
-    if (isLeftSwipe && currentIndex < tabOrder.length - 1) {
-      // Swipe left to go to next tab
-      handleTabChange(tabOrder[currentIndex + 1]);
-    } else if (isRightSwipe && currentIndex > 0) {
-      // Swipe right to go to previous tab
-      handleTabChange(tabOrder[currentIndex - 1]);
+    if (isHorizontalSwipe) {
+      if (horizontalDistance > 0 && currentIndex < tabOrder.length - 1) {
+        // Swipe left to go to next tab
+        handleTabChange(tabOrder[currentIndex + 1]);
+      } else if (horizontalDistance < 0 && currentIndex > 0) {
+        // Swipe right to go to previous tab
+        handleTabChange(tabOrder[currentIndex - 1]);
+      }
     }
+  };
+  
+  // Show a visual indicator when a swipe is detected
+  const [showSwipeIndicator, setShowSwipeIndicator] = useState(false);
+  
+  // Handle touch move to show visual feedback
+  const handleTouchMove = (e: React.TouchEvent) => {
+    onTouchMove(e);
+    
+    // Show visual indicator if it's likely to be a horizontal swipe
+    if (touchStartX && touchStartY) {
+      const currentX = e.targetTouches[0].clientX;
+      const currentY = e.targetTouches[0].clientY;
+      
+      const horizontalDist = Math.abs(touchStartX - currentX);
+      const verticalDist = Math.abs(touchStartY - currentY);
+      
+      if (horizontalDist > 30 && horizontalDist > verticalDist * 1.5) {
+        setShowSwipeIndicator(true);
+      } else {
+        setShowSwipeIndicator(false);
+      }
+    }
+  };
+  
+  // Reset swipe indicator when touch ends
+  const handleTouchEnd = () => {
+    onTouchEnd();
+    setShowSwipeIndicator(false);
   };
   
   // Update URL when tab changes
@@ -721,12 +765,33 @@ export const Profile = () => {
         
         {/* Main content */}
         <div 
-          className="lg:col-span-3"
+          className="lg:col-span-3 relative"
           ref={contentRef}
           onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
+          {/* Swipe direction indicators */}
+          {showSwipeIndicator && (
+            <div className="absolute inset-y-0 left-0 w-16 z-10 flex items-center justify-start opacity-30 pointer-events-none">
+              {touchStartX && touchEndX && touchEndX < touchStartX && (
+                <div className="text-3xl text-primary">
+                  <Icon icon="lucide:chevron-left" width={36} />
+                </div>
+              )}
+            </div>
+          )}
+          
+          {showSwipeIndicator && (
+            <div className="absolute inset-y-0 right-0 w-16 z-10 flex items-center justify-end opacity-30 pointer-events-none">
+              {touchStartX && touchEndX && touchEndX > touchStartX && (
+                <div className="text-3xl text-primary">
+                  <Icon icon="lucide:chevron-right" width={36} />
+                </div>
+              )}
+            </div>
+          )}
+          
           <Card>
             <CardHeader className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">
@@ -1049,7 +1114,7 @@ export const Profile = () => {
           <div className="flex justify-center mt-2 md:hidden">
             <p className="text-xs text-default-400 flex items-center">
               <Icon icon="lucide:swipe" className="mr-1" />
-              Swipe to change tabs
+              Swipe horizontally to change tabs
             </p>
           </div>
         </div>
