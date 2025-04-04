@@ -162,7 +162,7 @@ const GooeyNav: React.FC<GooeyNavProps> = ({
   }, []);
 
   return (
-    <div style={{width: 'fit-content', height: 'fit-content'}} className="gooey-nav-container" ref={containerRef}>
+    <div style={{}} className="gooey-nav-container" ref={containerRef}>
       <div 
         ref={elementRef}
         className={isActive ? "active" : ""}
