@@ -293,6 +293,116 @@ export const Profile = () => {
     onOpen();
   };
 
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState<string | null>(null);
+
+  const validatePasswordForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!changePasswordForm.currentPassword) {
+      newErrors.currentPassword = 'Current password is required';
+    }
+    
+    if (!changePasswordForm.newPassword) {
+      newErrors.newPassword = 'New password is required';
+    } else if (changePasswordForm.newPassword.length < 8) {
+      newErrors.newPassword = 'Password must be at least 8 characters';
+    } else if (!/\d/.test(changePasswordForm.newPassword)) {
+      newErrors.newPassword = 'Password must contain at least one number';
+    } else if (!/[a-zA-Z]/.test(changePasswordForm.newPassword)) {
+      newErrors.newPassword = 'Password must contain at least one letter';
+    }
+    
+    if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+    
+    setPasswordErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handlePasswordChange = async () => {
+    if (!validatePasswordForm()) return;
+    
+    setIsChangingPassword(true);
+    setPasswordSuccessMessage(null); // Reset success message
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const token = localStorage.getItem('accessToken');
+      
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const fetchResponse = await fetch(`${apiUrl}/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword: changePasswordForm.currentPassword,
+          newPassword: changePasswordForm.newPassword,
+          confirmPassword: changePasswordForm.confirmPassword
+        })
+      });
+
+      const responseData = await fetchResponse.json();
+
+      if (!fetchResponse.ok) {
+        if (responseData.message === 'Current password is incorrect') {
+          setPasswordErrors({ currentPassword: 'Incorrect current password' });
+        } else if (responseData.errors) {
+          // Handle validation errors from backend
+          const newErrors: Record<string, string> = {};
+          responseData.errors.forEach((error: { param: string; msg: string }) => {
+            if (error.param === 'currentPassword') {
+              newErrors.currentPassword = error.msg;
+            } else if (error.param === 'newPassword') {
+              newErrors.newPassword = error.msg;
+            } else if (error.param === 'confirmPassword') {
+              newErrors.confirmPassword = error.msg;
+            }
+          });
+          setPasswordErrors(newErrors);
+        } else {
+          throw new Error(responseData.message || 'Failed to change password');
+        }
+        return;
+      }
+
+      // Reset form and close modal
+      setChangePasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setPasswordErrors({});
+      setIsChangePasswordOpen(false);
+      
+      // Set success message
+      setPasswordSuccessMessage('Password changed successfully!');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setPasswordSuccessMessage(null);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Password change error:', error);
+      setPasswordErrors({ general: 'Failed to change password. Please try again.' });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -549,6 +659,58 @@ export const Profile = () => {
               </ModalFooter>
             </>
           )}
+        </ModalContent>
+      </Modal>
+      
+      {/* Change Password Modal */}
+      <Modal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)}>
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            Change Password
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                type="password"
+                label="Current Password"
+                value={changePasswordForm.currentPassword}
+                onValueChange={(value) => setChangePasswordForm({ ...changePasswordForm, currentPassword: value })}
+                errorMessage={passwordErrors.currentPassword}
+                isInvalid={!!passwordErrors.currentPassword}
+                startContent={<Icon icon="lucide:lock" className="text-default-400" />}
+              />
+              <Input
+                type="password"
+                label="New Password"
+                value={changePasswordForm.newPassword}
+                onValueChange={(value) => setChangePasswordForm({ ...changePasswordForm, newPassword: value })}
+                errorMessage={passwordErrors.newPassword}
+                isInvalid={!!passwordErrors.newPassword}
+                startContent={<Icon icon="lucide:key" className="text-default-400" />}
+              />
+              <Input
+                type="password"
+                label="Confirm New Password"
+                value={changePasswordForm.confirmPassword}
+                onValueChange={(value) => setChangePasswordForm({ ...changePasswordForm, confirmPassword: value })}
+                errorMessage={passwordErrors.confirmPassword}
+                isInvalid={!!passwordErrors.confirmPassword}
+                startContent={<Icon icon="lucide:key" className="text-default-400" />}
+              />
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="danger" variant="light" onPress={() => setIsChangePasswordOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              color="primary" 
+              onPress={handlePasswordChange}
+              isLoading={isChangingPassword}
+            >
+              Change Password
+            </Button>
+          </ModalFooter>
         </ModalContent>
       </Modal>
       
@@ -1041,13 +1203,24 @@ export const Profile = () => {
                           Manage your password and security settings here.
                         </p>
                         
+                        {passwordSuccessMessage && (
+                          <div className="p-4 mb-4 bg-success-50 text-success-700 rounded-md">
+                            {passwordSuccessMessage}
+                          </div>
+                        )}
+                        
                         <div className="p-4 border rounded-md">
                           <div className="flex justify-between items-center">
                             <div>
                               <h3 className="font-semibold">Password</h3>
                               <p className="text-default-500 text-sm">Last changed 3 months ago</p>
                             </div>
-                            <Button variant="light">Change Password</Button>
+                            <Button 
+                              variant="light" 
+                              onPress={() => setIsChangePasswordOpen(true)}
+                            >
+                              Change Password
+                            </Button>
                           </div>
                         </div>
                         
