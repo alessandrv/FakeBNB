@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@heroui/react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AddressStep } from "../components/steps/address-step";
 import { DetailsStep } from "../components/steps/details-step";
 import { AmenitiesStep } from "../components/steps/amenities-step";
@@ -9,6 +9,7 @@ import { DescriptionStep } from "../components/steps/description-step";
 import { PricingStep } from "../components/steps/pricing-step";
 import { SummaryStep } from "../components/steps/summary-step";
 import { FormStepper } from "../components/form-stepper";
+import { houseService, House } from "../services/houseService";
 
 export interface ListingData {
   address: {
@@ -51,7 +52,43 @@ const INITIAL_DATA: ListingData = {
 export function ListingForm() {
   const [currentStep, setCurrentStep] = React.useState(0);
   const [formData, setFormData] = React.useState<ListingData>(INITIAL_DATA);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { id } = useParams();
+
+  // Load house data if editing
+  useEffect(() => {
+    if (id) {
+      const loadHouse = async () => {
+        try {
+          const house = await houseService.getHouse(Number(id));
+          setFormData({
+            address: {
+              location: [house.latitude, house.longitude],
+              formatted: house.address,
+            },
+            details: {
+              bedrooms: house.bedrooms,
+              bathrooms: house.bathrooms,
+              beds: house.beds,
+              guests: house.max_guests,
+            },
+            amenities: house.amenities,
+            photos: [], // We'll handle photos separately
+            name: house.name,
+            description: house.description,
+            tags: [], // Not used in backend
+            price: house.price_per_night,
+          });
+        } catch (error) {
+          setError("Failed to load house data");
+          navigate("/profile?tab=houses");
+        }
+      };
+      loadHouse();
+    }
+  }, [id, navigate]);
 
   // Hide header, footer, and navbar for both desktop and mobile
   useEffect(() => {
@@ -124,15 +161,35 @@ export function ListingForm() {
     }
   };
 
-  const handleSubmit = () => {
-    console.log("Form submitted:", formData);
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (id) {
+        await houseService.updateHouse(Number(id), formData);
+      } else {
+        await houseService.createHouse(formData);
+      }
+      navigate("/profile?tab=houses");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to save house");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="flex  flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-background">
       <div className="flex-1 p-4 md:p-6 pt-6 md:pt-8">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl md:text-3xl font-bold mb-6">List Your Property</h1>
+          <h1 className="text-2xl md:text-3xl font-bold mb-6">
+            {id ? "Edit Property" : "List Your Property"}
+          </h1>
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
           <FormStepper steps={steps} currentStep={currentStep} />
           <div className="mt-8">
             {steps[currentStep].component}
@@ -145,15 +202,26 @@ export function ListingForm() {
             variant="flat"
             onPress={handleBack}
             className="flex-1 md:flex-none"
+            isDisabled={isLoading}
           >
             {currentStep === 0 ? 'Cancel' : 'Back'}
           </Button>
           {currentStep === steps.length - 1 ? (
-            <Button color="primary" onPress={handleSubmit} className="flex-1 md:flex-none">
-              Submit
+            <Button 
+              color="primary" 
+              onPress={handleSubmit} 
+              className="flex-1 md:flex-none"
+              isLoading={isLoading}
+            >
+              {id ? "Update" : "Submit"}
             </Button>
           ) : (
-            <Button color="primary" onPress={next} className="flex-1 md:flex-none">
+            <Button 
+              color="primary" 
+              onPress={next} 
+              className="flex-1 md:flex-none"
+              isDisabled={isLoading}
+            >
               Continue
             </Button>
           )}
