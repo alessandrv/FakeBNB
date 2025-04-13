@@ -19,6 +19,7 @@ import { ListingForm } from './pages/CreateHouse';
 import { Spacer } from '@heroui/react';
 import { PasswordGate } from './components/PasswordGate';
 import { useState, useEffect } from 'react';
+import { AuthCallback } from './components/auth/AuthCallback';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -121,6 +122,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>
       </NavbarContext.Provider>
     </AuthProvider>
