@@ -4,6 +4,20 @@ import { Avatar, Button, Card, CardBody, Chip, DateRangePicker, Divider, Image, 
 import { Icon } from '@iconify/react';
 import { houseService, House } from '../services/houseService';
 
+// Get API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// Utility function to format image paths
+const formatImageUrl = (imagePath: string) => {
+  // If the path already includes http(s), it's a complete URL
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  
+  // Otherwise, combine the API URL with the path
+  return `${API_URL}/uploads/${imagePath}`;
+};
+
 // Icon mapping for amenities
 const AMENITY_ICONS: Record<string, string> = {
   "WiFi": "lucide:wifi",
@@ -254,7 +268,7 @@ export const PropertyDetails = () => {
         {/* Main image - visible on all devices */}
         <div className="col-span-1 md:col-span-1 h-[300px] md:h-[500px]">
           <img
-            src={property.images[activeImage] || 'https://via.placeholder.com/800x600?text=No+Image+Available'}
+            src={property.images[activeImage] ? formatImageUrl(property.images[activeImage]) : 'https://via.placeholder.com/800x600?text=No+Image+Available'}
             className="w-full h-full object-cover rounded-lg main-property-image cursor-pointer"
             alt={property.title}
             onClick={() => openGallery(activeImage)}
@@ -271,7 +285,7 @@ export const PropertyDetails = () => {
           {property.images.length > 1 && property.images.slice(1, 5).map((image, index) => (
             <div key={index} className="overflow-hidden rounded-lg">
               <img
-                src={image || 'https://via.placeholder.com/400x300?text=No+Image'}
+                src={image ? formatImageUrl(image) : 'https://via.placeholder.com/400x300?text=No+Image'}
                 className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
                 alt={`${property.title} - image ${index + 2}`}
                 onClick={() => {
@@ -594,7 +608,7 @@ export const PropertyDetails = () => {
           
           <div className="flex-1 flex items-center justify-center relative">
             <img
-              src={property.images[modalImageIndex] || 'https://via.placeholder.com/800x600?text=No+Image+Available'}
+              src={property.images[modalImageIndex] ? formatImageUrl(property.images[modalImageIndex]) : 'https://via.placeholder.com/800x600?text=No+Image+Available'}
               className="max-h-full max-w-full object-contain"
               alt={`${property.title} - fullscreen view`}
               onError={(e) => {
@@ -636,7 +650,7 @@ export const PropertyDetails = () => {
                   onClick={() => setModalImageIndex(index)}
                 >
                   <img
-                    src={image || 'https://via.placeholder.com/100x100?text=No+Image'}
+                    src={image ? formatImageUrl(image) : 'https://via.placeholder.com/100x100?text=No+Image'}
                     className="w-full h-full object-cover cursor-pointer"
                     alt={`Thumbnail ${index + 1}`}
                     onError={(e) => {
