@@ -7,6 +7,7 @@ import { motion, AnimatePresence, useAnimation, PanInfo } from 'framer-motion';
 
 // Define interfaces for house management
 interface Tenant {
+  id: string;
   name: string;
   avatar: string;
   email?: string;
@@ -32,6 +33,82 @@ interface House {
   image: string;
 }
 
+interface User {
+  // ... existing code ...
+}
+
+// Define a HouseCard component for the Profile page
+const HouseCard = ({ house }: { house: House }) => {
+  const navigate = useNavigate();
+  
+  const handleEditHouse = (e: React.MouseEvent, houseId: string) => {
+    e.stopPropagation();
+    navigate(`/edit-house/${houseId}`);
+  };
+  
+  const handleViewTenants = (e: React.MouseEvent, tenants: Tenant[]) => {
+    e.stopPropagation();
+    // You can implement tenant details view logic here
+  };
+  
+  return (
+    <Card 
+      className="w-full cursor-pointer transform transition-transform hover:scale-[1.02]"
+      isPressable
+      onPress={() => navigate(`/property/${house.id}`)}
+    >
+      <CardBody>
+        <div className="relative">
+          <img 
+            src={house.image} 
+            alt={house.address}
+            className="w-full h-40 object-cover rounded-lg mb-3"
+          />
+          
+          <div className="absolute top-2 right-2">
+            <Chip
+              color={house.status === "occupied" ? "success" : "warning"}
+              variant="flat"
+              size="sm"
+              className="capitalize"
+            >
+              {house.status}
+            </Chip>
+          </div>
+        </div>
+          
+        <div className="mb-2">
+          <h3 className="font-semibold text-lg truncate">{house.address}</h3>
+          <p className="text-default-500 text-sm">
+            ${house.monthlyRent}/month • {house.occupants} {house.occupants === 1 ? 'tenant' : 'tenants'}
+          </p>
+        </div>
+          
+        <div className="flex justify-between mt-4">
+          <Button 
+            size="sm" 
+            color="primary" 
+            variant="flat"
+            startContent={<Icon icon="lucide:edit" />}
+            onClick={(e) => handleEditHouse(e, house.id)}
+          >
+            Edit
+          </Button>
+          
+          <Button 
+            size="sm" 
+            variant="light"
+            startContent={<Icon icon="lucide:users" />}
+            onClick={(e) => handleViewTenants(e, house.tenants)}
+          >
+            Tenants ({house.tenants.length})
+          </Button>
+        </div>
+      </CardBody>
+    </Card>
+  );
+};
+
 export const Profile = () => {
   const { user, isLoading, logout } = useAuth();
   const location = useLocation();
@@ -49,6 +126,21 @@ export const Profile = () => {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+  
+  // Update the function signatures to accept any event type
+  const handleEditHouse = (e: any, houseId: string) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+    }
+    navigate(`/edit-house/${houseId}`);
+  };
+  
+  const handleViewHouse = (e: any, houseId: string) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+    }
+    navigate(`/property/${houseId}`);
   };
   
   const [activeTab, setActiveTab] = useState(getInitialTab());
@@ -178,58 +270,81 @@ export const Profile = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Sample houses data
-  const [houses] = useState<House[]>([
-    {
-      id: "1",
-      address: "123 Main St, New York, NY",
-      occupants: 3,
-      status: "occupied",
-      monthlyRent: 2500,
-      image: "https://picsum.photos/seed/house1/400/300",
-      tenants: [
-        {
-          name: "Alice Johnson",
-          avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
-          email: "alice.johnson@example.com",
-          phone: "+1 234-567-8901",
-          moveInDate: "2023-01-15",
-          paymentStatus: "paid",
-          lastPaymentDate: "2024-02-01",
-          rentAmount: 1250,
-          paymentHistory: [
-            { date: "2024-02-01", amount: 1250, status: "completed" },
-            { date: "2024-01-01", amount: 1250, status: "completed" },
-            { date: "2023-12-01", amount: 1250, status: "completed" },
-          ],
-        },
-        {
-          name: "Bob Smith",
-          avatar: "https://i.pravatar.cc/150?u=a042581f4e29026024d",
-          email: "bob.smith@example.com",
-          phone: "+1 234-567-8902",
-          moveInDate: "2023-01-15",
-          paymentStatus: "pending",
-          lastPaymentDate: "2024-01-01",
-          rentAmount: 1250,
-          paymentHistory: [
-            { date: "2024-02-01", amount: 1250, status: "pending" },
-            { date: "2024-01-01", amount: 1250, status: "completed" },
-            { date: "2023-12-01", amount: 1250, status: "completed" },
-          ],
-        },
-      ],
-    },
-    {
-      id: "2",
-      address: "456 Park Ave, Boston, MA",
-      occupants: 0,
-      status: "vacant",
-      monthlyRent: 3000,
-      image: "https://picsum.photos/seed/house2/400/300",
-      tenants: [],
-    },
-  ]);
+  // Replace the sample houses data with state and useEffect to fetch real data
+  const [houses, setHouses] = useState<House[]>([]);
+  const [housesError, setHousesError] = useState<string | null>(null);
+
+  // Fetch houses when the component mounts
+  useEffect(() => {
+    const fetchHouses = async () => {
+      setHousesDataLoading(true);
+      setHousesError(null);
+      
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          throw new Error('Authentication required');
+        }
+        
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${apiUrl}/api/houses/user/with-guests`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch houses');
+        }
+        
+        const housesData = await response.json();
+        
+        // Transform the API response to match our component's expected format
+        const transformedHouses = housesData.map((house: any) => {
+          // Get first image as the main house image, or use a placeholder
+          const mainImage = house.photos && house.photos.length > 0 
+            ? `${apiUrl}/api/images/${house.photos[0]}` 
+            : "https://picsum.photos/seed/house1/400/300";
+          
+          // Transform tenants data
+          const transformedTenants = (house.tenants || []).map((tenant: any) => ({
+            name: `${tenant.first_name} ${tenant.last_name}`,
+            avatar: tenant.avatar || `https://i.pravatar.cc/150?u=${tenant.id}`,
+            email: tenant.email || "",
+            phone: tenant.phone || "",
+            moveInDate: tenant.move_in_date,
+            paymentStatus: tenant.payment_status || "pending",
+            lastPaymentDate: tenant.last_payment_date || new Date().toISOString().split('T')[0],
+            rentAmount: tenant.monthly_rent,
+            paymentHistory: (tenant.payment_history || []).map((payment: any) => ({
+              date: payment.payment_date,
+              amount: payment.amount,
+              status: payment.status
+            }))
+          }));
+          
+          return {
+            id: house.id.toString(),
+            address: house.address,
+            occupants: parseInt(house.occupants) || 0,
+            status: house.status || (transformedTenants.length > 0 ? "occupied" : "vacant"),
+            monthlyRent: parseFloat(house.monthly_rent) || 0,
+            image: mainImage,
+            tenants: transformedTenants
+          };
+        });
+        
+        setHouses(transformedHouses);
+      } catch (error) {
+        console.error('Error fetching houses:', error);
+        setHousesError('Failed to load houses. Please try again.');
+      } finally {
+        setHousesDataLoading(false);
+      }
+    };
+    
+    fetchHouses();
+  }, []);
 
   // Initialize form values when user data loads
   React.useEffect(() => {
@@ -1106,14 +1221,26 @@ export const Profile = () => {
                                       )}
                                     </div>
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    variant="flat"
-                                    color="primary"
-                                    startContent={<Icon icon="lucide:edit" />}
-                                  >
-                                    Manage
-                                  </Button>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="flat"
+                                      color="secondary"
+                                      startContent={<Icon icon="lucide:eye" />}
+                                      onPress={(e) => handleViewHouse(e, house.id)}
+                                    >
+                                      View
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="flat"
+                                      color="primary"
+                                      startContent={<Icon icon="lucide:edit" />}
+                                      onPress={(e) => handleEditHouse(e, house.id)}
+                                    >
+                                      Manage
+                                    </Button>
+                                  </div>
                                 </div>
 
                                 {house.status === "occupied" && (

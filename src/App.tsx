@@ -49,13 +49,12 @@ function App() {
           {/* Routes WITH navbar */}
           <Route path="/" element={<MobileNavbar />}>
             <Route index element={<Home />} />
-            <Route path="properties/:id" element={<PropertyDetails />} />
+            <Route path="property/:id" element={<PropertyDetails />} />
             <Route path="search" element={<SearchResults />} />
             <Route path="map" element={<Map />} />
             <Route path="faq" element={<Faq />} />
             <Route path="contact" element={<Contact />} />
             <Route path="verify-email" element={<VerifyEmail />} />
-            <Route path="property" element={<PropertyDetails />} />
             
             
             {/* Auth Pages - only accessible when NOT logged in */}

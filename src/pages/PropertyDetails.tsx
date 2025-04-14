@@ -9,13 +9,36 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // Utility function to format image paths
 const formatImageUrl = (imagePath: string) => {
-  // If the path already includes http(s), it's a complete URL
+  // Handle null or undefined image path
+  if (!imagePath) {
+    console.log('[Image] No image path provided');
+    return 'https://via.placeholder.com/800x600?text=No+Image+Available';
+  }
+  
+  console.log(`[Image] Formatting image path: ${imagePath}`);
+  
+  // If the path already includes http(s), it's a full URL
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    // If it's pointing to our own server but in direct /uploads format,
+    // convert to the proxy API format
+    if (imagePath.includes('/uploads/')) {
+      const parts = imagePath.split('/uploads/');
+      const filename = parts[parts.length - 1];
+      console.log(`[Image] Extracted filename from URL: ${filename}`);
+      return `${API_URL}/api/images/${encodeURIComponent(filename)}`;
+    }
+    // Return external URLs as is
     return imagePath;
   }
   
-  // Otherwise, combine the API URL with the path
-  return `${API_URL}/uploads/${imagePath}`;
+  // For relative paths like filenames only or paths starting with /
+  // Use the proxy endpoint
+  const filename = imagePath.includes('/') 
+    ? imagePath.split('/').pop() 
+    : imagePath;
+    
+  console.log(`[Image] Using API endpoint for filename: ${filename}`);
+  return `${API_URL}/api/images/${encodeURIComponent(filename || '')}`;
 };
 
 // Icon mapping for amenities
@@ -268,15 +291,10 @@ export const PropertyDetails = () => {
         {/* Main image - visible on all devices */}
         <div className="col-span-1 md:col-span-1 h-[300px] md:h-[500px]">
           <img
-            src={property.images[activeImage] ? formatImageUrl(property.images[activeImage]) : 'https://via.placeholder.com/800x600?text=No+Image+Available'}
+            src={property.images[activeImage] ? formatImageUrl(property.images[activeImage]) : ''}
             className="w-full h-full object-cover rounded-lg main-property-image cursor-pointer"
             alt={property.title}
             onClick={() => openGallery(activeImage)}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.onerror = null; // Prevent infinite error loop
-              target.src = 'https://via.placeholder.com/800x600?text=Image+Error';
-            }}
           />
         </div>
         
@@ -285,7 +303,7 @@ export const PropertyDetails = () => {
           {property.images.length > 1 && property.images.slice(1, 5).map((image, index) => (
             <div key={index} className="overflow-hidden rounded-lg">
               <img
-                src={image ? formatImageUrl(image) : 'https://via.placeholder.com/400x300?text=No+Image'}
+                src={image ? formatImageUrl(image) : ''}
                 className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
                 alt={`${property.title} - image ${index + 2}`}
                 onClick={() => {
@@ -293,11 +311,6 @@ export const PropertyDetails = () => {
                   if (newIndex < property.images.length) {
                     setActiveImage(newIndex);
                   }
-                }}
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null; // Prevent infinite error loop
-                  target.src = 'https://via.placeholder.com/400x300?text=Image+Error';
                 }}
               />
             </div>
@@ -608,14 +621,9 @@ export const PropertyDetails = () => {
           
           <div className="flex-1 flex items-center justify-center relative">
             <img
-              src={property.images[modalImageIndex] ? formatImageUrl(property.images[modalImageIndex]) : 'https://via.placeholder.com/800x600?text=No+Image+Available'}
+              src={property.images[modalImageIndex] ? formatImageUrl(property.images[modalImageIndex]) : ''}
               className="max-h-full max-w-full object-contain"
               alt={`${property.title} - fullscreen view`}
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.onerror = null;
-                target.src = 'https://via.placeholder.com/800x600?text=Image+Error';
-              }}
             />
             
             <Button 
@@ -650,14 +658,9 @@ export const PropertyDetails = () => {
                   onClick={() => setModalImageIndex(index)}
                 >
                   <img
-                    src={image ? formatImageUrl(image) : 'https://via.placeholder.com/100x100?text=No+Image'}
+                    src={image ? formatImageUrl(image) : ''}
                     className="w-full h-full object-cover cursor-pointer"
                     alt={`Thumbnail ${index + 1}`}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.onerror = null;
-                      target.src = 'https://via.placeholder.com/100x100?text=Error';
-                    }}
                   />
                 </div>
               ))}

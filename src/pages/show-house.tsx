@@ -3,7 +3,7 @@ import { ScrollShadow, Button } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { PropertyCard } from '../components/property-card';
 import { MapView } from '../components/map-view';
-import { properties } from '../data/properties';
+import { properties } from '../FakeBNBBackend/data/properties';
 import { Property } from '../types/property';
 import { useVisibleProperties } from '../hooks/use-visible-properties';
 
