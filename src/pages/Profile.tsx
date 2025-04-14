@@ -25,6 +25,7 @@ interface Tenant {
 
 interface House {
   id: string;
+  name: string;
   address: string;
   occupants: number;
   status: "occupied" | "vacant";
@@ -36,6 +37,66 @@ interface House {
 interface User {
   // ... existing code ...
 }
+
+// Sample placeholder tenant for testing
+const placeholderTenant: Tenant = {
+  id: "test-tenant-1",
+  name: "Jane Smith",
+  avatar: "https://i.pravatar.cc/150?u=test-tenant-1",
+  email: "jane.smith@example.com",
+  phone: "555-123-4567",
+  moveInDate: "2023-01-15",
+  paymentStatus: "paid",
+  lastPaymentDate: "2023-05-01",
+  rentAmount: 1200,
+  paymentHistory: [
+    {
+      date: "2023-05-01",
+      amount: 1200,
+      status: "completed"
+    },
+    {
+      date: "2023-04-01",
+      amount: 1200,
+      status: "completed"
+    },
+    {
+      date: "2023-03-01",
+      amount: 1200,
+      status: "pending"
+    }
+  ]
+};
+
+// Second placeholder tenant for testing
+const placeholderTenant2: Tenant = {
+  id: "test-tenant-2",
+  name: "John Davis",
+  avatar: "https://i.pravatar.cc/150?u=test-tenant-2",
+  email: "john.davis@example.com",
+  phone: "555-987-6543",
+  moveInDate: "2023-02-05",
+  paymentStatus: "pending",
+  lastPaymentDate: "2023-05-03",
+  rentAmount: 1000,
+  paymentHistory: [
+    {
+      date: "2023-05-03",
+      amount: 1000,
+      status: "pending"
+    },
+    {
+      date: "2023-04-02",
+      amount: 1000,
+      status: "completed"
+    },
+    {
+      date: "2023-03-02",
+      amount: 1000,
+      status: "completed"
+    }
+  ]
+};
 
 // Define a HouseCard component for the Profile page
 const HouseCard = ({ house }: { house: House }) => {
@@ -59,27 +120,21 @@ const HouseCard = ({ house }: { house: House }) => {
     >
       <CardBody>
         <div className="relative">
-          <img 
-            src={house.image} 
-            alt={house.address}
-            className="w-full h-40 object-cover rounded-lg mb-3"
-          />
-          
-          <div className="absolute top-2 right-2">
-            <Chip
-              color={house.status === "occupied" ? "success" : "warning"}
-              variant="flat"
-              size="sm"
-              className="capitalize"
-            >
-              {house.status}
-            </Chip>
+          <div className="w-full aspect-square mb-3 overflow-hidden rounded-lg">
+            <img 
+              src={house.image} 
+              alt={house.name}
+              className="w-full h-full object-cover"
+            />
           </div>
         </div>
           
         <div className="mb-2">
-          <h3 className="font-semibold text-lg truncate">{house.address}</h3>
-          <p className="text-default-500 text-sm">
+          <h3 className="font-semibold text-lg truncate">{house.name}</h3>
+          <p className="text-default-500 text-sm truncate">
+            {house.address}
+          </p>
+          <p className="text-default-500 text-sm mt-1">
             ${house.monthlyRent}/month • {house.occupants} {house.occupants === 1 ? 'tenant' : 'tenants'}
           </p>
         </div>
@@ -323,18 +378,34 @@ export const Profile = () => {
             }))
           }));
           
+          // Add placeholder tenant for testing if no tenants exist
+          const finalTenants = transformedTenants.length > 0 ? transformedTenants : [];
+          
           return {
             id: house.id.toString(),
+            name: house.name || `Property ${house.id}`,
             address: house.address,
             occupants: parseInt(house.occupants) || 0,
             status: house.status || (transformedTenants.length > 0 ? "occupied" : "vacant"),
             monthlyRent: parseFloat(house.monthly_rent) || 0,
             image: mainImage,
-            tenants: transformedTenants
+            tenants: finalTenants
           };
         });
         
-        setHouses(transformedHouses);
+        // Add a house with a placeholder tenant for testing
+        const houseWithPlaceholder = {
+          id: "test-property-1",
+          name: "Test Property",
+          address: "123 Test Street, Testville",
+          occupants: 2, // Updated to reflect 2 tenants
+          status: "occupied",
+          monthlyRent: 1200,
+          image: "https://picsum.photos/seed/test1/400/300",
+          tenants: [placeholderTenant, placeholderTenant2] // Added second tenant
+        };
+        
+        setHouses([...transformedHouses, houseWithPlaceholder]);
       } catch (error) {
         console.error('Error fetching houses:', error);
         setHousesError('Failed to load houses. Please try again.');
@@ -1193,33 +1264,22 @@ export const Profile = () => {
                         <Card key={house.id} className="w-full">
                           <CardBody>
                             <div className="grid grid-cols-1 md:grid-cols-[300px,1fr] gap-6">
-                              <img
-                                src={house.image}
-                                alt={house.address}
-                                className="w-full h-48 md:h-full object-cover rounded-lg"
-                              />
+                              <div className="aspect-square w-full md:w-[300px] h-auto overflow-hidden rounded-lg">
+                                <img
+                                  src={house.image}
+                                  alt={house.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                               <div className="space-y-6">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                   <div>
                                     <h3 className="text-lg font-semibold">
-                                      {house.address}
+                                      {house.name}
                                     </h3>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <Badge
-                                        color={
-                                          house.status === "occupied"
-                                            ? "success"
-                                            : "danger"
-                                        }
-                                      >
-                                        {house.status}
-                                      </Badge>
-                                      {house.status === "occupied" && (
-                                        <span className="text-small text-default-500">
-                                          {house.occupants} occupants
-                                        </span>
-                                      )}
-                                    </div>
+                                    <p className="text-small text-default-500 mt-1">
+                                      {house.address}
+                                    </p>
                                   </div>
                                   <div className="flex gap-2">
                                     <Button
@@ -1243,16 +1303,21 @@ export const Profile = () => {
                                   </div>
                                 </div>
 
-                                {house.status === "occupied" && (
-                                  <div className="space-y-4">
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
                                     <h4 className="text-medium font-semibold">
                                       Current Tenants
                                     </h4>
+                                    <span className="text-small text-default-500">
+                                      {house.occupants} {house.occupants === 1 ? 'occupant' : 'occupants'}
+                                    </span>
+                                  </div>
 
-                                    <Card className="w-full">
-                                      <CardBody>
-                                        <div className="flex flex-col gap-3">
-                                          {house.tenants.map((tenant, index) => (
+                                  <Card className="w-full">
+                                    <CardBody>
+                                      <div className="flex flex-col gap-3">
+                                        {house.tenants.length > 0 ? (
+                                          house.tenants.map((tenant, index) => (
                                             <div key={index} className="border-b pb-3 last:border-b-0 last:pb-0">
                                               <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-3">
@@ -1298,12 +1363,27 @@ export const Profile = () => {
                                                 </div>
                                               </div>
                                             </div>
-                                          ))}
-                                        </div>
-                                      </CardBody>
-                                    </Card>
-                                  </div>
-                                )}
+                                          ))
+                                        ) : (
+                                          <div className="flex flex-col items-center justify-center py-8">
+                                            <Icon icon="lucide:users" className="text-4xl text-default-300 mb-2" />
+                                            <p className="text-default-500">No tenants</p>
+                                            <Button 
+                                              size="sm" 
+                                              variant="flat" 
+                                              color="primary" 
+                                              className="mt-4" 
+                                              startContent={<Icon icon="lucide:user-plus" />}
+                                              onPress={(e) => handleEditHouse(e, house.id)}
+                                            >
+                                              Add Tenant
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </CardBody>
+                                  </Card>
+                                </div>
                               </div>
                             </div>
                           </CardBody>
