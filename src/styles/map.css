@@ -1,0 +1,172 @@
+/* MapLibre GL JS custom styles */
+
+/* Improve popup styling */
+.maplibregl-popup {
+  max-width: 280px !important;
+  font-family: inherit;
+  z-index: 10;
+}
+
+.maplibregl-popup-content {
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.maplibregl-popup-close-button {
+  font-size: 18px;
+  padding: 5px;
+  line-height: 16px;
+  color: #666;
+}
+
+.maplibregl-popup-close-button:hover {
+  color: #333;
+  background-color: transparent;
+}
+
+/* Map container styling */
+.map-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Marker customization */
+.maplibregl-marker {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  z-index: 5;
+}
+
+.maplibregl-marker:hover {
+  transform: scale(1.1);
+}
+
+/* Navigation controls */
+.maplibregl-ctrl-top-right {
+  margin-top: 60px;
+}
+
+/* Make attribution smaller and less intrusive */
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+}
+
+/* Map loading animation */
+.maplibregl-canvas-container.maplibregl-interactive {
+  cursor: grab;
+}
+
+.maplibregl-canvas-container.maplibregl-interactive:active {
+  cursor: grabbing;
+}
+
+/* Fix raster tile display */
+.maplibregl-canvas {
+  outline: none;
+}
+
+/* Improve marker styling */
+.maplibregl-marker div {
+  transition: all 0.3s ease;
+  filter: drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.2));
+}
+
+.maplibregl-marker div:hover {
+  filter: drop-shadow(0px 3px 5px rgba(0, 0, 0, 0.3));
+}
+
+/* Make markers appear over the map and not get hidden */
+.maplibregl-marker {
+  z-index: 3;
+}
+
+/* Custom styling for map container parent */
+.map-parent {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Attribution styling */
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl,
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+  margin: 0 5px 5px 0;
+}
+
+/* Map Style Previews */
+/* OpenStreetMap */
+.bg-blue-50 {
+  background-color: #e6f2ff;
+  background-image: linear-gradient(0deg, rgba(255,255,255,0.5) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+
+/* Stamen Toner */
+.bg-gray-100.border.border-gray-400 {
+  background-color: #f8f9fa;
+  background-image: repeating-linear-gradient(45deg, #e9ecef 0, #e9ecef 1px, #f8f9fa 0, #f8f9fa 6px);
+}
+
+/* Stamen Watercolor */
+.bg-amber-50 {
+  background-color: #fffbeb;
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(251, 191, 36, 0.15) 2%, transparent 25%),
+    radial-gradient(circle at 75% 75%, rgba(217, 119, 6, 0.15) 2%, transparent 25%);
+}
+
+/* Carto Dark */
+.bg-gray-800 {
+  background-color: #1f2937;
+  background-image: linear-gradient(30deg, #111827 12%, transparent 12.5%, transparent 87%, #111827 87.5%, #111827),
+                    linear-gradient(150deg, #111827 12%, transparent 12.5%, transparent 87%, #111827 87.5%, #111827),
+                    linear-gradient(30deg, #111827 12%, transparent 12.5%, transparent 87%, #111827 87.5%, #111827),
+                    linear-gradient(150deg, #111827 12%, transparent 12.5%, transparent 87%, #111827 87.5%, #111827),
+                    linear-gradient(60deg, #111827 25%, transparent 25.5%, transparent 75%, #111827 75%, #111827),
+                    linear-gradient(60deg, #111827 25%, transparent 25.5%, transparent 75%, #111827 75%, #111827);
+  background-size: 16px 28px;
+  background-position: 0 0, 0 0, 8px 14px, 8px 14px, 0 0, 8px 14px;
+}
+
+/* Carto Light */
+.bg-gray-100 {
+  background-color: #f3f4f6;
+  background-image: linear-gradient(30deg, #e5e7eb 12%, transparent 12.5%, transparent 87%, #e5e7eb 87.5%, #e5e7eb),
+                    linear-gradient(150deg, #e5e7eb 12%, transparent 12.5%, transparent 87%, #e5e7eb 87.5%, #e5e7eb),
+                    linear-gradient(30deg, #e5e7eb 12%, transparent 12.5%, transparent 87%, #e5e7eb 87.5%, #e5e7eb),
+                    linear-gradient(150deg, #e5e7eb 12%, transparent 12.5%, transparent 87%, #e5e7eb 87.5%, #e5e7eb),
+                    linear-gradient(60deg, #e5e7eb 25%, transparent 25.5%, transparent 75%, #e5e7eb 75%, #e5e7eb),
+                    linear-gradient(60deg, #e5e7eb 25%, transparent 25.5%, transparent 75%, #e5e7eb 75%, #e5e7eb);
+  background-size: 16px 28px;
+  background-position: 0 0, 0 0, 8px 14px, 8px 14px, 0 0, 8px 14px;
+}
+
+/* Jawg Streets */
+.bg-gray-200 {
+  background-color: #e5e7eb;
+  background-image: 
+    linear-gradient(90deg, transparent 79px, #d1d5db 79px, #d1d5db 81px, transparent 81px),
+    linear-gradient(#d1d5db 1px, transparent 1px);
+  background-size: 100% 10px, 100% 10px;
+}
+
+/* Thunderforest Outdoors */
+.bg-green-100 {
+  background-color: #d1fae5;
+  background-image: 
+    linear-gradient(90deg, transparent 50%, rgba(16, 185, 129, 0.1) 50%),
+    linear-gradient(rgba(5, 150, 105, 0.1) 50%, transparent 50%);
+  background-size: 20px 20px;
+}
+
+/* OpenTopoMap */
+.bg-amber-100 {
+  background-color: #fef3c7;
+  background-image: 
+    linear-gradient(transparent 50%, rgba(217, 119, 6, 0.1) 50%),
+    linear-gradient(90deg, rgba(217, 119, 6, 0.1) 50%, transparent 50%);
+  background-size: 10px 10px;
+} 

@@ -1,126 +1,169 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Avatar, Button, Card, CardBody, Chip, DateRangePicker, Divider, Image, Input, Progress, Textarea } from '@heroui/react';
+import { Avatar, Button, Card, CardBody, Chip, DateRangePicker, Divider, Image, Input, Progress, Textarea, Spinner } from '@heroui/react';
 import { Icon } from '@iconify/react';
+import { houseService, House } from '../services/houseService';
 
-// Mock data for a single property
-const propertyData = {
-  id: '1',
-  title: 'Modern Luxury Villa with Ocean View',
-  description: 'Experience the perfect blend of comfort and luxury in this stunning oceanfront villa. With panoramic views of the Pacific, this spacious 3-bedroom property features high-end finishes, a private pool, and direct beach access. Ideal for family getaways or special celebrations.',
-  price: 299,
-  location: {
-    address: '123 Ocean Drive',
-    city: 'Malibu',
-    state: 'California',
-    country: 'United States',
-    coordinates: {
-      lat: 34.0259,
-      lng: -118.7798
-    }
-  },
-  images: [
-    'https://images.pexels.com/photos/1396122/pexels-photo-1396122.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-    'https://images.pexels.com/photos/1643383/pexels-photo-1643383.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-    'https://images.pexels.com/photos/1080721/pexels-photo-1080721.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-    'https://images.pexels.com/photos/2091166/pexels-photo-2091166.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-    'https://images.pexels.com/photos/2724748/pexels-photo-2724748.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'
-  ],
-  features: [
-    {
-      icon: 'lucide:users',
-      label: '6 guests'
-    },
-    {
-      icon: 'lucide:bed',
-      label: '3 bedrooms'
-    },
-    {
-      icon: 'lucide:bath',
-      label: '2 bathrooms'
-    },
-    {
-      icon: 'lucide:wifi',
-      label: 'Free wifi'
-    },
-    {
-      icon: 'lucide:car',
-      label: 'Free parking'
-    },
-    {
-      icon: 'lucide:tv',
-      label: 'Smart TV'
-    },
-    {
-      icon: 'lucide:thermometer',
-      label: 'AC & Heating'
-    },
-    {
-      icon: 'lucide:utensils',
-      label: 'Full kitchen'
-    }
-  ],
-  rating: 4.92,
-  reviews: [
-    {
-      id: '1',
-      author: {
-        name: 'Sarah Johnson',
-        avatar: 'https://i.pravatar.cc/150?u=sarah',
-        date: 'October 2023'
-      },
-      rating: 5,
-      comment: 'Absolutely stunning property! The views were breathtaking and the house was immaculate. We loved the private pool and easy beach access. Definitely returning next summer!'
-    },
-    {
-      id: '2',
-      author: {
-        name: 'Michael Chen',
-        avatar: 'https://i.pravatar.cc/150?u=michael',
-        date: 'September 2023'
-      },
-      rating: 5,
-      comment: 'Perfect getaway spot for our family. The kitchen was well-equipped, beds were comfortable, and the location was ideal for exploring Malibu. Hosts were very responsive and helpful!'
-    },
-    {
-      id: '3',
-      author: {
-        name: 'Emma Rodriguez',
-        avatar: 'https://i.pravatar.cc/150?u=emma',
-        date: 'August 2023'
-      },
-      rating: 4,
-      comment: 'Beautiful home with amazing views. Only giving 4 stars because the wifi was a bit spotty during our stay, but the hosts were quick to help troubleshoot. Would still recommend!'
-    }
-  ],
-  host: {
-    id: '101',
-    name: 'Jason Williams',
-    avatar: 'https://i.pravatar.cc/150?u=jason',
-    joined: 'January 2018',
-    responseRate: 98,
-    responseTime: 'within an hour',
-    description: "Hi, I'm Jason! I've been hosting on FakeBNB for over 5 years and love sharing my properties with travelers from around the world. I'm a former architect with a passion for beautiful spaces, and I take pride in creating memorable experiences for my guests."
-  },
-  reviewCount: 187,
-  availability: {
-    booked: ['2023-11-05', '2023-11-06', '2023-11-07', '2023-12-24', '2023-12-25', '2023-12-26', '2023-12-31', '2024-01-01']
-  }
+// Icon mapping for amenities
+const AMENITY_ICONS: Record<string, string> = {
+  "WiFi": "lucide:wifi",
+  "Kitchen": "lucide:cooking-pot",
+  "Washer": "lucide:washing-machine",
+  "Dryer": "lucide:package",
+  "Air Conditioning": "lucide:fan",
+  "Heating": "lucide:flame",
+  "TV": "lucide:tv",
+  "Pool": "lucide:droplets",
+  "Hot Tub": "lucide:bath",
+  "Free Parking": "lucide:car",
+  "Gym": "lucide:dumbbell",
+  "Elevator": "lucide:arrow-up-down",
+  "Indoor Fireplace": "lucide:flame",
+  "Breakfast": "lucide:coffee",
+  "Workspace": "lucide:desk",
+  // Default icon for any other amenities
+  "default": "lucide:check-circle"
 };
+
+interface PropertyFeature {
+  icon: string;
+  label: string;
+}
+
+// Extended property interface based on the House interface but with additional fields needed for UI
+interface PropertyData {
+  id: number;
+  title: string; // mapped from house.name
+  description: string;
+  price: number; // mapped from house.price_per_night
+  location: {
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    coordinates: {
+      lat: number;
+      lng: number;
+    }
+  };
+  images: string[]; // mapped from house.photos
+  features: PropertyFeature[]; // derived from house data and amenities
+  amenities: string[]; // mapped from house.amenities
+  rating?: number; // not in current API but could be in future
+  reviews: any[]; // would need a reviews API endpoint in the future
+  reviewCount: number; // if available
+  host: {
+    id: number;
+    name: string;
+    avatar?: string;
+    joined?: string;
+    responseRate?: number;
+    responseTime?: string;
+    description?: string;
+  };
+}
 
 export const PropertyDetails = () => {
   const { id } = useParams<{ id: string }>();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [property, setProperty] = useState<PropertyData | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [bookingDates, setBookingDates] = useState<[Date | null, Date | null]>([null, null]);
   const [guests, setGuests] = useState(2);
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
   
-  // Find property based on id (in a real app, you'd fetch this from an API)
-  const property = propertyData;
+  useEffect(() => {
+    const fetchPropertyData = async () => {
+      if (!id) {
+        setError("Property ID is missing");
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        const houseData = await houseService.getHouse(parseInt(id));
+        
+        // Transform database house data to property format
+        const propertyData: PropertyData = {
+          id: houseData.id,
+          title: houseData.name,
+          description: houseData.description,
+          price: houseData.price_per_night,
+          location: {
+            address: houseData.address,
+            // Extract city, state, country from address if possible, or use defaults
+            city: "City",
+            state: "State",
+            country: "Country",
+            coordinates: {
+              lat: houseData.latitude,
+              lng: houseData.longitude
+            }
+          },
+          images: Array.isArray(houseData.photos) && houseData.photos[0] !== null 
+            ? houseData.photos.filter(Boolean) 
+            : ['https://via.placeholder.com/800x600?text=No+Images+Available'],
+          // Generate features from house data
+          features: [
+            {
+              icon: 'lucide:users',
+              label: `${houseData.max_guests} guests`
+            },
+            {
+              icon: 'lucide:bed',
+              label: `${houseData.bedrooms} bedrooms`
+            },
+            {
+              icon: 'lucide:bath',
+              label: `${houseData.bathrooms} bathrooms`
+            }
+          ],
+          // Add amenities as features
+          amenities: Array.isArray(houseData.amenities) && houseData.amenities[0] !== null 
+            ? houseData.amenities.filter(Boolean)
+            : [],
+          // Placeholder for reviews - would come from a review API
+          reviews: [],
+          reviewCount: 0,
+          // Host information
+          host: {
+            id: houseData.user_id,
+            name: houseData.owner_first_name && houseData.owner_last_name 
+              ? `${houseData.owner_first_name} ${houseData.owner_last_name}`
+              : "Host",
+            avatar: houseData.owner_profile_picture || undefined
+          }
+        };
+        
+        // Add amenities to features
+        if (propertyData.amenities.length > 0) {
+          propertyData.features = [
+            ...propertyData.features,
+            ...propertyData.amenities.map(amenity => ({
+              icon: AMENITY_ICONS[amenity] || AMENITY_ICONS.default,
+              label: amenity
+            }))
+          ];
+        }
+        
+        setProperty(propertyData);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching property:", err);
+        setError("Failed to load property details. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchPropertyData();
+  }, [id]);
   
   const calculateTotalPrice = () => {
-    if (!bookingDates[0] || !bookingDates[1]) return 0;
+    if (!bookingDates[0] || !bookingDates[1] || !property) return 0;
     
     const startDate = bookingDates[0];
     const endDate = bookingDates[1];
@@ -142,21 +185,39 @@ export const PropertyDetails = () => {
   };
   
   const nextImage = () => {
+    if (!property) return;
     setModalImageIndex((prev) => 
       prev === property.images.length - 1 ? 0 : prev + 1
     );
   };
   
   const prevImage = () => {
+    if (!property) return;
     setModalImageIndex((prev) => 
       prev === 0 ? property.images.length - 1 : prev - 1
     );
   };
   
-  if (!property) {
+  if (loading) {
+    return (
+      <div className="container mx-auto py-20 flex flex-col items-center justify-center">
+        <Spinner size="lg" />
+        <p className="mt-4 text-default-500">Loading property details...</p>
+      </div>
+    );
+  }
+  
+  if (error || !property) {
     return (
       <div className="container mx-auto py-8 px-4">
-        <p>Property not found</p>
+        <div className="p-8 bg-danger-50 text-danger rounded-lg text-center">
+          <Icon icon="lucide:alert-triangle" className="w-16 h-16 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Error Loading Property</h2>
+          <p className="mb-4">{error || "Property not found"}</p>
+          <Button as={Link} to="/" color="primary">
+            Go Back Home
+          </Button>
+        </div>
       </div>
     );
   }
@@ -167,14 +228,24 @@ export const PropertyDetails = () => {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">{property.title}</h1>
         <div className="flex items-center gap-2 mt-2">
-          <div className="flex items-center">
-            <Icon icon="lucide:star" className="text-warning" />
-            <span className="ml-1">{property.rating}</span>
-          </div>
-          <span>·</span>
-          <span className="text-default-500">{property.reviewCount} reviews</span>
-          <span>·</span>
-          <span className="text-default-500">{property.location.city}, {property.location.state}, {property.location.country}</span>
+          {property.rating && (
+            <>
+              <div className="flex items-center">
+                <Icon icon="lucide:star" className="text-warning" />
+                <span className="ml-1">{property.rating}</span>
+              </div>
+              <span>·</span>
+            </>
+          )}
+          {property.reviewCount > 0 && (
+            <>
+              <span className="text-default-500">{property.reviewCount} reviews</span>
+              <span>·</span>
+            </>
+          )}
+          <span className="text-default-500">
+            {property.location.city}, {property.location.state}, {property.location.country}
+          </span>
         </div>
       </div>
       
@@ -240,9 +311,13 @@ export const PropertyDetails = () => {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-2xl font-semibold">Hosted by {property.host.name}</h2>
-              <p className="text-default-500">{property.features[0].label} · {property.features[1].label} · {property.features[2].label}</p>
+              <p className="text-default-500">
+                {property.features.slice(0, 3).map(f => f.label).join(' · ')}
+              </p>
             </div>
-            <Avatar src={property.host.avatar} className="w-16 h-16" />
+            {property.host.avatar && (
+              <Avatar src={property.host.avatar} className="w-16 h-16" />
+            )}
           </div>
           
           <Divider className="my-6" />
@@ -268,82 +343,107 @@ export const PropertyDetails = () => {
             <p className="whitespace-pre-line">{property.description}</p>
           </div>
           
-          <Divider className="my-6" />
-          
-          {/* Reviews */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Icon icon="lucide:star" className="text-warning" width={24} />
-              <h3 className="text-xl font-semibold">{property.rating} · {property.reviewCount} reviews</h3>
-            </div>
-            
-            <div className="space-y-6">
-              {property.reviews.map(review => (
-                <div key={review.id} className="pb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Avatar src={review.author.avatar} className="w-10 h-10" />
-                    <div>
-                      <h4 className="font-medium">{review.author.name}</h4>
-                      <p className="text-sm text-default-500">{review.author.date}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 mb-2">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Icon 
-                        key={i}
-                        icon="lucide:star" 
-                        className={i < review.rating ? "text-warning" : "text-default-200"} 
-                        width={16} 
-                      />
-                    ))}
-                  </div>
-                  <p>{review.comment}</p>
+          {property.reviews.length > 0 && (
+            <>
+              <Divider className="my-6" />
+              
+              {/* Reviews */}
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <Icon icon="lucide:star" className="text-warning" width={24} />
+                  <h3 className="text-xl font-semibold">{property.rating} · {property.reviewCount} reviews</h3>
                 </div>
-              ))}
-            </div>
-            
-            <Button 
-              variant="light" 
-              color="primary" 
-              className="mt-4"
-              endContent={<Icon icon="lucide:chevron-right" />}
-            >
-              Show all {property.reviewCount} reviews
-            </Button>
-          </div>
+                
+                <div className="space-y-6">
+                  {property.reviews.map((review, index) => (
+                    <div key={index} className="pb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Avatar src={review.author.avatar} className="w-10 h-10" />
+                        <div>
+                          <h4 className="font-medium">{review.author.name}</h4>
+                          <p className="text-sm text-default-500">{review.author.date}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 mb-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Icon 
+                            key={i}
+                            icon="lucide:star" 
+                            className={i < review.rating ? "text-warning" : "text-default-200"} 
+                            width={16} 
+                          />
+                        ))}
+                      </div>
+                      <p>{review.comment}</p>
+                    </div>
+                  ))}
+                </div>
+                
+                {property.reviewCount > property.reviews.length && (
+                  <Button 
+                    variant="light" 
+                    color="primary" 
+                    className="mt-4"
+                    endContent={<Icon icon="lucide:chevron-right" />}
+                  >
+                    Show all {property.reviewCount} reviews
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
           
           <Divider className="my-6" />
           
           {/* Host Info */}
           <div className="mb-8">
             <div className="flex items-start gap-4 mb-4">
-              <Avatar src={property.host.avatar} className="w-14 h-14" />
+              {property.host.avatar ? (
+                <Avatar src={property.host.avatar} className="w-14 h-14" />
+              ) : (
+                <div className="w-14 h-14 bg-primary/20 rounded-full flex items-center justify-center">
+                  <Icon icon="lucide:user" className="text-primary" width={24} />
+                </div>
+              )}
               <div>
                 <h3 className="text-xl font-semibold">Hosted by {property.host.name}</h3>
-                <p className="text-default-500">Joined in {property.host.joined} · {property.reviewCount} reviews</p>
+                {property.host.joined && (
+                  <p className="text-default-500">
+                    Joined in {property.host.joined}
+                    {property.reviewCount > 0 && ` · ${property.reviewCount} reviews`}
+                  </p>
+                )}
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="flex items-center gap-2">
-                <Icon icon="lucide:star" className="text-warning" />
-                <span>{property.rating} rating</span>
+            {(property.host.responseRate || property.host.responseTime) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {property.rating && (
+                  <div className="flex items-center gap-2">
+                    <Icon icon="lucide:star" className="text-warning" />
+                    <span>{property.rating} rating</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Icon icon="lucide:check" />
+                  <span>Identity verified</span>
+                </div>
+                {property.host.responseRate && (
+                  <div className="flex items-center gap-2">
+                    <Icon icon="lucide:message-circle" />
+                    <span>Response rate: {property.host.responseRate}%</span>
+                  </div>
+                )}
+                {property.host.responseTime && (
+                  <div className="flex items-center gap-2">
+                    <Icon icon="lucide:clock" />
+                    <span>Response time: {property.host.responseTime}</span>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <Icon icon="lucide:check" />
-                <span>Identity verified</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Icon icon="lucide:message-circle" />
-                <span>Response rate: {property.host.responseRate}%</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Icon icon="lucide:clock" />
-                <span>Response time: {property.host.responseTime}</span>
-              </div>
-            </div>
+            )}
             
-            <p className="mb-4">{property.host.description}</p>
+            {property.host.description && <p className="mb-4">{property.host.description}</p>}
             
             <Button 
               variant="bordered" 
@@ -363,11 +463,13 @@ export const PropertyDetails = () => {
                 <div className="text-2xl font-semibold">
                   ${property.price} <span className="text-base font-normal text-default-500">night</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Icon icon="lucide:star" className="text-warning" />
-                  <span>{property.rating}</span>
-                  <span className="text-default-500">({property.reviewCount})</span>
-                </div>
+                {property.rating && (
+                  <div className="flex items-center gap-1">
+                    <Icon icon="lucide:star" className="text-warning" />
+                    <span>{property.rating}</span>
+                    <span className="text-default-500">({property.reviewCount})</span>
+                  </div>
+                )}
               </div>
               
               <div className="mb-4">
@@ -411,8 +513,8 @@ export const PropertyDetails = () => {
                   <div className="flex-1 text-center">{guests}</div>
                   <button 
                     className="p-3 text-default-500 hover:bg-default-100 disabled:opacity-50"
-                    onClick={() => setGuests(prev => Math.min(6, prev + 1))}
-                    disabled={guests >= 6}
+                    onClick={() => setGuests(prev => Math.min(property.features[0].label.includes('guests') ? parseInt(property.features[0].label) : 6, prev + 1))}
+                    disabled={guests >= (property.features[0].label.includes('guests') ? parseInt(property.features[0].label) : 6)}
                   >
                     <Icon icon="lucide:plus" />
                   </button>

@@ -19,6 +19,10 @@ export interface House {
   photos: string[];
   created_at: string;
   updated_at: string;
+  // Owner information from the JOIN query in backend
+  owner_first_name?: string;
+  owner_last_name?: string;
+  owner_profile_picture?: string;
 }
 
 export interface HouseFilters {
@@ -40,39 +44,49 @@ export const houseService = {
       throw new Error('Authentication required. Please log in.');
     }
 
-    const houseData = {
-      name: data.name,
-      description: data.description,
-      address: data.address.formatted,
-      latitude: data.address.location[0],
-      longitude: data.address.location[1],
-      bedrooms: data.details.bedrooms,
-      bathrooms: data.details.bathrooms,
-      beds: data.details.beds,
-      max_guests: data.details.guests,
-      price_per_night: data.price,
-      amenities: data.amenities,
-      photos: data.photos.map(photo => URL.createObjectURL(photo)) // Convert File objects to URLs
-    };
+    // Create FormData for file uploads
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('description', data.description);
+    formData.append('address', data.address.formatted);
+    formData.append('latitude', data.address.location[0].toString());
+    formData.append('longitude', data.address.location[1].toString());
+    formData.append('bedrooms', data.details.bedrooms.toString());
+    formData.append('bathrooms', data.details.bathrooms.toString());
+    formData.append('beds', data.details.beds.toString());
+    formData.append('max_guests', data.details.guests.toString());
+    formData.append('price_per_night', data.price.toString());
+
+    // Add amenities as JSON string
+    if (data.amenities && data.amenities.length > 0) {
+      formData.append('amenities', JSON.stringify(data.amenities));
+    }
+
+    // Append each photo as a file
+    if (data.photos && data.photos.length > 0) {
+      data.photos.forEach((photo) => {
+        formData.append('photos', photo);
+      });
+    }
 
     const response = await fetch(`${API_URL}/api/houses`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        // Don't set Content-Type when using FormData, the browser will set it with the boundary
       },
-      body: JSON.stringify(houseData),
+      body: formData,
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const errorData = await response.json();
       if (response.status === 401) {
         throw new Error('Authentication failed. Please log in again.');
       }
       if (response.status === 400) {
-        throw new Error(error.message || 'Invalid data. Please check all required fields.');
+        throw new Error(errorData.message || 'Invalid data. Please check all required fields.');
       }
-      throw new Error(error.message || 'Failed to create house');
+      throw new Error(errorData.message || 'Failed to create house');
     }
 
     return response.json();
@@ -104,7 +118,11 @@ export const houseService = {
   },
 
   async updateHouse(id: number, data: Partial<ListingData>): Promise<House> {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+
     const formData = new FormData();
 
     // Add updated fields
@@ -124,8 +142,8 @@ export const houseService = {
     if (data.price) formData.append('price_per_night', data.price.toString());
     if (data.amenities) formData.append('amenities', JSON.stringify(data.amenities));
     if (data.photos) {
-      data.photos.forEach((photo, index) => {
-        formData.append(`photos`, photo);
+      data.photos.forEach((photo) => {
+        formData.append('photos', photo);
       });
     }
 
@@ -146,7 +164,11 @@ export const houseService = {
   },
 
   async deleteHouse(id: number): Promise<void> {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    
     const response = await fetch(`${API_URL}/api/houses/${id}`, {
       method: 'DELETE',
       headers: {

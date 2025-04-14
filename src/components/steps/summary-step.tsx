@@ -3,6 +3,20 @@ import { Card, CardBody, Divider } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { ListingData } from '../../pages/CreateHouse';
 
+// Icon mapping for common amenities
+const AMENITY_ICONS: Record<string, string> = {
+  "wifi": "lucide:wifi",
+  "tv": "lucide:tv",
+  "kitchen": "lucide:cooking-pot",
+  "washer": "lucide:washing-machine",
+  "parking": "lucide:parking",
+  "paid-parking": "lucide:parking-meter",
+  "ac": "lucide:fan",
+  "workspace": "lucide:desk",
+  // Default icon for any other amenities
+  "default": "lucide:check-circle"
+};
+
 interface SummaryStepProps {
   data: ListingData;
 }
@@ -48,12 +62,15 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({ data }) => {
         <CardBody>
           <h3 className="text-xl font-semibold mb-4">Amenities</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {data.amenities.map((amenity, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <Icon icon="lucide:check" className="text-success" />
-                <span>{amenity}</span>
-              </div>
-            ))}
+            {data.amenities.map((amenityName, index) => {
+              // For the summary, we'll just use a default icon since we don't have the amenity objects
+              return (
+                <div key={index} className="flex items-center gap-2">
+                  <Icon icon={AMENITY_ICONS.default} className="text-success" />
+                  <span>{amenityName}</span>
+                </div>
+              );
+            })}
           </div>
         </CardBody>
       </Card>
