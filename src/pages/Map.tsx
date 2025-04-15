@@ -46,6 +46,10 @@ interface NominatimResult {
   importance: number;
 }
 
+// Constants for POI markers
+const POI_MIN_ZOOM_LEVEL = 14;
+const MIN_FETCH_INTERVAL = 5000;
+
 // Enhanced Search for locations using OpenStreetMap Nominatim API
 const searchLocations = async (query: string): Promise<NominatimResult[]> => {
   if (!query || query.length < 3) return [];
@@ -284,7 +288,7 @@ const SearchBar = ({ onSearch, isSearching = false }: {
   );
 
   return (
-    <div className="fixed top-3 left-2 right-2 bg-white rounded-xl shadow-lg px-2 py-2 md:px-4 md:py-3 z-50">
+    <div className="fixed top-15 left-2 right-2 bg-white rounded-xl shadow-lg px-2 py-2 md:px-4 md:py-3 z-50">
       <form onSubmit={handleSearch} className="flex items-center gap-1 md:gap-2">
         <div className="flex-1">
           <Autocomplete
@@ -346,6 +350,7 @@ const SearchBar = ({ onSearch, isSearching = false }: {
               "Select a location from the dropdown for more accurate results" : undefined
             }
             items={autocompleteItems}
+            aria-label="Search for a location"
           >
             {(item: NominatimResult) => {
               // Special rendering for no results item
@@ -1025,6 +1030,364 @@ const MapProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   );
 };
 
+// Types for POI data
+interface POI {
+  id: number;
+  type: string;
+  lat: number;
+  lon: number;
+  tags?: {
+    name?: string;
+    amenity?: string;
+    [key: string]: string | undefined;
+  };
+}
+
+// Function to fetch POIs from Overpass API
+const fetchPOIs = async (bounds: L.LatLngBounds): Promise<POI[]> => {
+  try {
+    if (!bounds || !bounds.isValid()) {
+      console.warn('Invalid bounds provided to fetchPOIs');
+      return [];
+    }
+
+    // Safely get bounds coordinates
+    const south = bounds.getSouth();
+    const west = bounds.getWest();
+    const north = bounds.getNorth();
+    const east = bounds.getEast();
+
+    if (isNaN(south) || isNaN(west) || isNaN(north) || isNaN(east)) {
+      console.warn('Invalid coordinates in bounds');
+      return [];
+    }
+  
+    // Query for specific POIs we want to show (only hospitals, universities, schools, and police stations)
+    const query = `
+      [out:json][timeout:25];
+      (
+        node["amenity"~"hospital|university|school|police"](${south},${west},${north},${east});
+        way["amenity"~"hospital|university|school|police"](${south},${west},${north},${east});
+        relation["amenity"~"hospital|university|school|police"](${south},${west},${north},${east});
+      );
+      out body;
+      >;
+      out skel qt;
+    `;
+
+    console.log('Fetching POIs with query:', query);
+
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: query,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('Rate limit exceeded for Overpass API');
+        return []; // Return empty array instead of throwing error
+      }
+      throw new Error('Failed to fetch POIs');
+    }
+    
+    const data = await response.json();
+    console.log('Received POIs:', data.elements?.length || 0);
+    return data.elements || [];
+  } catch (error) {
+    console.error('Error fetching POIs:', error);
+    return []; // Return empty array instead of throwing error
+  }
+};
+
+// Component to display POI markers
+const POIMarkers = () => {
+  const map = useMap();
+  const [pois, setPois] = useState<POI[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
+  const boundsRef = useRef<L.LatLngBounds | null>(null);
+  const mapInitializedRef = useRef(false);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMapReadyRef = useRef(false);
+  const movementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
+  const rateLimitRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Function to get display name for POI type
+  const getPOIDisplayName = (amenity: string) => {
+    const displayNames: Record<string, string> = {
+      'university': 'Universities',
+      'school': 'Schools',
+      'hospital': 'Hospitals',
+      'police': 'Police Stations'
+    };
+    return displayNames[amenity] || amenity;
+  };
+
+  // Function to get marker HTML based on POI type
+  const getMarkerHTML = (amenity: string) => {
+    const icons = {
+      hospital: `
+        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-red-500 text-xl font-bold">+</div>
+        </div>
+      `,
+      university: `
+        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-blue-500 text-xl">🎓</div>
+        </div>
+      `,
+      school: `
+        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-green-500 text-xl">📚</div>
+        </div>
+      `,
+      police: `
+        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-indigo-500 text-xl">👮</div>
+        </div>
+      `
+    };
+
+    return icons[amenity as keyof typeof icons] || '';
+  };
+
+  // Initialize map state
+  useEffect(() => {
+    if (map) {
+      isMapReadyRef.current = true;
+      mapInitializedRef.current = true;
+      console.log('Map initialized, current zoom:', map.getZoom());
+    }
+  }, [map]);
+
+  // Update POIs when map bounds change
+  useEffect(() => {
+    if (!map) return;
+
+    const updatePOIs = async () => {
+      if (!isMapReadyRef.current) return;
+
+      try {
+        // Clear any existing timeouts
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
+        }
+        if (movementTimeoutRef.current) {
+          clearTimeout(movementTimeoutRef.current);
+        }
+        if (rateLimitRetryTimeoutRef.current) {
+          clearTimeout(rateLimitRetryTimeoutRef.current);
+        }
+
+        // Wait for map to settle after movement
+        movementTimeoutRef.current = setTimeout(async () => {
+          try {
+            if (!map || !map.getBounds) {
+              console.warn('Map not ready for POI update');
+              return;
+            }
+
+            // Check if zoom level is sufficient
+            const currentZoom = map.getZoom();
+            console.log('Current zoom level:', currentZoom);
+            if (currentZoom < POI_MIN_ZOOM_LEVEL) {
+              console.log('Zoom level too low, clearing POIs');
+              setPois([]); // Clear POIs when zoomed out
+              return;
+            }
+
+            const bounds = map.getBounds();
+            if (!bounds || !bounds.isValid()) {
+              console.warn('Invalid map bounds');
+              return;
+            }
+
+            // Rate limiting check with increased interval
+            const now = Date.now();
+            if (now - lastFetchTimeRef.current < MIN_FETCH_INTERVAL) {
+              console.log('Rate limiting POI fetch - waiting longer');
+              return;
+            }
+            
+            boundsRef.current = bounds;
+            setIsLoading(true);
+            lastFetchTimeRef.current = now;
+            
+            const newPOIs = await fetchPOIs(bounds);
+            console.log('Fetched new POIs:', newPOIs.length);
+            
+            // Filter out any POIs with invalid coordinates
+            const validPOIs = newPOIs.filter(poi => 
+              typeof poi.lat === 'number' && 
+              typeof poi.lon === 'number' && 
+              !isNaN(poi.lat) && 
+              !isNaN(poi.lon)
+            );
+            setPois(validPOIs);
+          } catch (error) {
+            console.error('Error updating POIs:', error);
+          } finally {
+            setIsLoading(false);
+          }
+        }, 1000);
+      } catch (error) {
+        console.error('Error in updatePOIs:', error);
+        setIsLoading(false);
+      }
+    };
+
+    // Add zoomend event listener
+    const handleZoomEnd = () => {
+      const currentZoom = map.getZoom();
+      console.log('Zoom level changed to:', currentZoom);
+      if (currentZoom < POI_MIN_ZOOM_LEVEL) {
+        setPois([]); // Clear POIs when zoomed out
+      } else {
+        updatePOIs(); // Update POIs when zoomed in
+      }
+    };
+
+    map.on('zoomend', handleZoomEnd);
+    map.on('moveend', updatePOIs);
+
+    // Initial POI load
+    if (map.getZoom() >= POI_MIN_ZOOM_LEVEL) {
+      updatePOIs();
+    }
+
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      if (movementTimeoutRef.current) {
+        clearTimeout(movementTimeoutRef.current);
+      }
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+      }
+      if (rateLimitRetryTimeoutRef.current) {
+        clearTimeout(rateLimitRetryTimeoutRef.current);
+      }
+      map.off('moveend', updatePOIs);
+      map.off('zoomend', handleZoomEnd);
+    };
+  }, [map]);
+
+  return (
+    <>
+      {/* Legend - only show when zoomed in */}
+      {map && map.getZoom() >= POI_MIN_ZOOM_LEVEL && (
+        <div className="absolute top-20 right-4 z-[2000] bg-white p-3 rounded-lg shadow-md">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-sm">Points of Interest</h3>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="light"
+              onClick={() => setShowLegend(!showLegend)}
+            >
+              <Icon icon={showLegend ? "lucide:chevron-up" : "lucide:chevron-down"} />
+            </Button>
+          </div>
+          {showLegend && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <span className="text-lg">+</span>
+                </div>
+                <span className="text-sm">Hospitals</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <span className="text-lg">🎓</span>
+                </div>
+                <span className="text-sm">Universities</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <span className="text-lg">📚</span>
+                </div>
+                <span className="text-sm">Schools</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <span className="text-lg">👮</span>
+                </div>
+                <span className="text-sm">Police Stations</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* POI Markers - only show when zoomed in */}
+      {map && map.getZoom() >= POI_MIN_ZOOM_LEVEL && pois.map(poi => {
+        if (typeof poi.lat !== 'number' || typeof poi.lon !== 'number' || 
+            isNaN(poi.lat) || isNaN(poi.lon)) {
+          return null;
+        }
+
+        const amenity = poi.tags?.amenity;
+        if (!amenity || !['hospital', 'university', 'school', 'police'].includes(amenity)) {
+          return null;
+        }
+
+        const name = poi.tags?.name;
+        const markerHtml = getMarkerHTML(amenity);
+        
+        if (!markerHtml) {
+          return null;
+        }
+
+        return (
+          <Marker
+            key={`${poi.id}-${poi.type}`}
+            position={[poi.lat, poi.lon]}
+            icon={L.divIcon({
+              html: markerHtml,
+              className: 'custom-poi-marker',
+              iconSize: [32, 32],
+              iconAnchor: [16, 16]
+            })}
+            zIndexOffset={1000}
+          >
+            <Popup className="z-[1500]">
+              <div className="p-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">
+                    {amenity === 'hospital' && '+'}
+                    {amenity === 'university' && '🎓'}
+                    {amenity === 'school' && '📚'}
+                    {amenity === 'police' && '👮'}
+                  </span>
+                  <h3 className="font-semibold">{name || getPOIDisplayName(amenity)}</h3>
+                </div>
+                <p className="text-sm text-default-500 capitalize">{getPOIDisplayName(amenity)}</p>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+      
+      {/* Loading indicator - only show when zoomed in */}
+      {map && map.getZoom() >= POI_MIN_ZOOM_LEVEL && isLoading && (
+        <div className="absolute bottom-4 right-4 z-[2000] bg-white p-2 rounded-lg shadow-md">
+          <div className="flex items-center gap-2">
+            <Spinner size="sm" />
+            <span className="text-sm">Loading POIs...</span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 export const Map = () => {
   const [visibleHouses, setVisibleHouses] = useState<House[]>([]);  // Start with empty array
   const [mapCenter, setMapCenter] = useState<[number, number]>([41.9028, 12.4964]); // Default: Rome, Italy
@@ -1246,6 +1609,16 @@ export const Map = () => {
         setMarkersLoaded(false);
         setVisibleHouses([]);
         
+        // Force map to zoom in to show POIs
+        const leafletMap = (window as any).leafletMap;
+        if (leafletMap) {
+          leafletMap.setZoom(POI_MIN_ZOOM_LEVEL);
+          // Force a map redraw to ensure POIs are loaded
+          setTimeout(() => {
+            leafletMap.invalidateSize();
+          }, 100);
+        }
+        
       } else if (params.location) {
         // Otherwise geocode the location
         const coords = await geocodeLocation(params.location);
@@ -1258,6 +1631,16 @@ export const Map = () => {
           // Hide markers when searching a new area
           setMarkersLoaded(false);
           setVisibleHouses([]);
+          
+          // Force map to zoom in to show POIs
+          const leafletMap = (window as any).leafletMap;
+          if (leafletMap) {
+            leafletMap.setZoom(POI_MIN_ZOOM_LEVEL);
+            // Force a map redraw to ensure POIs are loaded
+            setTimeout(() => {
+              leafletMap.invalidateSize();
+            }, 100);
+          }
           
         } else {
           // No results found
@@ -1344,54 +1727,33 @@ export const Map = () => {
           {/* Sidebar with listings */}
           <div className="overflow-y-auto p-4 border-r">
             <div className="mb-4">
-              <h2 className="text-xl font-bold">Available Houses</h2>
+              <h2 className="text-xl font-bold">Available Properties</h2>
               <p className="text-default-500">
-                {markersLoaded ? (
-                  visibleHouses.length > 0 
-                    ? `${visibleHouses.length} properties in view` 
-                    : "No properties in current view"
-                ) : (
-                  "Loading properties..."
-                )}
+                {visibleHouses.length} properties found in this area
               </p>
-              {isLoading && (
-                <div className="mt-2 flex items-center gap-2 text-primary">
-                  <Icon icon="lucide:loader-2" className="animate-spin" />
-                  <p>Loading properties...</p>
-                </div>
-              )}
-              {searchError && (
-                <div className="mt-2 p-2 bg-danger-50 text-danger rounded">
-                  <p>{searchError}</p>
-                </div>
-              )}
-              {visibleHouses.length === 0 && markersLoaded && !searchError && !isLoading && (
-                <div className="mt-2 p-2 bg-default-100 text-default-700 rounded">
-                  <p>Try zooming out or panning the map to find properties</p>
-                </div>
-              )}
-              <div className="mt-4">
-                <Button 
-                  color="primary" 
-                  fullWidth
-                  className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
-                  onClick={handleLoadProperties}
-                  isLoading={isLoading}
-                >
-                  {isLoading ? (
-                    <Spinner classNames={{label: "text-foreground mt-4"}} label="spinner" variant="spinner" />
-                  ) : (
-                    <>
-                      <Icon icon="lucide:refresh-cw" className="mr-2" />
-                      Refresh Properties
-                    </>
-                  )}
-                </Button>
-              </div>
             </div>
-            {visibleHouses.map(house => (
-              <HouseCard key={house.id} house={house} onFindOnMap={handleFindOnMap} />
-            ))}
+            <div className="flex flex-col gap-4">
+              {visibleHouses.map(house => (
+                <HouseCard 
+                  key={house.id} 
+                  house={house} 
+                  onFindOnMap={handleFindOnMap}
+                />
+              ))}
+              {visibleHouses.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-default-500">No properties found in this area</p>
+                  <Button 
+                    color="primary" 
+                    className="mt-4"
+                    onClick={handleLoadProperties}
+                    isLoading={isLoading}
+                  >
+                    Load Properties
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Map */}
@@ -1409,22 +1771,24 @@ export const Map = () => {
                   url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 />
                 <MapProvider>
-                  <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
+                  <MapUpdater houses={[]} onBoundsChange={handleBoundsChange} />
                   <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
                   <MapOptions />
                   
                   {/* Show visual marker for searched location */}
                   {searchedCoordinates && <SearchedLocationMarker position={searchedCoordinates} />}
                   
-                  {/* Only show markers when loaded and pass visibleHouses instead of sampleHouses */}
-                  {markersLoaded && (
-                    <PersistentMarkers 
-                      houses={visibleHouses} 
-                      onMarkerClick={handleMarkerClick} 
-                      selectedHouseId={selectedHouseId}
-                      findOnMapTimestamp={findOnMapTimestamp}
-                    />
-                  )}
+                  {/* Add POI markers */}
+                  <POIMarkers />
+                  
+                  {/* Add property markers */}
+                  <PersistentMarkers 
+                    houses={visibleHouses}
+                    onMarkerClick={handleMarkerClick}
+                    selectedHouseId={selectedHouseId}
+                    findOnMapTimestamp={findOnMapTimestamp}
+                  />
+                  
                   <ZoomControls />
                 </MapProvider>
               </MapContainer>
@@ -1453,47 +1817,28 @@ export const Map = () => {
                   url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 />
                 <MapProvider>
-                  <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
+                  <MapUpdater houses={[]} onBoundsChange={handleBoundsChange} />
                   <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
                   <MapOptions />
                   
                   {/* Show visual marker for searched location */}
                   {searchedCoordinates && <SearchedLocationMarker position={searchedCoordinates} />}
                   
-                  {/* Only show markers when loaded and pass visibleHouses instead of sampleHouses */}
-                  {markersLoaded && (
-                    <PersistentMarkers 
-                      houses={visibleHouses} 
-                      onMarkerClick={handleMarkerClick} 
-                      selectedHouseId={selectedHouseId}
-                      findOnMapTimestamp={findOnMapTimestamp}
-                    />
-                  )}
+                  {/* Add POI markers */}
+                  <POIMarkers />
+                  
+                  {/* Add property markers */}
+                  <PersistentMarkers 
+                    houses={visibleHouses}
+                    onMarkerClick={handleMarkerClick}
+                    selectedHouseId={selectedHouseId}
+                    findOnMapTimestamp={findOnMapTimestamp}
+                  />
+                  
                   <ZoomControls />
                 </MapProvider>
               </MapContainer>
             )}
-            
-            <LoadPropertiesButton onClick={handleLoadProperties} isLoading={isLoading} />
-
-            {/* Show search error on mobile */}
-            {searchError && (
-              <div className="absolute top-16 left-2 right-2 z-40 p-2 bg-danger-50 text-danger rounded shadow-md">
-                <p className="text-sm">{searchError}</p>
-              </div>
-            )}
-          </div>
-          
-          {/* Draggable Bottom Sheet */}
-          <div className="pointer-events-auto fixed w-full px-4 bottom-[96px] z-10">
-            <DraggableBottomSheet 
-              ref={bottomSheetRef}
-              houses={visibleHouses.map(convertHouseForSheet)} 
-              onViewDetails={handleMarkerClick}
-              onFindOnMap={handleFindOnMap}
-              topOffset={searchBarHeight + 12} // Add 12px for the top-3 spacing
-              inWrapper={true}
-            />
           </div>
         </div>
       </div>
