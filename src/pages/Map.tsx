@@ -1424,11 +1424,21 @@ export const Map = () => {
     
     setCurrentBounds(bounds);
     
-    // Show all properties by default
-    if (!markersLoaded) {
-      console.log("🔄 Initial load, showing all properties");
-      setVisibleHouses(sampleHouses);
+    // Always filter houses to only show those within current map bounds
+    const filteredHouses = sampleHouses.filter(house => {
+      const [lat, lng] = house.location;
+      return bounds.contains([lat, lng]);
+    });
+    setVisibleHouses(filteredHouses);
+    
+    // Only show markers on map when zoomed in enough (level 13 or higher)
+    const map = (window as any).leafletMap;
+    if (map && map.getZoom() >= 13) {
+      console.log("🔄 Zoom level sufficient, showing markers on map");
       setMarkersLoaded(true);
+    } else {
+      console.log("🔄 Zoom level too low, hiding markers from map");
+      setMarkersLoaded(false);
     }
   };
   
@@ -1454,9 +1464,20 @@ export const Map = () => {
     
     // Small delay to show loading state
     setTimeout(() => {
-      // Show all properties instead of filtering
-      setVisibleHouses(sampleHouses);
-      setMarkersLoaded(true);
+      // Always filter houses to only show those within current map bounds
+      const filteredHouses = sampleHouses.filter(house => {
+        const [lat, lng] = house.location;
+        return bounds.contains([lat, lng]);
+      });
+      setVisibleHouses(filteredHouses);
+      
+      // Only show markers on map when zoomed in enough (level 13 or higher)
+      const map = (window as any).leafletMap;
+      if (map && map.getZoom() >= 13) {
+        setMarkersLoaded(true);
+      } else {
+        setMarkersLoaded(false);
+      }
       setIsLoading(false);
     }, 300);
   };
