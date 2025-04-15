@@ -1133,23 +1133,23 @@ const POIMarkers = () => {
   const getMarkerHTML = (amenity: string) => {
     const icons = {
       hospital: `
-        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-red-500 text-xl font-bold">+</div>
+        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-red-500 text-lg font-bold">+</div>
         </div>
       `,
       university: `
-        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-blue-500 text-xl">🎓</div>
+        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-blue-500 text-lg">🎓</div>
         </div>
       `,
       school: `
-        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-green-500 text-xl">📚</div>
+        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-green-500 text-lg">📚</div>
         </div>
       `,
       police: `
-        <div class="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-indigo-500 text-xl">👮</div>
+        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
+          <div class="text-indigo-500 text-lg">👮</div>
         </div>
       `
     };
@@ -1352,23 +1352,22 @@ const POIMarkers = () => {
             icon={L.divIcon({
               html: markerHtml,
               className: 'custom-poi-marker',
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
             })}
             zIndexOffset={1000}
           >
             <Popup className="z-[1500]">
               <div className="p-2">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
                   <span className="text-lg">
                     {amenity === 'hospital' && '+'}
                     {amenity === 'university' && '🎓'}
                     {amenity === 'school' && '📚'}
                     {amenity === 'police' && '👮'}
                   </span>
-                  <h3 className="font-semibold">{name || getPOIDisplayName(amenity)}</h3>
+                  <h3 className="font-semibold text-base">{name || getPOIDisplayName(amenity)}</h3>
                 </div>
-                <p className="text-sm text-default-500 capitalize">{getPOIDisplayName(amenity)}</p>
               </div>
             </Popup>
           </Marker>
@@ -1425,11 +1424,11 @@ export const Map = () => {
     
     setCurrentBounds(bounds);
     
-    // Only apply initial filtering when the map first loads if auto-filtering is enabled
-    if (autoFilterEnabled) {
-      console.log("🔄 Auto-filtering enabled, loading properties");
-      filterPropertiesByBounds(bounds);
-      setAutoFilterEnabled(false); // Disable auto filtering after first load
+    // Show all properties by default
+    if (!markersLoaded) {
+      console.log("🔄 Initial load, showing all properties");
+      setVisibleHouses(sampleHouses);
+      setMarkersLoaded(true);
     }
   };
   
@@ -1455,26 +1454,9 @@ export const Map = () => {
     
     // Small delay to show loading state
     setTimeout(() => {
-      // Filter properties by bounds
-      const filtered = sampleHouses.filter(house => {
-        const [lat, lng] = house.location;
-        const isInBounds = bounds.contains([lat, lng]);
-        if (!isInBounds) {
-          console.log(`House ${house.id} at [${lat}, ${lng}] is outside bounds`);
-        }
-        return isInBounds;
-      });
-      
-      console.log("🔍 FILTER: Filter results:", {
-        total: sampleHouses.length,
-        filtered: filtered.length,
-        propertiesFound: filtered.length > 0 ? "Yes" : "No",
-        filteredIds: filtered.map(h => h.id)
-      });
-      
-      // Only display houses that are actually visible on the map
-      setVisibleHouses(filtered);
-      setMarkersLoaded(true); // Mark that markers have been loaded
+      // Show all properties instead of filtering
+      setVisibleHouses(sampleHouses);
+      setMarkersLoaded(true);
       setIsLoading(false);
     }, 300);
   };
