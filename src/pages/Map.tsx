@@ -1404,7 +1404,10 @@ export const Map = () => {
                 zoomControl={false}
                 style={{ height: '100%', width: '100%' }}
               >
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <TileLayer
+                  attribution='&copy; <a href="https://carto.com/" target="_blank">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
+                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                />
                 <MapProvider>
                   <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
                   <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
@@ -1445,7 +1448,10 @@ export const Map = () => {
                 zoomControl={false}
                 style={{ height: '100%', width: '100%' }}
               >
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <TileLayer
+                  attribution='&copy; <a href="https://carto.com/" target="_blank">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
+                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                />
                 <MapProvider>
                   <MapUpdater houses={sampleHouses} onBoundsChange={handleBoundsChange} />
                   <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
