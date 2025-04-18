@@ -8,7 +8,7 @@ import { NotFound } from './pages/NotFound';
 import { SearchResults } from './pages/SearchResults';
 import { PropertyDetails } from './pages/PropertyDetails';
 import { BookingHistory } from './pages/BookingHistory';
-import { Map } from './pages/Map';
+import Map from './pages/Map';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Faq } from './pages/faq';

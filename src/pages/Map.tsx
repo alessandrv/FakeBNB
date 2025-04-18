@@ -1,28 +1,28 @@
 import React, { useState, useRef, FormEvent, useEffect, useCallback, useMemo } from 'react';
 import { Button, Card, CardBody, CardFooter, Input, Divider, Popover, PopoverTrigger, PopoverContent, Autocomplete, AutocompleteItem, Spinner } from '@heroui/react';
 import { Icon } from '@iconify/react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, CircleMarker } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { Map as OlMap, View } from 'ol';
+import { MapBrowserEvent } from 'ol';
+import type { ObjectEvent } from 'ol/Object';
+import TileLayer from 'ol/layer/Tile';
+import XYZ from 'ol/source/XYZ';
+import { fromLonLat } from 'ol/proj';
+import { Feature } from 'ol';
+import { Point } from 'ol/geom';
+import { Style, Icon as OlIcon } from 'ol/style';
+import VectorLayer from 'ol/layer/Vector';
+import VectorSource from 'ol/source/Vector';
+import Overlay from 'ol/Overlay';
 import { DraggableBottomSheet, DraggableBottomSheetHandle } from '../components/DraggableBottomSheet';
-import { Link, useLocation } from 'react-router-dom';
-
-// Import properties from data file
-import { properties } from '../data/properties';
-
-// Fix marker icons in Leaflet
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
-
-// Fix default marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: markerIcon,
-  iconRetinaUrl: markerIconRetina,
-  shadowUrl: markerShadow,
-});
+import SearchBar from '../components/SearchBar';
+import { properties } from '../data/properties';
+import 'ol/ol.css';
+import { createRoot } from 'react-dom/client';
+import MapEvent from 'ol/MapEvent';
+import { DragPan } from 'ol/interaction';
+import { Text, Fill, Stroke } from 'ol/style';
 
 // Define search params interface
 interface SearchParams {
@@ -47,489 +47,18 @@ interface NominatimResult {
 }
 
 // Constants for POI markers
-const POI_MIN_ZOOM_LEVEL = 14;
-const MIN_FETCH_INTERVAL = 5000;
+const POI_MIN_ZOOM_LEVEL = 13;
+const MIN_FETCH_INTERVAL = 10000; // 10 seconds between fetches
+const POI_CACHE_DURATION = 300000; // 5 minutes cache duration
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 5000; // 5 seconds
 
-// Enhanced Search for locations using OpenStreetMap Nominatim API
-const searchLocations = async (query: string): Promise<NominatimResult[]> => {
-  if (!query || query.length < 3) return [];
-  
-  try {
-    // Use OpenStreetMap's Nominatim API for geocoding with improved parameters
-    // Add featureType to filter for cities and countries only
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?` + 
-      `format=json&` +
-      `q=${encodeURIComponent(query)}&` +
-      `limit=5&` +
-      `addressdetails=1&` +
-      `accept-language=en&` + // Prefer English results
-      `dedupe=1&` + // Remove duplicate results
-      `featuretype=city,country,state,county,region,district` // Limit to administrative boundaries
-    );
-    
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-    
-    const data: NominatimResult[] = await response.json();
-    
-    // Filter results to only include places that are cities or countries
-    // This is an additional check as the API's featuretype parameter might not be 100% reliable
-    const filteredData = data.filter(item => {
-      const lowerClass = item.class.toLowerCase();
-      const lowerType = item.type.toLowerCase();
-      
-      // Check if the result is a city, country, state, or administrative boundary
-      return (
-        lowerClass === 'boundary' || 
-        lowerClass === 'place' || 
-        lowerType.includes('city') || 
-        lowerType.includes('town') || 
-        lowerType.includes('country') || 
-        lowerType.includes('state') || 
-        lowerType.includes('region') ||
-        lowerType === 'administrative'
-      );
-    });
-    
-    // Sort results by importance for better suggestions
-    return filteredData.sort((a, b) => b.importance - a.importance);
-  } catch (error) {
-    console.error('Error fetching location suggestions:', error);
-    return [];
-  }
-};
-
-// Enhanced SearchBar component
-const SearchBar = ({ onSearch, isSearching = false }: { 
-  onSearch: (params: SearchParams, coordinates?: [number, number]) => void;
-  isSearching?: boolean;
-}) => {
-  const [location, setLocation] = useState('');
-  const [suggestedLocations, setSuggestedLocations] = useState<NominatimResult[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<NominatimResult | null>(null);
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const [isMobileDateOpen, setIsMobileDateOpen] = useState(false); // Separate state for mobile date picker
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchAttempted, setSearchAttempted] = useState(false);
-  const [dateError, setDateError] = useState<string | null>(null);
-
-  // Validate dates are selected before searching
-  const validateDates = (): boolean => {
-    if (!checkIn || !checkOut) {
-      setDateError("Please select check-in and check-out dates");
-      return false;
-    }
-    setDateError(null);
-    return true;
-  };
-
-  const handleSearch = (e: FormEvent) => {
-    e.preventDefault();
-    setSearchAttempted(true);
-    
-    // Validate dates are selected
-    if (!validateDates()) {
-      // Open the date picker if dates aren't selected
-      if (window.innerWidth < 768) {
-        setIsMobileDateOpen(true);
-      } else {
-        setIsOpen(true);
-      }
-      return;
-    }
-    
-    // Close the virtual keyboard on mobile
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-    
-    if (selectedLocation) {
-      onSearch(
-        { location, checkIn, checkOut }, 
-        [parseFloat(selectedLocation.lat), parseFloat(selectedLocation.lon)] as [number, number]
-      );
-    } else if (location.trim()) {
-      // Still search even without a selected location from autocomplete
-      onSearch({ location, checkIn, checkOut });
-    }
-  };
-
-  // Create a formatted date string for display
-  const formattedDates = useMemo(() => {
-    if (checkIn && checkOut) {
-      return `${checkIn} — ${checkOut}`;
-    }
-    return "Add dates";
-  }, [checkIn, checkOut]);
-
-  // Debounce function for location search with improved timing
-  const debouncedSearch = useCallback(
-    debounce(async (query: string) => {
-      if (query.length >= 3) {
-        setIsLoading(true);
-        const results = await searchLocations(query);
-        setSuggestedLocations(results);
-        setIsLoading(false);
-      } else {
-        setSuggestedLocations([]);
-      }
-    }, 350), // Slightly longer debounce for better UX
-    []
-  );
-
-  useEffect(() => {
-    debouncedSearch(location);
-    
-    // Reset search attempted state when user types new input
-    if (searchAttempted) {
-      setSearchAttempted(false);
-    }
-  }, [location, debouncedSearch, searchAttempted]);
-
-  // Handle direct input changes
-  const handleInputChange = (value: string) => {
-    setLocation(value);
-    
-    // If the input is cleared or changed significantly, reset the selected location
-    if (!value || (selectedLocation && !value.includes(selectedLocation.display_name.split(',')[0]))) {
-      setSelectedLocation(null);
-    }
-  };
-
-  // Format display name for better readability
-  const formatLocationName = (displayName: string): string => {
-    const parts = displayName.split(',');
-    if (parts.length > 2) {
-      return `${parts[0].trim()}, ${parts[parts.length - 2].trim()}`;
-    }
-    return parts[0].trim();
-  };
-
-  // Create a combined array that includes a "no results" item when appropriate
-  const autocompleteItems = useMemo(() => {
-    if (location.length >= 3 && suggestedLocations.length === 0 && !isLoading) {
-      return [{ 
-        place_id: -1, 
-        display_name: "No results found",
-        lat: "0",
-        lon: "0",
-        // Add other required properties with default values
-        licence: "",
-        osm_type: "",
-        osm_id: 0,
-        boundingbox: [],
-        class: "",
-        type: "",
-        importance: 0
-      }];
-    }
-    return suggestedLocations;
-  }, [location, suggestedLocations, isLoading]);
-
-  // Date popover content - shared between mobile and desktop
-  const datePopoverContent = (
-    <div className="flex flex-col gap-4 p-4">
-      <div>
-        <label className="block text-small text-default-600 mb-1">Check in</label>
-        <Input
-          type="date"
-          value={checkIn}
-          onChange={(e) => setCheckIn(e.target.value)}
-          placeholder="Add date"
-          color="default"
-        />
-      </div>
-      <div>
-        <label className="block text-small text-default-600 mb-1">Check out</label>
-        <Input
-          type="date"
-          value={checkOut}
-          onChange={(e) => setCheckOut(e.target.value)}
-          placeholder="Add date"
-          color="default"
-        />
-      </div>
-      {dateError && <p className="text-danger text-xs">{dateError}</p>}
-      <Button 
-        color="primary" 
-        className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
-        onClick={() => {
-          // Validate dates before applying
-          if (!checkIn || !checkOut) {
-            setDateError("Please select both check-in and check-out dates");
-            return;
-          }
-          
-          // Clear date error
-          setDateError(null);
-          
-          // Close both popovers
-          setIsOpen(false);
-          setIsMobileDateOpen(false);
-          
-          // Auto-search when dates are selected
-          if (selectedLocation) {
-            onSearch(
-              { location, checkIn, checkOut },
-              [parseFloat(selectedLocation.lat), parseFloat(selectedLocation.lon)] as [number, number]
-            );
-          } else if (location.trim()) {
-            onSearch({ location, checkIn, checkOut });
-          }
-        }}
-      >
-        Apply
-      </Button>
-    </div>
-  );
-
-  return (
-    <div className="fixed top-15 left-2 right-2 bg-white rounded-xl shadow-lg px-2 py-2 md:px-4 md:py-3 z-50">
-      <form onSubmit={handleSearch} className="flex items-center gap-1 md:gap-2">
-        <div className="flex-1">
-          <Autocomplete
-            placeholder="Where are you going?"
-            value={location}
-            onInputChange={handleInputChange}
-            onSelectionChange={(key) => {
-              if (key) {
-                const selected = suggestedLocations.find(
-                  loc => loc.place_id.toString() === key
-                );
-                if (selected) {
-                  // Use a more descriptive location name for display
-                  // Extract just the city/country name for cleaner display
-                  const displayName = selected.display_name;
-                  const mainLocationName = displayName.split(',')[0].trim();
-                  
-                  setSelectedLocation(selected);
-                  setLocation(mainLocationName);
-                  
-                  // Close the virtual keyboard on mobile
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
-                  
-                  // Always open the date picker after selecting a location
-                  if (window.innerWidth < 768) {
-                    setIsMobileDateOpen(true);
-                  } else {
-                    setIsOpen(true);
-                  }
-                  
-                  // Only auto-search when dates are already selected
-                  if (checkIn && checkOut) {
-                    onSearch(
-                      { location: mainLocationName, checkIn, checkOut },
-                      [parseFloat(selected.lat), parseFloat(selected.lon)] as [number, number]
-                    );
-                  } else {
-                    setDateError("Please select check-in and check-out dates");
-                  }
-                }
-              }
-            }}
-            startContent={<Icon icon="lucide:map-pin" className="text-default-400" />}
-            endContent={
-              isLoading ? (
-                <Icon icon="lucide:loader-2" className="animate-spin text-default-400" />
-              ) : location && !selectedLocation && searchAttempted ? (
-                <Icon icon="lucide:alert-circle" className="text-danger" />
-              ) : null
-            }
-            className="w-full"
-            listboxProps={{
-              className: "max-h-[200px] overflow-y-auto",
-            }}
-            errorMessage={
-              location && !selectedLocation && searchAttempted ? 
-              "Select a location from the dropdown for more accurate results" : undefined
-            }
-            items={autocompleteItems}
-            aria-label="Search for a location"
-          >
-            {(item: NominatimResult) => {
-              // Special rendering for no results item
-              if (item.place_id === -1) {
-                return (
-                  <AutocompleteItem key="no-results" textValue="No results found" isReadOnly>
-                    <div className="text-default-400 italic">No locations found</div>
-                  </AutocompleteItem>
-                );
-              }
-              
-              // Normal location item rendering
-              return (
-                <AutocompleteItem key={item.place_id.toString()} textValue={item.display_name}>
-                  <div className="flex items-start">
-                    <Icon icon="lucide:map-pin" className="mt-0.5 mr-2 text-default-400" />
-                    <div>
-                      <div className="font-medium">{item.display_name.split(',')[0]}</div>
-                      <div className="text-small text-default-400 truncate">
-                        {formatLocationName(item.display_name.substring(item.display_name.indexOf(',') + 1))}
-                      </div>
-                    </div>
-                  </div>
-                </AutocompleteItem>
-              );
-            }}
-          </Autocomplete>
-        </div>
-
-        {/* Mobile Date Selector - Show on mobile only */}
-        <div className="md:hidden">
-          <Popover isOpen={isMobileDateOpen} onOpenChange={setIsMobileDateOpen} placement="bottom">
-            <PopoverTrigger>
-              <Button 
-                isIconOnly
-                variant="flat"
-                color="default"
-                className="bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
-              >
-                <Icon icon="lucide:calendar" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-0">
-              {datePopoverContent}
-            </PopoverContent>
-          </Popover>
-        </div>
-        
-        {/* Desktop Date Selector - Show on desktop only */}
-        <div className="hidden md:block">
-          <Popover isOpen={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger>
-              <Button 
-                variant="flat" 
-                className="justify-between w-full md:w-auto"
-                endContent={<Icon icon="lucide:calendar" />}
-                color="default"
-              >
-                {formattedDates}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-4 w-[280px]">
-              {datePopoverContent}
-            </PopoverContent>
-          </Popover>
-        </div>
-        
-        <Button 
-          type="submit" 
-          color="primary"
-          className="min-w-0 px-3 md:px-8 bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
-          isIconOnly={window.innerWidth < 768}
-          isLoading={isSearching}
-          startContent={window.innerWidth >= 768 ? <Icon icon="lucide:search" /> : null}
-        >
-          {isSearching ? null : (
-            <>
-              {window.innerWidth < 768 ? (
-                <Icon icon="lucide:search" />
-              ) : (
-                <span className="ml-1">Search</span>
-              )}
-            </>
-          )}
-        </Button>
-      </form>
-
-      {/* Date error message */}
-      {dateError && (
-        <div className="mt-1 px-1 text-xs text-danger">
-          {dateError}
-        </div>
-      )}
-
-      {/* Mobile Date Indicator - Show selected dates on mobile */}
-      {(checkIn || checkOut) && (
-        <div className="md:hidden mt-1 px-1 text-xs text-default-600">
-          <div className="flex items-center">
-            <Icon icon="lucide:calendar" className="mr-1 text-primary" width={12} height={12} />
-            <span>{formattedDates}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Utility function for debouncing
-function debounce<F extends (...args: any[]) => any>(func: F, wait: number) {
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-  
-  return function(this: any, ...args: Parameters<F>) {
-    const context = this;
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      func.apply(context, args);
-    }, wait);
-  };
+interface POI {
+  id: number;
+  type: string;
+  name: string;
+  coordinates: [number, number];
 }
-
-// Modified Component for map center updating without changing zoom
-const SetMapCenter = ({ center, searchedLocation = false }: { center: [number, number], searchedLocation?: boolean }) => {
-  const map = useMap();
-  
-  useEffect(() => {
-    if (center && map) {
-      // Use a small timeout to ensure the map has fully initialized
-      setTimeout(() => {
-        // Get current zoom level
-        const currentZoom = map.getZoom();
-        
-        // Use panTo instead of flyTo to maintain zoom level
-        map.panTo(center, {
-          animate: true,
-          duration: 1.0 // Animation duration in seconds
-        });
-        
-        // Force a map redraw to ensure changes take effect
-        map.invalidateSize();
-      }, 100);
-    }
-  }, [center, map, searchedLocation]);
-  
-  return null;
-};
-
-// Component for zoom controls
-const ZoomControls = () => {
-  const map = useMap();
-  
-  const handleZoomIn = () => {
-    map.zoomIn();
-  };
-  
-  const handleZoomOut = () => {
-    map.zoomOut();
-  };
-  
-  return (
-    <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-      <Button 
-        isIconOnly 
-        variant="flat" 
-        className="bg-white shadow-md"
-        onClick={handleZoomIn}
-      >
-        <Icon icon="lucide:plus" />
-      </Button>
-      <Button 
-        isIconOnly 
-        variant="flat" 
-        className="bg-white shadow-md"
-        onClick={handleZoomOut}
-      >
-        <Icon icon="lucide:minus" />
-      </Button>
-    </div>
-  );
-};
 
 interface House {
   id: string;
@@ -537,1314 +66,843 @@ interface House {
   price: number;
   rating: number;
   reviews: number;
-  images: string[];
+  image: string;
   location: [number, number];
-  address: string;
-  beds: number;
-  baths: number;
+  description: string;
+  hasBooking: boolean;
 }
 
-// Convert Property type to House type for use in the map
-const convertPropertiesToHouses = (): House[] => {
-  return properties.map(property => ({
-    id: property.id,
-    title: property.title,
-    price: property.price,
-    rating: property.rating,
-    reviews: property.reviews,
-    // Create an array with the single image
-    images: [property.image],
-    // Convert the location object to an array format
-    location: [property.location.lat, property.location.lng],
-    // Use the title or description as the address if no dedicated address field
-    address: property.description.split('.')[0], // Use the first sentence of description as address
-    // Add default values for properties not in the data file
-    beds: Math.floor(Math.random() * 4) + 1, // Random number of beds between 1-4
-    baths: Math.floor(Math.random() * 3) + 1 // Random number of baths between 1-3
-  }));
-};
+interface POICacheEntry {
+  pois: POI[];
+  timestamp: number;
+}
 
-// Replace the sampleHouses array with the converted properties
-const sampleHouses: House[] = convertPropertiesToHouses();
+interface RequestQueueItem {
+  bbox: string;
+  type: string;
+  resolve: (value: POI[]) => void;
+  reject: (reason?: any) => void;
+  retries: number;
+}
 
-// Enhanced geocoding service using OpenStreetMap Nominatim API with better error handling
-const geocodeLocation = async (query: string): Promise<[number, number] | null> => {
-  try {
-    const results = await searchLocations(query);
-    if (results && results.length > 0) {
-      console.log("Geocoding results for:", query, results);
-      return [parseFloat(results[0].lat), parseFloat(results[0].lon)] as [number, number];
-    }
-    return null; // Return null instead of default to better handle no results
-  } catch (error) {
-    console.error("Error geocoding location:", error);
-    return null;
-  }
-};
-
-// Convert House type for DraggableBottomSheet
-const convertHouseForSheet = (house: House) => {
-  return {
-    id: house.id,
-    address: house.title,
-    price: house.price,
-    image: house.images[0],
-    beds: house.beds,
-    baths: house.baths,
-    rating: house.rating,
-    reviews: house.reviews,
-    // Include the location for Find on map feature
-    location: house.location
-  };
-};
-
-// Create a context for direct map access
-const MapContext = React.createContext<L.Map | null>(null);
-
-export const useMapInstance = () => {
-  return React.useContext(MapContext);
-};
-
-// Modified MapUpdater to prevent excessive bounds change events
-const MapUpdater = ({ houses, onBoundsChange }: { houses: House[], onBoundsChange: (bounds: L.LatLngBounds) => void }) => {
-  const map = useMap();
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const initialLoadRef = useRef<boolean>(true);
+const PropertyCard: React.FC<{
+  house: House;
+  isSelected: boolean;
+  onLocate: () => void;
+}> = ({ house, isSelected, onLocate }) => {
+  const navigate = useNavigate();
   
-  // Export the map instance to the parent component through a global variable and context
-  useEffect(() => {
-    if (map) {
-      console.log("🗺️ Setting leafletMap global reference");
-      (window as any).leafletMap = map;
-      
-      // Force a map invalidation to ensure everything is initialized properly
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 100);
-    }
-    
-    return () => {
-      if ((window as any).leafletMap === map) {
-        (window as any).leafletMap = null;
-      }
-    };
-  }, [map]);
-
-  useMapEvents({
-    moveend: () => {
-      // Clear any existing timeout to debounce the bounds change event
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      
-      // Only update bounds after movement has completely stopped
-      timeoutRef.current = setTimeout(() => {
-        const currentBounds = map.getBounds();
-        console.log("🗺️ Map movement ended, bounds:", {
-          north: currentBounds.getNorth().toFixed(5),
-          south: currentBounds.getSouth().toFixed(5),
-          east: currentBounds.getEast().toFixed(5),
-          west: currentBounds.getWest().toFixed(5),
-          isInitialLoad: initialLoadRef.current
-        });
-        
-        if (initialLoadRef.current) {
-          initialLoadRef.current = false;
-        }
-        onBoundsChange(currentBounds);
-      }, 300);
-    }
-  });
-
-  // Initial bounds update
-  useEffect(() => {
-    if (map && initialLoadRef.current) {
-      // Set a small delay to ensure the map is fully initialized
-      setTimeout(() => {
-        const bounds = map.getBounds();
-        console.log("🗺️ Initial map bounds:", {
-          north: bounds.getNorth().toFixed(5),
-          south: bounds.getSouth().toFixed(5),
-          east: bounds.getEast().toFixed(5),
-          west: bounds.getWest().toFixed(5)
-        });
-        onBoundsChange(bounds);
-        initialLoadRef.current = false;
-      }, 500);
-    }
-  }, [map, onBoundsChange]);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  return null;
-};
-
-// New component for the floating Load Properties button
-const LoadPropertiesButton = ({ onClick, isLoading }: { onClick: () => void, isLoading?: boolean }) => {
   return (
-    <div className="fixed bottom-44 left-1/2 transform -translate-x-1/2 z-10">
-      <Button 
-        color="primary"
-        className="shadow-lg rounded-full bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground"
-        isIconOnly
-        onClick={onClick}
-        isLoading={isLoading}
-      >
-        {isLoading ? (
-          <Spinner classNames={{label: "text-foreground mt-4"}} label="spinner" variant="spinner" />
-        ) : (
-          <Icon icon="lucide:refresh-cw" />
-        )}
-      </Button>
+    <div className={`mb-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
+      <div className="relative pb-[66.666667%] rounded-t-lg overflow-hidden">
+        <img 
+          src={house.image} 
+          alt={house.title}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute top-3 right-3 bg-white rounded-full px-3 py-1 text-sm font-semibold text-gray-900">
+          ${house.price}/night
+        </div>
+      </div>
+      <div className="p-4">
+        <h3 className="font-semibold text-gray-900">{house.title}</h3>
+        <p className="text-gray-600 text-sm mt-1 line-clamp-2">{house.description}</p>
+        <div className="flex items-center mt-2 text-sm text-gray-600">
+          <span className="flex items-center">
+            {house.rating} <span className="text-yellow-400 ml-1">★</span>
+          </span>
+          <span className="mx-1">·</span>
+          <span>({house.reviews} reviews)</span>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={onLocate}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors"
+          >
+            <Icon icon="carbon:location" className="w-4 h-4" />
+            Find on Map
+          </button>
+          <button
+            onClick={() => navigate(`/property/${house.id}`)}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Icon icon="carbon:view" className="w-4 h-4" />
+            View Details
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
-const HouseCard = ({ house, onFindOnMap }: { house: House, onFindOnMap: (location: [number, number]) => void }) => (
-  <Card className="mb-4">
-    <CardBody className="p-0">
-      <div className="relative">
-        <img
-          src={house.images[0]}
-          alt={house.title}
-          className="w-full h-48 object-cover rounded-t-lg"
-        />
-        <Button
-          isIconOnly
-          className="absolute top-2 right-2"
-          variant="flat"
-          color="default"
-          size="sm"
-        >
-          <Icon icon="lucide:heart" />
-        </Button>
-      </div>
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-2">
-          <h3 className="font-semibold">{house.title}</h3>
-          <div className="flex items-center">
-            <Icon icon="lucide:star" className="text-warning" />
-            <span className="ml-1">{house.rating}</span>
-          </div>
-        </div>
-        <p className="text-small text-default-500">{house.address}</p>
-        <div className="flex gap-2 text-small text-default-500 mt-2">
-          <span>{house.beds} beds</span>
-          <span>•</span>
-          <span>{house.baths} baths</span>
-        </div>
-      </div>
-    </CardBody>
-    <CardFooter className="flex-col items-stretch gap-2">
-      <div className="flex justify-between items-center w-full">
-        <span className="font-semibold">${house.price}</span>
-        <span className="text-small text-default-500">{house.reviews} reviews</span>
-      </div>
-      <div className="flex flex-col gap-2">
-        <Link to={`/property/${house.id}`} className="w-full">
-          <Button 
-            size="sm"
-            variant="solid" 
-            color="primary"
-            className="w-full"
-          >
-            View details
-          </Button>
-        </Link>
-        <Button 
-          size="sm"
-          variant="flat" 
-          color="primary"
-          startContent={<Icon icon="lucide:map-pin" />}
-          onClick={() => onFindOnMap(house.location)}
-          className="w-full"
-        >
-          Find on map
-        </Button>
-      </div>
-    </CardFooter>
-  </Card>
-);
-
-// Component to display a highlighted marker for searched locations
-const SearchedLocationMarker = ({ position }: { position: [number, number] }) => {
-  // Create a more subtle effect for the search point
+const PropertyPopup: React.FC<{ house: House }> = ({ house }) => {
+  const navigate = useNavigate();
+  
   return (
-    <>
-      {/* Single external highlight circle */}
-   
-      
-      {/* Core dot */}
-      <CircleMarker 
-        center={position} 
-        pathOptions={{ 
-          color: '#2563eb', 
-          fillColor: '#2563eb',
-          fillOpacity: 0.8,
-          weight: 1.5
+    <div className="bg-white rounded-lg shadow-lg p-4 max-w-[300px]" onClick={(e) => e.stopPropagation()}>
+      <div className="relative pb-[66.666667%] rounded-lg overflow-hidden mb-3">
+        <img 
+          src={house.image} 
+          alt={house.title}
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute top-3 right-3 bg-white rounded-full px-3 py-1 text-sm font-semibold text-gray-900">
+          ${house.price}/night
+        </div>
+      </div>
+      <h3 className="font-semibold text-gray-900 mb-2">{house.title}</h3>
+      <p className="text-gray-600 text-sm mb-2">{house.description}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center text-sm text-gray-600">
+          <span className="flex items-center">
+            {house.rating} <span className="text-yellow-400 ml-1">★</span>
+          </span>
+          <span className="mx-1">·</span>
+          <span>{house.reviews} reviews</span>
+        </div>
+        {house.hasBooking ? 
+          <span className="text-blue-600 text-sm font-medium">Has Booking</span> : 
+          <span className="text-green-600 text-sm font-medium">Available</span>
+        }
+      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          navigate(`/property/${house.id}`);
         }}
-        radius={2}
-      />
-      
-      {/* Add a marker with a label */}
-      <Marker 
-        position={position}
-        icon={L.divIcon({
-          html: '<div class="flex justify-center items-center w-full h-full"><div class="w-4 h-4 bg-gradient-to-tr from-gradient-first to-gradient-second text-primary-foreground rounded-full shadow-lg"></div></div>',
-          className: 'custom-marker-icon ',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        })}
+        className="mt-3 block w-full text-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
       >
-        <Popup closeButton={false}>
-          <div className="text-center">
-            <p className="font-medium">Search Location</p>
-            <p className="text-small text-default-500">
-              {position[0].toFixed(4)}, {position[1].toFixed(4)}
-            </p>
-          </div>
-        </Popup>
-      </Marker>
-    </>
+        View Details
+      </button>
+    </div>
   );
 };
 
-// Add a new component to ensure markers stay visible during map changes
-const PersistentMarkers = ({ houses, onMarkerClick, selectedHouseId, findOnMapTimestamp }: { 
-  houses: House[], 
-  onMarkerClick: (id: string) => void,
-  selectedHouseId: string | null,
-  findOnMapTimestamp: number
-}) => {
-  // Create a map of refs for all markers
-  const markerRefs = useRef<{ [key: string]: L.Marker | null }>({});
-  const map = useMap();
-  const pendingPopupRef = useRef<string | null>(null);
-  const attemptCountRef = useRef<number>(0);
-  const maxAttempts = 3; // Maximum number of attempts to ensure popup visibility
-  const prevSelectedHouseIdRef = useRef<string | null>(null);
-  const prevTimestampRef = useRef<number>(0);
+const Popup: React.FC<{ house: House | null; onClose: () => void }> = ({ house, onClose }) => {
+  const navigate = useNavigate();
+  
+  if (!house) return null;
+  
+  return (
+    <div 
+      className="bg-white rounded-lg shadow-lg p-4 max-w-[400px] absolute left-0 top-0 transform translate-x-[15px]" 
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        zIndex: 1000,
+        pointerEvents: 'auto'
+      }}
+    >
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-900 mb-2">{house.title}</h3>
+          <div className="mt-2">
+            <div className="text-lg font-semibold text-gray-900">
+              ${house.price}/night
+            </div>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/property/${house.id}`);
+              }}
+              className="w-full text-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              Details
+            </button>
+          </div>
+        </div>
+        <div className="w-32 h-32 flex-shrink-0">
+          <img 
+            src={house.image} 
+            alt={house.title}
+            loading="lazy"
+            className="w-full h-full object-cover rounded-lg"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
-  // Log when the component receives new properties
-  useEffect(() => {
-    console.log("🏠 PersistentMarkers updated:", {
-      houseCount: houses.length,
-      selectedHouseId,
-      timestamp: findOnMapTimestamp
-    });
-  }, [houses, selectedHouseId, findOnMapTimestamp]);
+const Map: React.FC = () => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const popupRootRef = useRef<ReturnType<typeof createRoot> | null>(null);
+  const isMountedRef = useRef(true);
+  const [map, setMap] = useState<OlMap | null>(null);
+  const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
+  const [popupOverlay, setPopupOverlay] = useState<Overlay | null>(null);
+  const [visibleHouses, setVisibleHouses] = useState<House[]>([]);
+  const [pois, setPois] = useState<POI[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [houses] = useState<House[]>(() => {
+    const bookedPropertyIds = ['1', '3', '7', '9', '11'];
+    return properties.map(property => ({
+      id: property.id,
+      title: property.title,
+      price: property.price,
+      rating: property.rating,
+      reviews: property.reviews,
+      image: property.image,
+      location: [property.location.lng, property.location.lat],
+      description: property.description,
+      hasBooking: bookedPropertyIds.includes(property.id)
+    }));
+  });
+  const navigate = useNavigate();
+  const [searchMarker, setSearchMarker] = useState<Feature | null>(null);
+  const searchVectorRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const bottomSheetRef = useRef<DraggableBottomSheetHandle>(null);
+  const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
 
-  // More robust function to ensure popup visibility
-  const ensurePopupVisibility = useCallback((markerId: string) => {
-    const marker = markerRefs.current[markerId];
-    if (!marker) {
-      console.log("❌ Marker not found for ID:", markerId);
+  // Initialize cache and queue inside component
+  const poiCache = useRef<Record<string, POICacheEntry>>({});
+  const requestQueue = useRef<RequestQueueItem[]>([]);
+  const isProcessingQueue = useRef(false);
+  const lastRequestTime = useRef(0);
+
+  // Function to process the request queue
+  const processQueue = useCallback(async () => {
+    if (isProcessingQueue.current || requestQueue.current.length === 0) return;
+
+    isProcessingQueue.current = true;
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime.current;
+
+    if (timeSinceLastRequest < MIN_FETCH_INTERVAL) {
+      setTimeout(processQueue, MIN_FETCH_INTERVAL - timeSinceLastRequest);
+      isProcessingQueue.current = false;
       return;
     }
 
-    console.log("🔍 Ensuring popup visibility for marker:", markerId);
+    const item = requestQueue.current.shift();
+    if (!item) {
+      isProcessingQueue.current = false;
+      return;
+    }
 
-    // Get the marker position
-    const markerPosition = marker.getLatLng();
+    try {
+      const pois = await fetchPOIsWithRetry(item.bbox, item.type, item.retries);
+      item.resolve(pois);
+    } catch (error) {
+      item.reject(error);
+    }
+
+    lastRequestTime.current = Date.now();
+    isProcessingQueue.current = false;
+    processQueue();
+  }, []);
+
+  // Function to fetch POIs with retry logic
+  const fetchPOIsWithRetry = useCallback(async (bbox: string, type: string, retries: number): Promise<POI[]> => {
+    const cacheKey = `${bbox}-${type}`;
+    const cached = poiCache.current[cacheKey];
     
-    // Check if marker is already well within viewport (not near edges)
-    // Using a larger padding value (-0.3) to determine "near edge"
-    const viewportBounds = map.getBounds().pad(-0.3);
-    const isMarkerFullyVisible = viewportBounds.contains(markerPosition);
-    
-    // If marker is near edge or outside viewport
-    if (!isMarkerFullyVisible) {
-      console.log("📍 Marker near edge, panning to center it");
-      // Center map on marker with animation
-      map.panTo(markerPosition, {
-        animate: true,
-        duration: 0.5
-      });
-      
-      // Don't open popup yet - wait for movement to complete
-      pendingPopupRef.current = markerId;
-      attemptCountRef.current += 1;
-    } else {
-      // Marker is well within viewport, safe to open popup
-      console.log("📍 Marker well within viewport, opening popup directly");
-      setTimeout(() => {
-        marker.openPopup();
-        // Reset attempt counter
-        attemptCountRef.current = 0;
-        pendingPopupRef.current = null;
-      }, 100);
+    if (cached && Date.now() - cached.timestamp < POI_CACHE_DURATION) {
+      return cached.pois;
     }
-  }, [map]);
 
-  // Handle map movement completion
-  useMapEvents({
-    moveend: () => {
-      // If we have a pending popup to open after movement
-      if (pendingPopupRef.current) {
-        const markerId = pendingPopupRef.current;
-        console.log("🗺️ Map movement ended, handling pending popup:", markerId);
-        
-        // If we've tried too many times, force open the popup anyway
-        if (attemptCountRef.current >= maxAttempts) {
-          console.log("🔄 Maximum attempts reached, forcing popup open");
-          const marker = markerRefs.current[markerId];
-          if (marker) {
-            setTimeout(() => {
-              marker.openPopup();
-              // Reset counters
-              attemptCountRef.current = 0;
-              pendingPopupRef.current = null;
-            }, 100);
-          }
-        } else {
-          // Try again to ensure visibility
-          console.log("🔄 Trying again to ensure popup visibility, attempt:", attemptCountRef.current);
-          setTimeout(() => {
-            ensurePopupVisibility(markerId);
-          }, 300);
-        }
+    try {
+      const pois = await fetchPOIs(bbox, type);
+      poiCache.current[cacheKey] = {
+        pois,
+        timestamp: Date.now()
+      };
+      return pois;
+    } catch (error) {
+      if (retries > 0 && (error as Error).message.includes('429')) {
+        const delay = INITIAL_RETRY_DELAY * Math.pow(2, MAX_RETRIES - retries);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchPOIsWithRetry(bbox, type, retries - 1);
       }
-    },
-    popupclose: () => {
-      // Clear the selected house state when a popup is closed manually
-      if (selectedHouseId) {
-        console.log("🗺️ Popup closed manually, clearing selected house:", selectedHouseId);
-        // Use the onMarkerClick handler with null to clear the selection
-        onMarkerClick("");
-      }
+      throw error;
     }
-  });
+  }, []);
 
-  // When selectedHouseId changes or findOnMapTimestamp updates, trigger the popup process
-  useEffect(() => {
-    if (selectedHouseId && markerRefs.current[selectedHouseId]) {
-      // Check if this is a new house selection or the same house but with a new timestamp
-      const isSameHouse = prevSelectedHouseIdRef.current === selectedHouseId;
-      const isNewTimestamp = findOnMapTimestamp > prevTimestampRef.current;
-      
-      // If it's a new house or the same house but with a new timestamp (user clicked "Find on map" again)
-      if (!isSameHouse || (isSameHouse && isNewTimestamp)) {
-        // Reset the attempt counter
-        attemptCountRef.current = 0;
-        
-        // Close any open popups first to ensure the new one opens
-        map.closePopup();
-        
-        // Start the process of ensuring visibility and opening popup
-        ensurePopupVisibility(selectedHouseId);
-        
-        // Update the refs
-        prevSelectedHouseIdRef.current = selectedHouseId;
-        prevTimestampRef.current = findOnMapTimestamp;
-      }
-    }
-  }, [selectedHouseId, ensurePopupVisibility, findOnMapTimestamp, map]);
-
-  return (
-    <>
-      {houses.map(house => (
-        <Marker 
-          icon={L.divIcon({
-            html: '<div class="flex justify-center items-center w-full h-full"><div class="w-6 h-6 bg-gradient-to-tr from-gradient-first to-gradient-second rounded-full shadow-lg flex items-center justify-center border-2 border-white"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-4 h-4"><path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.69z" /><path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75v4.5a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198c.03-.028.061-.056.091-.086L12 5.432z" /></svg></div></div>',
-            className: 'custom-marker-icon ',
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-          })}
-          
-          key={house.id} 
-          position={house.location}
-          ref={(ref) => {
-            if (ref) {
-              markerRefs.current[house.id] = ref;
-            }
-          }}
-          eventHandlers={{
-            click: () => onMarkerClick(house.id),
-            popupclose: () => {
-              // Clear the selected house when popup is closed manually
-              if (house.id === selectedHouseId) {
-                console.log("🏠 Popup closed for house:", house.id);
-                onMarkerClick("");
-              }
-            }
-          }}
-        >
-          <Popup>
-            <div className="p-2 flex flex-col">
-              <img src={house.images[0]} alt={house.title} className="w-full h-24 object-cover mb-2 rounded" />
-              <h3 className="font-semibold">{house.title}</h3>
-              <div className="flex justify-between">
-                <p className="text-small">${house.price}/night</p>
-                <div className="flex items-center">
-                  <Icon icon="lucide:star" className="text-yellow-500 text-xs" />
-                  <span className="text-xs ml-1">{house.rating}</span>
-                </div>
-              </div>
-              <Link to={`/property/${house.id}`} className="text-sm text-primary mt-2">View Details</Link>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </>
-  );
-};
-
-// Custom component to set map options
-const MapOptions = () => {
-  const map = useMap();
-  
-  useEffect(() => {
-    if (map) {
-      // Set map options
-      map.options.maxBoundsViscosity = 1.0;
-      map.options.inertia = true;
-      map.options.inertiaDeceleration = 3000;
-    }
-  }, [map]);
-  
-  return null;
-};
-
-// Map Provider component to make the map accessible via context
-const MapProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const map = useMap();
-  
-  useEffect(() => {
-    if (map) {
-      console.log("🗺️ Map is now available in context");
-      (window as any).leafletMap = map;
-    }
-  }, [map]);
-  
-  return (
-    <MapContext.Provider value={map}>
-      {children}
-    </MapContext.Provider>
-  );
-};
-
-// Types for POI data
-interface POI {
-  id: number;
-  type: string;
-  lat: number;
-  lon: number;
-  tags?: {
-    name?: string;
-    amenity?: string;
-    [key: string]: string | undefined;
-  };
-}
-
-// Function to fetch POIs from Overpass API
-const fetchPOIs = async (bounds: L.LatLngBounds): Promise<POI[]> => {
-  try {
-    if (!bounds || !bounds.isValid()) {
-      console.warn('Invalid bounds provided to fetchPOIs');
-      return [];
-    }
-
-    // Safely get bounds coordinates
-    const south = bounds.getSouth();
-    const west = bounds.getWest();
-    const north = bounds.getNorth();
-    const east = bounds.getEast();
-
-    if (isNaN(south) || isNaN(west) || isNaN(north) || isNaN(east)) {
-      console.warn('Invalid coordinates in bounds');
-      return [];
-    }
-  
-    // Query for specific POIs we want to show (only hospitals, universities, schools, and police stations)
-    const query = `
+  // Function to fetch POIs from OpenStreetMap
+  const fetchPOIs = useCallback(async (bbox: string, type: string): Promise<POI[]> => {
+    const overpassQuery = `
       [out:json][timeout:25];
+      area["name:en"="Italy"]->.searchArea;
+      area["name"="Foligno"]->.foligno;
       (
-        node["amenity"~"hospital|university|school|police"](${south},${west},${north},${east});
-        way["amenity"~"hospital|university|school|police"](${south},${west},${north},${east});
-        relation["amenity"~"hospital|university|school|police"](${south},${west},${north},${east});
+        node["amenity"="${type}"](area.searchArea)(area.foligno);
+        way["amenity"="${type}"](area.searchArea)(area.foligno);
+        relation["amenity"="${type}"](area.searchArea)(area.foligno);
       );
       out body;
       >;
       out skel qt;
     `;
 
-    console.log('Fetching POIs with query:', query);
+    console.log('Fetching POIs with query:', overpassQuery);
 
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: query,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded'
+    try {
+      const response = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
+        },
+        body: `data=${encodeURIComponent(overpassQuery)}`
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Received POI data:', data);
+
+      if (!data.elements) {
+        console.log('No elements found in response');
+        return [];
+      }
+
+      const pois = data.elements.map((element: any) => {
+        const coordinates = element.lat && element.lon 
+          ? [element.lon, element.lat]
+          : element.center 
+            ? [element.center.lon, element.center.lat]
+            : null;
+
+        if (!coordinates) {
+          return null;
+        }
+
+        const poi = {
+          id: element.id,
+          type: element.tags?.amenity || type,
+          name: element.tags?.name || `${type.charAt(0).toUpperCase() + type.slice(1)}`,
+          coordinates
+        };
+        console.log('Created POI:', poi);
+        return poi;
+      }).filter((poi: POI | null): poi is POI => poi !== null);
+
+      console.log(`Processed ${pois.length} POIs`);
+      return pois;
+    } catch (error) {
+      console.error(`Error fetching ${type} POIs:`, error);
+      return [];
+    }
+  }, []);
+
+  // Function to update visible houses based on map bounds
+  const updateVisibleHouses = useCallback(() => {
+    if (!map) return;
+
+    const extent = map.getView().calculateExtent(map.getSize());
+    const visible = houses.filter(house => {
+      const [lng, lat] = house.location;
+      const coordinate = fromLonLat([lng, lat]);
+      return coordinate[0] >= extent[0] && 
+             coordinate[0] <= extent[2] && 
+             coordinate[1] >= extent[1] && 
+             coordinate[1] <= extent[3];
+    });
+    setVisibleHouses(visible);
+  }, [map, houses]);
+
+  // Initialize map and popup
+  useEffect(() => {
+    if (!mapRef.current || !popupRef.current) return;
+
+    const mapContainer = mapRef.current;
+    mapContainer.style.width = '100%';
+    mapContainer.style.height = '100%';
+
+    const newMap = new OlMap({
+      target: mapContainer,
+      layers: [
+        new TileLayer({
+          source: new XYZ({
+            url: 'https://{a-c}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+          })
+        })
+      ],
+      view: new View({
+        center: fromLonLat([12.4964, 41.9028]),
+        zoom: 6
+      }),
+      pixelRatio: 1
+    });
+
+    // Create and configure popup overlay
+    const popup = new Overlay({
+      element: popupRef.current,
+      positioning: 'bottom-center',
+      offset: [15, 0],
+      stopEvent: true,
+      className: 'ol-popup',
+      autoPan: {
+        animation: {
+          duration: 250
+        }
       }
     });
-    
-    if (!response.ok) {
-      if (response.status === 429) {
-        console.warn('Rate limit exceeded for Overpass API');
-        return []; // Return empty array instead of throwing error
+
+    newMap.addOverlay(popup);
+    setPopupOverlay(popup);
+
+    // Add CSS for popup
+    const style = document.createElement('style');
+    style.textContent = `
+      .ol-popup {
+        z-index: 1000;
+        position: absolute;
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
+        border: none;
+        min-width: 280px;
       }
-      throw new Error('Failed to fetch POIs');
-    }
-    
-    const data = await response.json();
-    console.log('Received POIs:', data.elements?.length || 0);
-    return data.elements || [];
-  } catch (error) {
-    console.error('Error fetching POIs:', error);
-    return []; // Return empty array instead of throwing error
-  }
-};
+      .ol-popup:after, .ol-popup:before {
+        display: none;
+      }
+    `;
+    document.head.appendChild(style);
 
-// Component to display POI markers
-const POIMarkers = () => {
-  const map = useMap();
-  const [pois, setPois] = useState<POI[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showLegend, setShowLegend] = useState(true);
-  const boundsRef = useRef<L.LatLngBounds | null>(null);
-  const mapInitializedRef = useRef(false);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isMapReadyRef = useRef(false);
-  const movementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastFetchTimeRef = useRef<number>(0);
-  const rateLimitRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Function to get display name for POI type
-  const getPOIDisplayName = (amenity: string) => {
-    const displayNames: Record<string, string> = {
-      'university': 'Universities',
-      'school': 'Schools',
-      'hospital': 'Hospitals',
-      'police': 'Police Stations'
-    };
-    return displayNames[amenity] || amenity;
-  };
-
-  // Function to get marker HTML based on POI type
-  const getMarkerHTML = (amenity: string) => {
-    const icons = {
-      hospital: `
-        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-red-500 text-lg font-bold">+</div>
-        </div>
-      `,
-      university: `
-        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-blue-500 text-lg">🎓</div>
-        </div>
-      `,
-      school: `
-        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-green-500 text-lg">📚</div>
-        </div>
-      `,
-      police: `
-        <div class="w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center" style="z-index: 1000;">
-          <div class="text-indigo-500 text-lg">👮</div>
-        </div>
-      `
+    // Handle click events
+    const clickHandler = (evt: any) => {
+      const feature = newMap.forEachFeatureAtPixel(evt.pixel, (feature) => feature, {
+        hitTolerance: 5,
+        layerFilter: (layer) => layer instanceof VectorLayer
+      });
+      
+      if (feature) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        
+        const house = feature.get('house');
+        if (!house) return;
+        
+        const geometry = feature.getGeometry() as Point;
+        const coordinates = geometry.getCoordinates();
+        
+        setSelectedHouse(house);
+        popup.setPosition(coordinates);
+      } else {
+        setSelectedHouse(null);
+        popup.setPosition(undefined);
+      }
     };
 
-    return icons[amenity as keyof typeof icons] || '';
-  };
+    newMap.on('singleclick', clickHandler);
 
-  // Initialize map state
-  useEffect(() => {
-    if (map) {
-      isMapReadyRef.current = true;
-      mapInitializedRef.current = true;
-      console.log('Map initialized, current zoom:', map.getZoom());
-    }
-  }, [map]);
+    setMap(newMap);
 
-  // Update POIs when map bounds change
+    // Cleanup function
+    return () => {
+      newMap.un('singleclick', clickHandler);
+      newMap.setTarget(undefined);
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  // Map event handler
+  const handleMapEvent = useCallback((event: MapBrowserEvent<PointerEvent> | ObjectEvent) => {
+    updateVisibleHouses();
+  }, [updateVisibleHouses]);
+
+  // Separate effect for map event listeners and initial update
   useEffect(() => {
     if (!map) return;
 
-    const updatePOIs = async () => {
-      if (!isMapReadyRef.current) return;
+    // Use the correct event names from OpenLayers
+    map.on(['change:view'], handleMapEvent as any);
+    map.on(['moveend'], handleMapEvent as any);
 
-      try {
-        // Clear any existing timeouts
-        if (updateTimeoutRef.current) {
-          clearTimeout(updateTimeoutRef.current);
-        }
-        if (movementTimeoutRef.current) {
-          clearTimeout(movementTimeoutRef.current);
-        }
-        if (rateLimitRetryTimeoutRef.current) {
-          clearTimeout(rateLimitRetryTimeoutRef.current);
-        }
-
-        // Wait for map to settle after movement
-        movementTimeoutRef.current = setTimeout(async () => {
-          try {
-            if (!map || !map.getBounds) {
-              console.warn('Map not ready for POI update');
-              return;
-            }
-
-            // Check if zoom level is sufficient
-            const currentZoom = map.getZoom();
-            console.log('Current zoom level:', currentZoom);
-            if (currentZoom < POI_MIN_ZOOM_LEVEL) {
-              console.log('Zoom level too low, clearing POIs');
-              setPois([]); // Clear POIs when zoomed out
-              return;
-            }
-
-            const bounds = map.getBounds();
-            if (!bounds || !bounds.isValid()) {
-              console.warn('Invalid map bounds');
-              return;
-            }
-
-            // Rate limiting check with increased interval
-            const now = Date.now();
-            if (now - lastFetchTimeRef.current < MIN_FETCH_INTERVAL) {
-              console.log('Rate limiting POI fetch - waiting longer');
-              return;
-            }
-            
-            boundsRef.current = bounds;
-            setIsLoading(true);
-            lastFetchTimeRef.current = now;
-            
-            const newPOIs = await fetchPOIs(bounds);
-            console.log('Fetched new POIs:', newPOIs.length);
-            
-            // Filter out any POIs with invalid coordinates
-            const validPOIs = newPOIs.filter(poi => 
-              typeof poi.lat === 'number' && 
-              typeof poi.lon === 'number' && 
-              !isNaN(poi.lat) && 
-              !isNaN(poi.lon)
-            );
-            setPois(validPOIs);
-          } catch (error) {
-            console.error('Error updating POIs:', error);
-          } finally {
-            setIsLoading(false);
-          }
-        }, 1000);
-      } catch (error) {
-        console.error('Error in updatePOIs:', error);
-        setIsLoading(false);
-      }
-    };
-
-    // Add zoomend event listener
-    const handleZoomEnd = () => {
-      const currentZoom = map.getZoom();
-      console.log('Zoom level changed to:', currentZoom);
-      if (currentZoom < POI_MIN_ZOOM_LEVEL) {
-        setPois([]); // Clear POIs when zoomed out
-      } else {
-        updatePOIs(); // Update POIs when zoomed in
-      }
-    };
-
-    map.on('zoomend', handleZoomEnd);
-    map.on('moveend', updatePOIs);
-
-    // Initial POI load
-    if (map.getZoom() >= POI_MIN_ZOOM_LEVEL) {
-      updatePOIs();
-    }
+    // Initial update
+    updateVisibleHouses();
 
     return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
+      map.un(['change:view'], handleMapEvent as any);
+      map.un(['moveend'], handleMapEvent as any);
+    };
+  }, [map, handleMapEvent, updateVisibleHouses]);
+
+  // Update the updatePOIs function
+  const updatePOIs = useCallback(() => {
+    if (!map) return;
+
+    const view = map.getView();
+    const zoom = view.getZoom();
+    
+    if (!zoom || zoom < POI_MIN_ZOOM_LEVEL) {
+      setPois([]);
+      return;
+    }
+
+    const fetchAllPOIs = async () => {
+      try {
+        const types = ['hospital', 'police', 'school', 'university'];
+        const promises = types.map(type => 
+          new Promise<POI[]>((resolve, reject) => {
+            requestQueue.current.push({
+              bbox: '', // Empty bbox to fetch all of Italy
+              type,
+              resolve,
+              reject,
+              retries: MAX_RETRIES
+            });
+          })
+        );
+        
+        const allPOIs = await Promise.all(promises);
+        const flattenedPOIs = allPOIs.flat();
+        setPois(flattenedPOIs);
+        processQueue();
+      } catch (error) {
+        console.error('Error fetching POIs:', error);
+        setPois([]);
       }
-      if (movementTimeoutRef.current) {
-        clearTimeout(movementTimeoutRef.current);
+    };
+
+    fetchAllPOIs();
+  }, [map, processQueue]);
+
+  // Update the useEffect for POI updates
+  useEffect(() => {
+    if (!map) return;
+
+    let updateTimeout: NodeJS.Timeout;
+
+    const handleMoveEnd = () => {
+      clearTimeout(updateTimeout);
+      updateTimeout = setTimeout(updatePOIs, 1000); // Debounce for 1 second
+    };
+
+    const handleZoomEnd = () => {
+      const zoom = map.getView().getZoom();
+      if (!zoom || zoom < POI_MIN_ZOOM_LEVEL) {
+        setPois([]);
+      } else {
+        handleMoveEnd();
       }
-      if (initTimeoutRef.current) {
-        clearTimeout(initTimeoutRef.current);
+    };
+
+    map.on('moveend' as any, handleMoveEnd);
+    map.on('zoomend' as any, handleZoomEnd);
+
+    // Initial update
+    updatePOIs();
+
+    return () => {
+      clearTimeout(updateTimeout);
+      map.un('moveend' as any, handleMoveEnd);
+      map.un('zoomend' as any, handleZoomEnd);
+    };
+  }, [map, updatePOIs]);
+
+  // Update the useEffect for POI markers
+  useEffect(() => {
+    if (!map) return;
+
+    // Create POI vector layer with higher z-index
+    const poiVectorSource = new VectorSource();
+    const poiVectorLayer = new VectorLayer({
+      source: poiVectorSource,
+      zIndex: 2000
+    });
+    map.addLayer(poiVectorLayer);
+
+    // Update POI markers
+    poiVectorSource.clear();
+    pois.forEach(poi => {
+      const feature = new Feature({
+        geometry: new Point(fromLonLat(poi.coordinates)),
+        poi
+      });
+
+      // Set different colors for different POI types
+      let color = '#000000';
+      switch (poi.type) {
+        case 'hospital':
+          color = '#FF0000';
+          break;
+        case 'police':
+          color = '#0000FF';
+          break;
+        case 'school':
+          color = '#00FF00';
+          break;
+        case 'university':
+          color = '#800080';
+          break;
       }
-      if (rateLimitRetryTimeoutRef.current) {
-        clearTimeout(rateLimitRetryTimeoutRef.current);
+
+      const style = new Style({
+        text: new Text({
+          text: poi.name,
+          font: '12px Arial',
+          fill: new Fill({ color: color }),
+          stroke: new Stroke({
+            color: 'white',
+            width: 3
+          }),
+          offsetY: -15
+        })
+      });
+
+      feature.setStyle(style);
+      poiVectorSource.addFeature(feature);
+    });
+
+    return () => {
+      map.removeLayer(poiVectorLayer);
+    };
+  }, [map, pois]);
+
+  // Add this after map initialization in the first useEffect
+  useEffect(() => {
+    if (!map) return;
+
+    // Create search marker layer
+    const searchVectorSource = new VectorSource();
+    const searchVectorLayer = new VectorLayer({
+      source: searchVectorSource,
+      zIndex: 3000 // Higher than POIs and house markers
+    });
+    map.addLayer(searchVectorLayer);
+    searchVectorRef.current = searchVectorLayer;
+
+    return () => {
+      if (searchVectorRef.current) {
+        map.removeLayer(searchVectorRef.current);
       }
-      map.off('moveend', updatePOIs);
-      map.off('zoomend', handleZoomEnd);
     };
   }, [map]);
 
-  return (
-    <>
-      {/* Legend - only show when zoomed in */}
-      {map && map.getZoom() >= POI_MIN_ZOOM_LEVEL && (
-        <div className="absolute top-20 right-4 z-[2000] bg-white p-3 rounded-lg shadow-md">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-sm">Points of Interest</h3>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="light"
-              onClick={() => setShowLegend(!showLegend)}
-            >
-              <Icon icon={showLegend ? "lucide:chevron-up" : "lucide:chevron-down"} />
-            </Button>
-          </div>
-          {showLegend && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <span className="text-lg">+</span>
-                </div>
-                <span className="text-sm">Hospitals</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <span className="text-lg">🎓</span>
-                </div>
-                <span className="text-sm">Universities</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <span className="text-lg">📚</span>
-                </div>
-                <span className="text-sm">Schools</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <span className="text-lg">👮</span>
-                </div>
-                <span className="text-sm">Police Stations</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* POI Markers - only show when zoomed in */}
-      {map && map.getZoom() >= POI_MIN_ZOOM_LEVEL && pois.map(poi => {
-        if (typeof poi.lat !== 'number' || typeof poi.lon !== 'number' || 
-            isNaN(poi.lat) || isNaN(poi.lon)) {
-          return null;
-        }
-
-        const amenity = poi.tags?.amenity;
-        if (!amenity || !['hospital', 'university', 'school', 'police'].includes(amenity)) {
-          return null;
-        }
-
-        const name = poi.tags?.name;
-        const markerHtml = getMarkerHTML(amenity);
-        
-        if (!markerHtml) {
-          return null;
-        }
-
-        return (
-          <Marker
-            key={`${poi.id}-${poi.type}`}
-            position={[poi.lat, poi.lon]}
-            icon={L.divIcon({
-              html: markerHtml,
-              className: 'custom-poi-marker',
-              iconSize: [24, 24],
-              iconAnchor: [12, 12]
-            })}
-            zIndexOffset={1000}
-          >
-            <Popup className="z-[1500]">
-              <div className="p-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">
-                    {amenity === 'hospital' && '+'}
-                    {amenity === 'university' && '🎓'}
-                    {amenity === 'school' && '📚'}
-                    {amenity === 'police' && '👮'}
-                  </span>
-                  <h3 className="font-semibold text-base">{name || getPOIDisplayName(amenity)}</h3>
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        );
-      })}
-      
-      {/* Loading indicator - only show when zoomed in */}
-      {map && map.getZoom() >= POI_MIN_ZOOM_LEVEL && isLoading && (
-        <div className="absolute bottom-4 right-4 z-[2000] bg-white p-2 rounded-lg shadow-md">
-          <div className="flex items-center gap-2">
-            <Spinner size="sm" />
-            <span className="text-sm">Loading POIs...</span>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
-
-export const Map = () => {
-  const [visibleHouses, setVisibleHouses] = useState<House[]>([]);  // Start with empty array
-  const [mapCenter, setMapCenter] = useState<[number, number]>([41.9028, 12.4964]); // Default: Rome, Italy
-  const [selectedHouseId, setSelectedHouseId] = useState<string | null>(null);
-  const [findOnMapTimestamp, setFindOnMapTimestamp] = useState<number>(0); // Timestamp for "Find on map" clicks
-  const [searchParams, setSearchParams] = useState<SearchParams>({ location: '', checkIn: '', checkOut: '' });
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [isSearchedLocation, setIsSearchedLocation] = useState(false);
-  const location = useLocation();
-  const [mapReady, setMapReady] = useState(false);
-  const [searchedCoordinates, setSearchedCoordinates] = useState<[number, number] | null>(null);
-  const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | null>(null);
-  const [autoFilterEnabled, setAutoFilterEnabled] = useState(true); // Changed to true to auto-filter on load
-  const [isLoading, setIsLoading] = useState(false);
-  const [markersLoaded, setMarkersLoaded] = useState(false); // Track if markers have been loaded
-  const bottomSheetRef = useRef<DraggableBottomSheetHandle>(null);
-  
-  // Make sure the map is rendered client-side only
+  // Add house markers
   useEffect(() => {
-    setMapReady(true);
-  }, []);
+    if (!map) return;
 
-  // Track bounds but don't filter properties automatically after initial load
-  const handleBoundsChange = (bounds: L.LatLngBounds) => {
-    if (!bounds.isValid()) {
-      console.log("❌ Invalid bounds in handleBoundsChange");
-      return;
-    }
-    
-    console.log("🗺️ Bounds changed:", {
-      autoFilterEnabled,
-      hasSelectedHouse: !!selectedHouseId
+    const vectorSource = new VectorSource();
+    const vectorLayer = new VectorLayer({
+      source: vectorSource,
+      zIndex: 1000
     });
-    
-    setCurrentBounds(bounds);
-    
-    // Always filter houses to only show those within current map bounds
-    const filteredHouses = sampleHouses.filter(house => {
-      const [lat, lng] = house.location;
-      return bounds.contains([lat, lng]);
-    });
-    setVisibleHouses(filteredHouses);
-    
-    // Only show markers on map when zoomed in enough (level 13 or higher)
-    const map = (window as any).leafletMap;
-    if (map && map.getZoom() >= 13) {
-      console.log("🔄 Zoom level sufficient, showing markers on map");
-      setMarkersLoaded(true);
-    } else {
-      console.log("🔄 Zoom level too low, hiding markers from map");
-      setMarkersLoaded(false);
-    }
-  };
-  
-  // Function to manually filter properties based on current bounds
-  const filterPropertiesByBounds = (bounds: L.LatLngBounds) => {
-    if (!bounds || !bounds.isValid()) {
-      console.log("❌ Invalid bounds in filterPropertiesByBounds", bounds);
-      return;
-    }
-    
-    console.log("🔍 FILTER: Filtering properties with bounds:", {
-      north: bounds.getNorth().toFixed(5),
-      south: bounds.getSouth().toFixed(5),
-      east: bounds.getEast().toFixed(5),
-      west: bounds.getWest().toFixed(5),
-      selectedHouseId,
-      isValid: bounds.isValid(),
-      area: (bounds.getNorth() - bounds.getSouth()) * 
-            (bounds.getEast() - bounds.getWest())
-    });
-    
-    setIsLoading(true);
-    
-    // Small delay to show loading state
-    setTimeout(() => {
-      // Always filter houses to only show those within current map bounds
-      const filteredHouses = sampleHouses.filter(house => {
-        const [lat, lng] = house.location;
-        return bounds.contains([lat, lng]);
+    map.addLayer(vectorLayer);
+
+    houses.forEach(house => {
+      const feature = new Feature({
+        geometry: new Point(fromLonLat(house.location)),
+        house
       });
-      setVisibleHouses(filteredHouses);
+
+      const isSelected = selectedProperty === house.id;
+      const color = isSelected ? '%233B82F6' : '%2360A5FA';
+      const bgColor = isSelected ? '%23E6F6F6' : '%23F0F9FF';
       
-      // Only show markers on map when zoomed in enough (level 13 or higher)
-      const map = (window as any).leafletMap;
-      if (map && map.getZoom() >= 13) {
-        setMarkersLoaded(true);
-      } else {
-        setMarkersLoaded(false);
-      }
-      setIsLoading(false);
-    }, 300);
-  };
-  
-  // Handler for the Load Properties button
-  const handleLoadProperties = () => {
-    console.log("🔄 Refresh Properties clicked", {
-      hasCurrentBounds: !!currentBounds,
-      selectedHouseId,
-      hasOpenPopup: !!selectedHouseId
+      feature.setStyle(new Style({
+        image: new OlIcon({
+          src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+            <circle cx="12" cy="12" r="11" fill="${bgColor}" stroke="${color}" stroke-width="2"/>
+            <path d="M12 4L6 9h1v7h4v-4h2v4h4V9h1L12 4z" fill="${color}"/>
+          </svg>`,
+          scale: 1.2,
+          anchor: [0.5, 0.5]
+        })
+      }));
+
+      vectorSource.addFeature(feature);
     });
-    
-    // Close any open popup when refreshing properties
-    if (selectedHouseId) {
-      console.log("🔄 Closing popup before refreshing properties");
-      setSelectedHouseId(null);
-    }
-    
-    // Show loading state immediately
-    setIsLoading(true);
-    
-    // Wait slightly longer to ensure popup is closed and any animations complete
-    setTimeout(() => {
-      try {
-        // Get the live map instance to use for bounds checking
-        const leafletMap = (window as any).leafletMap;
-        
-        // Check if the leafletMap reference is available
-        if (leafletMap) {
-          console.log("🗺️ Using direct leafletMap reference for refresh");
-          
-          // Get the current bounds DIRECTLY from the map - not from our state
-          const liveBounds = leafletMap.getBounds();
-          
-          if (!liveBounds || !liveBounds.isValid()) {
-            console.error("❌ Invalid bounds from leafletMap");
-            throw new Error("Invalid bounds from leafletMap");
-          }
-          
-          console.log("🗺️ LIVE map bounds when refreshing:", {
-            north: liveBounds.getNorth().toFixed(5),
-            south: liveBounds.getSouth().toFixed(5),
-            east: liveBounds.getEast().toFixed(5),
-            west: liveBounds.getWest().toFixed(5),
-            isValid: liveBounds.isValid()
-          });
-          
-          // Force the search to use the current visible properties regardless of state
-          const filteredHouses = sampleHouses.filter(house => {
-            const [lat, lng] = house.location;
-            const isInBounds = liveBounds.contains([lat, lng]);
-            if (!isInBounds) {
-              console.log(`House ${house.id} is outside current map bounds`);
-            }
-            return isInBounds;
-          });
-          
-          console.log(`📊 Found ${filteredHouses.length} properties in current view`);
-          
-          // Update the visible houses directly
-          setVisibleHouses(filteredHouses);
-          setMarkersLoaded(true);
-          setIsLoading(false);
-        } else if (currentBounds) {
-          // Fallback to currentBounds if map instance not available
-          console.log("⚠️ Using stored bounds as fallback");
-          if (!currentBounds.isValid()) {
-            console.error("❌ Invalid currentBounds");
-            throw new Error("Invalid currentBounds");
-          }
-          filterPropertiesByBounds(currentBounds);
-        } else {
-          console.error("❌ No map bounds available for filtering");
-          setIsLoading(false);
-          // Just show all houses if we can't get bounds
-          console.log("📍 Showing all houses as fallback");
-          setVisibleHouses(sampleHouses);
-          setMarkersLoaded(true);
-        }
-      } catch (error) {
-        console.error("Error during property refresh:", error);
-        setIsLoading(false);
-        // Show all houses as a fallback if there's an error
-        setVisibleHouses(sampleHouses);
-        setMarkersLoaded(true);
-      }
-    }, 300); // Use a longer timeout to ensure all map movements have completed
-  };
 
-  // Reset markers when the map is moved significantly
-  useEffect(() => {
-    if (markersLoaded && currentBounds) {
-      // When markers are loaded and bounds change significantly, 
-      // we could optionally clear markers here until user clicks "Load Properties" again
-      // setMarkersLoaded(false);
-      // setVisibleHouses([]);
-    }
-  }, [mapCenter]);
+    return () => {
+      map.removeLayer(vectorLayer);
+    };
+  }, [map, houses, selectedProperty]);
 
-  const handleMarkerClick = (houseId: string) => {
-    // Check for empty string to handle closing popups
-    if (houseId === "") {
-      setSelectedHouseId(null);
-    } else {
-      setSelectedHouseId(houseId);
-    }
-  };
-
-  // Enhanced handle search with better error handling and user feedback
-  const handleSearch = async (params: SearchParams, coordinates?: [number, number]) => {
-    setSearchParams(params);
+  const handleSearch = async (params: { location: string; checkIn: string; checkOut: string }, coordinates?: [number, number]) => {
+    if (!map) return;
     setIsSearching(true);
-    setSearchError(null);
-    // Clear the selected house when performing a new search
-    setSelectedHouseId(null);
-    console.log("🔍 New search - clearing selected house state");
-    
-    // Collapse the bottom sheet if it's open
-    if (bottomSheetRef.current) {
-      bottomSheetRef.current.collapseSheet();
-    }
     
     try {
+      let searchCoords;
       if (coordinates) {
-        // If we have direct coordinates from selected location
-        console.log("Setting map center to:", coordinates);
-        setMapCenter(coordinates);
-        setSearchedCoordinates(coordinates);
-        setIsSearchedLocation(true);
+        // Use provided coordinates
+        searchCoords = fromLonLat(coordinates);
+      } else {
+        // Fetch coordinates from Nominatim
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(params.location)}`);
+        const data: NominatimResult[] = await response.json();
         
-        // Hide markers when searching a new area
-        setMarkersLoaded(false);
-        setVisibleHouses([]);
-        
-        // Force map to zoom in to show POIs
-        const leafletMap = (window as any).leafletMap;
-        if (leafletMap) {
-          leafletMap.setZoom(POI_MIN_ZOOM_LEVEL);
-          // Force a map redraw to ensure POIs are loaded
-          setTimeout(() => {
-            leafletMap.invalidateSize();
-          }, 100);
-        }
-        
-      } else if (params.location) {
-        // Otherwise geocode the location
-        const coords = await geocodeLocation(params.location);
-        if (coords) {
-          console.log("Geocoded coordinates:", coords);
-          setMapCenter(coords);
-          setSearchedCoordinates(coords);
-          setIsSearchedLocation(true);
-          
-          // Hide markers when searching a new area
-          setMarkersLoaded(false);
-          setVisibleHouses([]);
-          
-          // Force map to zoom in to show POIs
-          const leafletMap = (window as any).leafletMap;
-          if (leafletMap) {
-            leafletMap.setZoom(POI_MIN_ZOOM_LEVEL);
-            // Force a map redraw to ensure POIs are loaded
-            setTimeout(() => {
-              leafletMap.invalidateSize();
-            }, 100);
-          }
-          
-        } else {
-          // No results found
-          setSearchError(`No locations found for "${params.location}"`);
-          // Keep showing all houses but don't move the map
+        if (data && data.length > 0) {
+          const { lat, lon } = data[0];
+          searchCoords = fromLonLat([parseFloat(lon), parseFloat(lat)]);
         }
       }
+
+      if (searchCoords && searchVectorRef.current) {
+        // Remove previous search marker
+        if (searchMarker) {
+          searchVectorRef.current.getSource()?.removeFeature(searchMarker);
+        }
+
+        // Create new search marker
+        const newSearchMarker = new Feature({
+          geometry: new Point(searchCoords)
+        });
+
+        // Style for the search marker
+        newSearchMarker.setStyle(new Style({
+          image: new OlIcon({
+            src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+              <path d="M12 0C7.6 0 4 3.6 4 8c0 5.4 8 16 8 16s8-10.6 8-16c0-4.4-3.6-8-8-8zm0 12c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" 
+                fill="%23FF0000" stroke="%23FFFFFF" stroke-width="1"/>
+            </svg>`,
+            scale: 2,
+            anchor: [0.5, 1], // Anchor at bottom center of the pin
+            anchorXUnits: 'fraction',
+            anchorYUnits: 'fraction'
+          })
+        }));
+
+        // Add the marker and store it
+        searchVectorRef.current.getSource()?.addFeature(newSearchMarker);
+        setSearchMarker(newSearchMarker);
+
+        // Animate to the location
+        map.getView().animate({
+          center: searchCoords,
+          zoom: 13,
+          duration: 1000
+        });
+      }
     } catch (error) {
-      console.error('Error setting map location:', error);
-      setSearchError('Failed to search location. Please try again.');
+      console.error('Error searching location:', error);
     } finally {
       setIsSearching(false);
     }
   };
 
-  // Auto-load properties after search or when map is loaded
-  useEffect(() => {
-    // When the map movement finishes after search, load properties
-    if (!isSearching && currentBounds && (searchedCoordinates || !markersLoaded)) {
-      // Add a short delay to ensure the map has finished moving
-      const timerId = setTimeout(() => {
-        filterPropertiesByBounds(currentBounds);
-      }, 500);
-      
-      return () => clearTimeout(timerId);
-    }
-  }, [isSearching, searchedCoordinates, currentBounds, markersLoaded]);
-
-  const handleFindOnMap = (houseLocation: [number, number]) => {
-    setMapCenter(houseLocation);
-    // Don't set searchedLocation to true to avoid zoom change
-    setIsSearchedLocation(false);
-    
-    // Collapse the bottom sheet if it's open
-    if (bottomSheetRef.current) {
-      bottomSheetRef.current.collapseSheet();
-    }
-    
-    // Find the house in the full sampleHouses array (not just visibleHouses)
-    // This ensures we can find any house, even if it's currently filtered out
-    const house = sampleHouses.find(h => 
-      h.location[0] === houseLocation[0] && h.location[1] === houseLocation[1]
-    );
-    if (house) {
-      // Generate a new timestamp to force popup to reopen even for the same house
-      setFindOnMapTimestamp(Date.now());
-      setSelectedHouseId(house.id);
+  const handleViewModeChange = (mode: 'list' | 'map') => {
+    setViewMode(mode);
+    if (mode === 'list') {
+      // When switching to list view, expand the bottom sheet
+      bottomSheetRef.current?.expandSheet();
+    } else {
+      // When switching to map view, collapse the bottom sheet
+      bottomSheetRef.current?.collapseSheet();
     }
   };
 
-  // Calculate the height of the main content based on searchbar height
-  const searchBarHeight = 56; // Fixed height for searchbar
-  
-  // Adjust height for content - mobile only
-  const contentHeight = `calc(100vh`;
-
-  // useEffect for handling CSS variable for hiding header
-  useEffect(() => {
-    // Only hide header on mobile view for Dashboard page
-    const isDashboardPage = location.pathname === '/dashboard' || location.pathname === '/map';
-    document.documentElement.style.setProperty('--hide-header-mobile', isDashboardPage ? 'none' : 'block');
-    
-    // Always show header on desktop
-    document.documentElement.style.setProperty('--hide-header-desktop', 'block');
-    
-    return () => {
-      document.documentElement.style.setProperty('--hide-header-mobile', 'block');
-      document.documentElement.style.setProperty('--hide-header-desktop', 'block');
-    };
-  }, [location]);
-
   return (
-    <>
-      <div className="site-header">
+    <div className="h-screen flex flex-col">
+      {/* Header - Hidden on mobile */}
+      <div className="hidden md:block">
         <Header />
       </div>
-      {/* Desktop view - Search bar below main header */}
-      <div className="hidden md:block">
-        <SearchBar onSearch={handleSearch} isSearching={isSearching} />
-      </div>
-
-      <div style={{ height: contentHeight }} className="relative dashboard-content">
-        <div className="hidden md:grid md:grid-cols-[350px,1fr] h-full">
-          {/* Sidebar with listings */}
-          <div className="overflow-y-auto p-4 border-r">
-            <div className="mb-4">
-              <h2 className="text-xl font-bold">Available Properties</h2>
-              <p className="text-default-500">
-                {visibleHouses.length} properties found in this area
-              </p>
-            </div>
-            <div className="flex flex-col gap-4">
-              {visibleHouses.map(house => (
-                <HouseCard 
-                  key={house.id} 
-                  house={house} 
-                  onFindOnMap={handleFindOnMap}
-                />
-              ))}
-              {visibleHouses.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-default-500">No properties found in this area</p>
-                  <Button 
-                    color="primary" 
-                    className="mt-4"
-                    onClick={handleLoadProperties}
-                    isLoading={isLoading}
-                  >
-                    Load Properties
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Map */}
-          <div className="relative h-full map-parent">
-            {mapReady && (
-              <MapContainer
-                center={mapCenter}
-                zoom={6}
-                className="h-full w-full map-container"
-                zoomControl={false}
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://carto.com/" target="_blank">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
-                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                />
-                <MapProvider>
-                  <MapUpdater houses={[]} onBoundsChange={handleBoundsChange} />
-                  <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
-                  <MapOptions />
-                  
-                  {/* Show visual marker for searched location */}
-                  {searchedCoordinates && <SearchedLocationMarker position={searchedCoordinates} />}
-                  
-                  {/* Add POI markers */}
-                  <POIMarkers />
-                  
-                  {/* Add property markers */}
-                  <PersistentMarkers 
-                    houses={visibleHouses}
-                    onMarkerClick={handleMarkerClick}
-                    selectedHouseId={selectedHouseId}
-                    findOnMapTimestamp={findOnMapTimestamp}
-                  />
-                  
-                  <ZoomControls />
-                </MapProvider>
-              </MapContainer>
-            )}
-          </div>
+      <div className="flex-1 relative">
+        {/* Search Bar - Full width on mobile */}
+        <div className="md:px-4 relative z-50">
+          <SearchBar onSearch={handleSearch} isSearching={isSearching} />
         </div>
+        <div className="fixed inset-0 md:top-[64px]">
+          {/* Map Container - Full Screen */}
+          <div className="absolute inset-0">
+            <div ref={mapRef} className="absolute inset-0 w-full h-full" />
+            <div ref={popupRef} className="absolute z-30" />
+          </div>
 
-        {/* Mobile view with integrated search and sheet */}
-        <div className="md:hidden h-full">
-          {/* Full-screen map */}
-          <div className="h-full w-full map-parent">
-            
-            {/* Floating Search Bar for mobile */}
-            <SearchBar onSearch={handleSearch} isSearching={isSearching} />
-            
-            {mapReady && (
-              <MapContainer
-                center={mapCenter}
-                zoom={6}
-                className="h-full w-full map-container"
-                zoomControl={false}
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://carto.com/" target="_blank">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
-                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                />
-                <MapProvider>
-                  <MapUpdater houses={[]} onBoundsChange={handleBoundsChange} />
-                  <SetMapCenter center={mapCenter} searchedLocation={isSearchedLocation} />
-                  <MapOptions />
-                  
-                  {/* Show visual marker for searched location */}
-                  {searchedCoordinates && <SearchedLocationMarker position={searchedCoordinates} />}
-                  
-                  {/* Add POI markers */}
-                  <POIMarkers />
-                  
-                  {/* Add property markers */}
-                  <PersistentMarkers 
-                    houses={visibleHouses}
-                    onMarkerClick={handleMarkerClick}
-                    selectedHouseId={selectedHouseId}
-                    findOnMapTimestamp={findOnMapTimestamp}
+          {/* Desktop: Side List */}
+          <div className="hidden md:block absolute left-0 top-0 bottom-0 w-96 bg-white shadow-lg overflow-y-auto z-20">
+            <div className="p-4">
+              <h2 className="text-xl font-semibold mb-4">
+                Properties in View ({visibleHouses.length})
+              </h2>
+              <div className="space-y-4">
+                {visibleHouses.map(house => (
+                  <PropertyCard
+                    key={house.id}
+                    house={house}
+                    isSelected={selectedProperty === house.id}
+                    onLocate={() => {
+                      setSelectedProperty(house.id);
+                      if (map) {
+                        const view = map.getView();
+                        view.animate({
+                          center: fromLonLat(house.location),
+                          zoom: 14,
+                          duration: 1000
+                        });
+                      }
+                    }}
                   />
-                  
-                  <ZoomControls />
-                </MapProvider>
-              </MapContainer>
-            )}
+                ))}
+                {visibleHouses.length === 0 && (
+                  <div className="text-center text-gray-500 py-8">
+                    No properties in current view. Try zooming out or moving the map.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile: Draggable Bottom Sheet */}
+          <div className="md:hidden fixed inset-x-0 bottom-0 z-40">
+            <div className="touch-none">
+              <DraggableBottomSheet
+                ref={bottomSheetRef}
+                houses={visibleHouses.map(house => ({
+                  id: house.id,
+                  address: house.title,
+                  price: house.price,
+                  image: house.image,
+                  rating: house.rating,
+                  reviews: house.reviews,
+                  location: house.location
+                }))}
+                onViewDetails={(houseId) => {
+                  navigate(`/properties/${houseId}`);
+                }}
+                onFindOnMap={(location) => {
+                  if (map) {
+                    const view = map.getView();
+                    view.animate({
+                      center: fromLonLat(location),
+                      zoom: 14,
+                      duration: 1000
+                    });
+                  }
+                }}
+                topOffset={88}
+                inWrapper={true}
+                activeTab={viewMode}
+                onTabChange={handleViewModeChange}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </>
+      {selectedHouse && (
+        <div 
+          ref={popupRef} 
+          className="absolute z-10"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: 'translateX(15px)'
+          }}
+        >
+          <Popup 
+            house={selectedHouse} 
+            onClose={() => {
+              setSelectedHouse(null);
+              if (popupOverlay) {
+                popupOverlay.setPosition(undefined);
+              }
+            }} 
+          />
+        </div>
+      )}
+    </div>
   );
 };
+
+export default Map;
