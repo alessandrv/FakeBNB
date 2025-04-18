@@ -1,5 +1,5 @@
 import React, { useState, useRef, FormEvent, useEffect, useCallback, useMemo } from 'react';
-import { Button, Card, CardBody, CardFooter, Input, Divider, Popover, PopoverTrigger, PopoverContent, Autocomplete, AutocompleteItem, Spinner } from '@heroui/react';
+import { Button, Card, CardBody, CardFooter, Input, Divider, Popover, PopoverTrigger, PopoverContent, Autocomplete, AutocompleteItem, Spinner, Badge, Avatar, Tooltip, Progress, Chip } from '@heroui/react';
 import { Icon } from '@iconify/react';
 import { Map as OlMap, View } from 'ol';
 import { MapBrowserEvent } from 'ol';
@@ -93,45 +93,64 @@ const PropertyCard: React.FC<{
   const navigate = useNavigate();
   
   return (
-    <div className={`mb-6 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
+    <Card className={`mb-4 hover:shadow-md transition-shadow ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
       <div className="relative pb-[66.666667%] rounded-t-lg overflow-hidden">
         <img 
           src={house.image} 
           alt={house.title}
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute top-3 right-3 bg-white rounded-full px-3 py-1 text-sm font-semibold text-gray-900">
-          ${house.price}/night
-        </div>
+        {house.hasBooking && (
+          <Badge color="success" className="absolute top-3 left-3" aria-label="Property has a booking">
+            Booked
+          </Badge>
+        )}
       </div>
-      <div className="p-4">
-        <h3 className="font-semibold text-gray-900">{house.title}</h3>
-        <p className="text-gray-600 text-sm mt-1 line-clamp-2">{house.description}</p>
-        <div className="flex items-center mt-2 text-sm text-gray-600">
-          <span className="flex items-center">
-            {house.rating} <span className="text-yellow-400 ml-1">★</span>
-          </span>
+      <CardBody className="p-3">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-semibold text-gray-900 flex-1">{house.title}</h3>
+          <Badge color="primary" variant="solid" size="lg" className="ml-2 flex-shrink-0" aria-label={`Price: $${house.price}`}>
+            ${house.price}
+          </Badge>
+        </div>
+        <p className="text-gray-600 text-sm line-clamp-2 mb-2">{house.description}</p>
+        <div className="flex items-center text-sm text-gray-600">
+          <Tooltip content={`${house.rating} out of 5 stars`}>
+            <span className="flex items-center">
+              <Progress value={house.rating * 20} color="warning" className="w-20 mr-2" aria-label={`Rating: ${house.rating} out of 5 stars`} />
+              {house.rating} <span className="text-yellow-400 ml-1">★</span>
+            </span>
+          </Tooltip>
           <span className="mx-1">·</span>
           <span>({house.reviews} reviews)</span>
         </div>
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={onLocate}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors"
+      </CardBody>
+      <CardFooter className="p-3 pt-0">
+        <div className="flex gap-2">
+          <Button 
+            size="sm" 
+            variant="bordered" 
+            color="default" 
+            onPress={onLocate}
+            className="flex-1"
+            aria-label={`Locate ${house.title} on map`}
           >
-            <Icon icon="carbon:location" className="w-4 h-4" />
+            <Icon icon="carbon:location" className="mr-1" />
             Find on Map
-          </button>
-          <button
-            onClick={() => navigate(`/property/${house.id}`)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          </Button>
+          <Button 
+            size="sm" 
+            color="primary"
+            onPress={() => navigate(`/property/${house.id}`)}
+            className="flex-1"
+            aria-label={`View details of ${house.title}`}
           >
-            <Icon icon="carbon:view" className="w-4 h-4" />
+            <Icon icon="carbon:view" className="mr-1" />
             View Details
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 };
 
@@ -139,43 +158,48 @@ const PropertyPopup: React.FC<{ house: House }> = ({ house }) => {
   const navigate = useNavigate();
   
   return (
-    <div className="bg-white rounded-lg shadow-lg p-4 max-w-[300px]" onClick={(e) => e.stopPropagation()}>
-      <div className="relative pb-[66.666667%] rounded-lg overflow-hidden mb-3">
+    <Card className="w-full max-w-[300px]" onClick={(e) => e.stopPropagation()}>
+      <div className="relative pb-[66.666667%] rounded-t-lg overflow-hidden">
         <img 
           src={house.image} 
           alt={house.title}
           loading="lazy"
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute top-3 right-3 bg-white rounded-full px-3 py-1 text-sm font-semibold text-gray-900">
-          ${house.price}/night
-        </div>
       </div>
-      <h3 className="font-semibold text-gray-900 mb-2">{house.title}</h3>
-      <p className="text-gray-600 text-sm mb-2">{house.description}</p>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center text-sm text-gray-600">
-          <span className="flex items-center">
-            {house.rating} <span className="text-yellow-400 ml-1">★</span>
-          </span>
-          <span className="mx-1">·</span>
-          <span>{house.reviews} reviews</span>
+      <CardBody className="p-3">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-semibold text-gray-900 flex-1">{house.title}</h3>
+          <Badge color="primary" variant="solid" size="lg" className="ml-2 flex-shrink-0" aria-label={`Price: $${house.price}`}>
+            ${house.price}
+          </Badge>
         </div>
-        {house.hasBooking ? 
-          <span className="text-blue-600 text-sm font-medium">Has Booking</span> : 
-          <span className="text-green-600 text-sm font-medium">Available</span>
-        }
-      </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          navigate(`/property/${house.id}`);
-        }}
-        className="mt-3 block w-full text-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-      >
-        View Details
-      </button>
-    </div>
+        <p className="text-gray-600 text-sm mb-2">{house.description}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="flex items-center">
+              {house.rating} <span className="text-yellow-400 ml-1">★</span>
+            </span>
+            <span className="mx-1">·</span>
+            <span>{house.reviews} reviews</span>
+          </div>
+          {house.hasBooking ? 
+            <Chip color="primary" size="sm" aria-label="Property has booking">Has Booking</Chip> : 
+            <Chip color="success" size="sm" aria-label="Property is available">Available</Chip>
+          }
+        </div>
+      </CardBody>
+      <CardFooter className="p-3 pt-0">
+        <Button
+          color="primary"
+          fullWidth
+          onPress={() => navigate(`/property/${house.id}`)}
+          aria-label={`View details of ${house.title}`}
+        >
+          View Details
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };
 
@@ -185,44 +209,40 @@ const Popup: React.FC<{ house: House | null; onClose: () => void }> = ({ house, 
   if (!house) return null;
   
   return (
-    <div 
-      className="bg-white rounded-lg shadow-lg p-4 max-w-[400px] absolute left-0 top-0 transform translate-x-[15px]" 
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        zIndex: 1000,
-        pointerEvents: 'auto'
-      }}
-    >
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 mb-2">{house.title}</h3>
-          <div className="mt-2">
-            <div className="text-lg font-semibold text-gray-900">
-              ${house.price}/night
+    <Card className="max-w-[400px] shadow-lg">
+      <CardBody className="p-4">
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-gray-900">{house.title}</h3>
+              <Badge color="primary" variant="solid" size="lg" className="ml-2" aria-label={`Price: $${house.price}`}>
+                ${house.price}
+              </Badge>
             </div>
-          </div>
-          <div className="mt-3">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/property/${house.id}`);
-              }}
-              className="w-full text-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            <div className="flex items-center mt-2 mb-3">
+              <Progress value={house.rating * 20} color="warning" className="w-20 mr-2" aria-label={`Rating: ${house.rating} out of 5 stars`} />
+              <span>{house.rating}/5 ({house.reviews} reviews)</span>
+            </div>
+            <Button
+              color="primary"
+              fullWidth
+              onPress={() => navigate(`/property/${house.id}`)}
+              size="sm"
+              aria-label={`View details of ${house.title}`}
             >
-              Details
-            </button>
+              View Details
+            </Button>
+          </div>
+          <div className="w-32 h-32 flex-shrink-0">
+            <Avatar 
+              src={house.image} 
+              alt={house.title}
+              className="w-full h-full rounded-lg object-cover"
+            />
           </div>
         </div>
-        <div className="w-32 h-32 flex-shrink-0">
-          <img 
-            src={house.image} 
-            alt={house.title}
-            loading="lazy"
-            className="w-full h-full object-cover rounded-lg"
-          />
-        </div>
-      </div>
-    </div>
+      </CardBody>
+    </Card>
   );
 };
 
@@ -254,7 +274,7 @@ const Map: React.FC = () => {
   const navigate = useNavigate();
   const [searchMarker, setSearchMarker] = useState<Feature | null>(null);
   const searchVectorRef = useRef<VectorLayer<VectorSource> | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
   const bottomSheetRef = useRef<DraggableBottomSheetHandle>(null);
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
 
@@ -435,7 +455,7 @@ const Map: React.FC = () => {
     const popup = new Overlay({
       element: popupRef.current,
       positioning: 'bottom-center',
-      offset: [15, 0],
+      offset: [0, -10],
       stopEvent: true,
       className: 'ol-popup',
       autoPan: {
@@ -458,13 +478,20 @@ const Map: React.FC = () => {
         box-shadow: none;
         padding: 0;
         border: none;
-        min-width: 280px;
+        min-width: 320px;
+        pointer-events: auto;
+        transform: translate(-50%, 0);
       }
       .ol-popup:after, .ol-popup:before {
         display: none;
       }
+      .map-marker:hover {
+        cursor: pointer;
+      }
     `;
-    document.head.appendChild(style);
+    // Keep a reference to the head to ensure we're removing from the correct parent
+    const head = document.head;
+    head.appendChild(style);
 
     // Handle click events
     const clickHandler = (evt: any) => {
@@ -480,26 +507,55 @@ const Map: React.FC = () => {
         const house = feature.get('house');
         if (!house) return;
         
-        const geometry = feature.getGeometry() as Point;
-        const coordinates = geometry.getCoordinates();
+        // Position the popup at the clicked feature's coordinates
+        const geometry = feature.getGeometry();
+        if (geometry && geometry instanceof Point) {
+          const coordinates = geometry.getCoordinates();
+          popup.setPosition(coordinates);
+        }
         
         setSelectedHouse(house);
-        popup.setPosition(coordinates);
       } else {
         setSelectedHouse(null);
         popup.setPosition(undefined);
       }
     };
 
+    // Add pointer cursor for house icons
+    newMap.on('pointermove', function(e) {
+      const pixel = newMap.getEventPixel(e.originalEvent);
+      const hit = newMap.hasFeatureAtPixel(pixel, {
+        layerFilter: (layer) => layer instanceof VectorLayer
+      });
+      
+      mapContainer.style.cursor = hit ? 'pointer' : '';
+    });
+
     newMap.on('singleclick', clickHandler);
+
+    // Set willReadFrequently attribute on canvas to improve getImageData performance
+    setTimeout(() => {
+      const canvas = mapContainer.querySelector('canvas');
+      if (canvas) {
+        (canvas as HTMLCanvasElement).getContext('2d', { willReadFrequently: true });
+        console.log('Set willReadFrequently on map canvas for better performance');
+      }
+    }, 100);
 
     setMap(newMap);
 
     // Cleanup function
     return () => {
+      // Properly clean up event listeners first
       newMap.un('singleclick', clickHandler);
+      
+      // Set target to undefined to destroy the map
       newMap.setTarget(undefined);
-      document.head.removeChild(style);
+      
+      // Safely remove the style element
+      if (style.parentNode === head) {
+        head.removeChild(style);
+      }
     };
   }, []);
 
@@ -677,14 +733,15 @@ const Map: React.FC = () => {
     };
   }, [map]);
 
-  // Add house markers
+  // Update house markers
   useEffect(() => {
     if (!map) return;
 
     const vectorSource = new VectorSource();
     const vectorLayer = new VectorLayer({
       source: vectorSource,
-      zIndex: 1000
+      zIndex: 1000,
+      className: 'map-marker' // Add class for CSS targeting
     });
     map.addLayer(vectorLayer);
 
@@ -695,16 +752,18 @@ const Map: React.FC = () => {
       });
 
       const isSelected = selectedProperty === house.id;
-      const color = isSelected ? '%233B82F6' : '%2360A5FA';
-      const bgColor = isSelected ? '%23E6F6F6' : '%23F0F9FF';
+      // Use a consistent light blue for the circle, white for the house
+      const circleFill = '%23A0D2DB'; // Light blue color
+      const houseFill = '%23FFFFFF'; // White color
+      const borderColor = '%23FFFFFF'; // White border color
       
       feature.setStyle(new Style({
         image: new OlIcon({
-          src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
-            <circle cx="12" cy="12" r="11" fill="${bgColor}" stroke="${color}" stroke-width="2"/>
-            <path d="M12 4L6 9h1v7h4v-4h2v4h4V9h1L12 4z" fill="${color}"/>
+          src: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+            <circle cx="12" cy="12" r="11" fill="${circleFill}" stroke="${borderColor}" stroke-width="1" />
+            <path d="M12 5c-.4 0-.8.2-1 .5l-5 5.5c-.3.3-.3.7 0 1 .3.3.7.3 1 0L12 6.8l5 5.2c.3.3.7.3 1 0 .3-.3.3-.7 0-1l-5-5.5c-.2-.3-.6-.5-1-.5zm-3 7c-.6 0-1 .4-1 1v5c0 .6.4 1 1 1h6c.6 0 1-.4 1-1v-5c0-.6-.4-1-1-1H9zm.5 1h5v4.5h-5V13zm1 1v1.5h1.5V14h-1.5zm2.5 0v1.5H14V14h-1z" fill="${houseFill}"/>
           </svg>`,
-          scale: 1.2,
+          scale: 1.5,
           anchor: [0.5, 0.5]
         })
       }));
@@ -798,8 +857,8 @@ const Map: React.FC = () => {
         <Header />
       </div>
       <div className="flex-1 relative">
-        {/* Search Bar - Full width on mobile */}
-        <div className="md:px-4 relative z-50">
+        {/* Search Bar - Full width on mobile, adjusted for desktop */}
+        <div className="md:absolute md:left-[calc(384px+16px)] md:right-4 md:top-4 md:z-50">
           <SearchBar onSearch={handleSearch} isSearching={isSearching} />
         </div>
         <div className="fixed inset-0 md:top-[64px]">
@@ -815,7 +874,7 @@ const Map: React.FC = () => {
               <h2 className="text-xl font-semibold mb-4">
                 Properties in View ({visibleHouses.length})
               </h2>
-              <div className="space-y-4">
+              <div className="space-y-4 pt-2">
                 {visibleHouses.map(house => (
                   <PropertyCard
                     key={house.id}
@@ -841,6 +900,11 @@ const Map: React.FC = () => {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Mobile: Search Bar Positioning */}
+          <div className="md:hidden absolute top-4 left-4 right-4 z-50">
+            <SearchBar onSearch={handleSearch} isSearching={isSearching} />
           </div>
 
           {/* Mobile: Draggable Bottom Sheet */}
@@ -878,29 +942,29 @@ const Map: React.FC = () => {
             </div>
           </div>
         </div>
+        {selectedHouse && (
+          <div 
+            ref={popupRef} 
+            className="absolute z-10"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              transform: 'translate(20px, 20px)' // Fixed position offset
+            }}
+          >
+            <Popup 
+              house={selectedHouse} 
+              onClose={() => {
+                setSelectedHouse(null);
+                if (popupOverlay) {
+                  popupOverlay.setPosition(undefined);
+                }
+              }} 
+            />
+          </div>
+        )}
       </div>
-      {selectedHouse && (
-        <div 
-          ref={popupRef} 
-          className="absolute z-10"
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            transform: 'translateX(15px)'
-          }}
-        >
-          <Popup 
-            house={selectedHouse} 
-            onClose={() => {
-              setSelectedHouse(null);
-              if (popupOverlay) {
-                popupOverlay.setPosition(undefined);
-              }
-            }} 
-          />
-        </div>
-      )}
     </div>
   );
 };
