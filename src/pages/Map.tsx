@@ -426,7 +426,7 @@ const MapPage: React.FC = () => {
     onMapReady();
     
     // All'inizio dell'inizializzazione aggiungiamo una costante per lo stile
-    const MAP_STYLE_ID = import.meta.env.VITE_GOOGLE_MAPS_STYLE_ID || "e364d3818cec701"; // Fallback in caso di variabile mancante
+    const MAP_STYLE_ID = import.meta.env.VITE_GOOGLE_MAPS_STYLE_ID || ""; // Fallback in caso di variabile mancante
     
     // Controllo più rigoroso per l'API di Google Maps
     if (!mapRef.current) {
