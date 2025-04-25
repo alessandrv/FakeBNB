@@ -29,7 +29,7 @@ export const Header = () => {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <Icon icon="lucide:home" className="text-2xl text-primary" />
-          <span className="font-bold text-xl">FakeBNB</span>
+          <span className="font-bold text-xl">ConnectLivin</span>
         </Link>
 
        

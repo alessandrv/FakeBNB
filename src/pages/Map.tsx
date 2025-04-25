@@ -5,6 +5,7 @@ import { properties } from '../data/properties';
 import SearchBar from '../components/SearchBar';
 import { Card, Badge, Button } from '@heroui/react';
 import { DraggableBottomSheet, DraggableBottomSheetHandle } from '../components/DraggableBottomSheet';
+import { loadGoogleMapsApi, isGoogleMapsLoaded, onGoogleMapsLoaded } from '../services/GoogleMapsService';
 
 // Definizione delle interfacce
 interface SearchParams {
@@ -35,6 +36,8 @@ declare global {
     initGoogleCallback?: () => void;
     lastInitWarnLog?: number;
     lastVisibleUpdate?: number;
+    mapPropertyActions?: any;
+    isGoogleMapsLoading?: boolean;
   }
 }
 
@@ -86,7 +89,7 @@ const injectMarkerPolyfill = () => {
           <div style="background-color: #2563eb; width: 30px; height: 30px; border-radius: 50%; 
                display: flex; align-items: center; justify-content: center; 
                border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
-          </div>
+        </div>
         `;
       }
       
@@ -128,7 +131,7 @@ const injectMarkerPolyfill = () => {
 };
 
 // ID univoco per la mappa
-const MAP_ID = 'fakebnb-map';
+const MAP_ID = 'connectlivin-map';
 
 // Stili CSS per la mappa affiancata alla sidebar su desktop
 const mapContainerStyle: CSSProperties = {
@@ -148,17 +151,18 @@ const transparentToCursor: CSSProperties = {
 
 // Stile per elementi che devono essere interattivi
 const interactiveElement: CSSProperties = {
-  pointerEvents: 'auto'
+        pointerEvents: 'auto'
 };
 
 // Stile personalizzato per la searchbar migliorato
 const searchBarStyle: CSSProperties = {
-  boxShadow: '0 3px 10px rgba(0, 0, 0, 0.15)',
+  boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
   borderRadius: '30px', 
   overflow: 'hidden',
   background: 'white',
   border: 'none',
-  padding: '2px',
+  outline: 'none',
+  padding: '0',
   maxWidth: '600px',
   width: '100%'
 };
@@ -173,7 +177,8 @@ const searchBarContainerStyle: CSSProperties = {
   width: '50%',
   maxWidth: '600px',
   zIndex: 20,
-  padding: '0 10px'
+  padding: '0 10px',
+  border: 'none'
 };
 
 // Stile per il contenitore della search bar versione mobile
@@ -183,11 +188,12 @@ const mobileSearchBarContainerStyle: CSSProperties = {
   top: '0',
   left: '0',
   width: '100%',
-  padding: '8px 16px',
-  backgroundColor: 'white',
-  borderBottom: '1px solid #e5e7eb',
+  padding: '8px 16px 60px 16px', // Aumentato il padding bottom per dare spazio ai dropdown
+  backgroundColor: 'transparent',
+  borderBottom: 'none',
   zIndex: 50,
-  boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+  boxShadow: 'none',
+  border: 'none'
 };
 
 // Stile per il pulsante flottante della lista mobile
@@ -243,6 +249,7 @@ const MapPage: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null);
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [visibleProperties, setVisibleProperties] = useState<Property[]>([]);
@@ -285,13 +292,8 @@ const MapPage: React.FC = () => {
 
   // Funzione per aggiornare le proprietà visibili in base ai bounds della mappa
   const updateVisibleProperties = () => {
-    // Implementiamo un throttling per evitare chiamate troppo frequenti
-    const now = Date.now();
-    if (window.lastVisibleUpdate && now - window.lastVisibleUpdate < 300) {
-      // Non aggiorniamo se l'ultima chiamata è avvenuta meno di 300ms fa
-      return;
-    }
-    window.lastVisibleUpdate = now;
+    // Log per debugging
+    console.log("--------- INIZIO UPDATE VISIBLE PROPERTIES ---------");
     
     // Controllo più rigoroso per la mappa
     if (!googleMapRef.current || 
@@ -300,77 +302,93 @@ const MapPage: React.FC = () => {
         !window.google.maps.LatLng || 
         !mapLoaded) {
       
-      // Riduciamo i log per evitare spam nella console - mostriamo solo ogni 3 secondi
-      const now = Date.now();
-      if (!window.lastInitWarnLog || now - window.lastInitWarnLog > 3000) {
-        console.warn("[UPDATE_VISIBLE] Mappa non inizializzata completamente");
-        window.lastInitWarnLog = now;
-        
-        // Se la mappa non è pronta ma abbiamo delle proprietà, mostriamole tutte (solo la prima volta)
-        if (houses.length > 0 && visibleProperties.length === 0) {
-          console.log("[UPDATE_VISIBLE] Fallback: mostro tutte le proprietà in attesa dell'inizializzazione");
-          setVisibleProperties(houses);
-        }
-      }
+      console.warn("[UPDATE_VISIBLE] Mappa non inizializzata completamente, non posso filtrare le proprietà");
       return;
     }
-    
+
     try {
       // Verifica aggiuntiva per assicurarsi che la mappa sia pronta
       if (typeof googleMapRef.current.getBounds !== 'function') {
         console.warn("[UPDATE_VISIBLE] getBounds non è una funzione, la mappa potrebbe non essere completamente inizializzata");
-        return;
-      }
+      return;
+    }
 
       // Ottiene i bounds attuali della mappa
       const bounds = googleMapRef.current.getBounds();
       
-      // Se i bounds non sono disponibili, mostra tutte le proprietà
       if (!bounds) {
-        console.warn("[UPDATE_VISIBLE] Map bounds non disponibili");
-        console.log("[UPDATE_VISIBLE] Fallback: mostro tutte le proprietà");
-        setVisibleProperties(houses);
+        console.warn("[UPDATE_VISIBLE] Map bounds non disponibili, non posso filtrare le proprietà");
         return;
       }
       
-      console.log("[UPDATE_VISIBLE] Aggiornamento proprietà visibili in base ai bounds della mappa");
-      console.log("[UPDATE_VISIBLE] Bounds attuali:", 
-        `SW(${bounds.getSouthWest().lat().toFixed(5)}, ${bounds.getSouthWest().lng().toFixed(5)})`,
-        `NE(${bounds.getNorthEast().lat().toFixed(5)}, ${bounds.getNorthEast().lng().toFixed(5)})`);
+      // Ottieni i valori dei bounds per la console
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
       
-      // Filtra le case visibili nell'area della mappa
-      const visible = houses.filter(house => {
-        if (!house.location || !house.location.lat || !house.location.lng) {
+      // Log per debugging
+      console.log(`[UPDATE_VISIBLE] Bounds: SW(${sw.lat().toFixed(5)}, ${sw.lng().toFixed(5)}) NE(${ne.lat().toFixed(5)}, ${ne.lng().toFixed(5)})`);
+      
+      // IMPORTANTE: Filtra le case che sono all'interno dei bounds attuali della mappa
+      const visibleHouses = houses.filter(house => {
+        if (!house.location || typeof house.location.lat !== 'number' || typeof house.location.lng !== 'number') {
           return false;
         }
         
-        try {
-          const propertyLatLng = new window.google.maps.LatLng(
-            house.location.lat,
-            house.location.lng
-          );
-          return bounds.contains(propertyLatLng);
-        } catch (err) {
-          console.error(`[UPDATE_VISIBLE] Errore nel processare la proprietà ${house.id}:`, err);
-          return false;
-        }
+        // Verifica che la casa sia all'interno dei bounds attuali
+        const isInBounds = 
+          house.location.lat >= sw.lat() && 
+          house.location.lat <= ne.lat() && 
+          house.location.lng >= sw.lng() && 
+          house.location.lng <= ne.lng();
+        
+        return isInBounds;
       });
       
-      console.log(`[UPDATE_VISIBLE] Proprietà filtrate: ${visible.length} visibili su ${houses.length} totali`);
+      // Log per debugging
+      console.log(`[UPDATE_VISIBLE] Trovate ${visibleHouses.length} proprietà visibili su ${houses.length} totali`);
       
-      // Se non ci sono proprietà visibili ma ce ne sono alcune nel dataset, mostriamo comunque qualcosa
-      if (visible.length === 0 && houses.length > 0) {
-        console.warn("[UPDATE_VISIBLE] Nessuna proprietà visibile nell'area corrente, mostro tutte le proprietà");
-        setVisibleProperties(houses);
+      // Aggiorna lo stato solo se è cambiato
+      if (JSON.stringify(visibleHouses.map(h => h.id).sort()) !== JSON.stringify(visibleProperties.map(h => h.id).sort())) {
+        console.log(`[UPDATE_VISIBLE] Aggiornamento stato: ${visibleHouses.length} proprietà saranno visibili nella lista`);
+        setVisibleProperties(visibleHouses);
       } else {
-        // Aggiorna lo stato con le proprietà visibili
-        setVisibleProperties(visible);
+        console.log(`[UPDATE_VISIBLE] Nessun cambiamento nelle proprietà visibili, mantengo lo stato attuale`);
       }
+      
+      // Aggiorna anche i marker sulla mappa
+      Object.keys(markersRef.current).forEach(propertyId => {
+        const marker = markersRef.current[propertyId];
+        const isVisible = visibleHouses.some(p => p.id === propertyId);
+        
+        // Se il marker esiste, aggiorna la sua visibilità
+        if (marker) {
+          try {
+            // Per AdvancedMarkerElement
+            if (typeof marker.map !== 'undefined') {
+              if (isVisible && marker.map === null) {
+                marker.map = googleMapRef.current;
+              } else if (!isVisible && marker.map !== null) {
+                marker.map = null;
+              }
+            } 
+            // Per marker standard
+            else if (typeof marker.setMap === 'function') {
+              if (isVisible && !marker.getMap()) {
+                marker.setMap(googleMapRef.current);
+              } else if (!isVisible && marker.getMap()) {
+                marker.setMap(null);
+              }
+            }
+          } catch (err) {
+            console.warn(`[UPDATE_VISIBLE] Errore nell'aggiornare il marker per la proprietà ${propertyId}:`, err);
+          }
+        }
+      });
     } catch (error) {
-      console.error("[UPDATE_VISIBLE] Errore nell'aggiornamento delle proprietà visibili:", error);
-      // In caso di errore, mostriamo tutte le proprietà per evitare una lista vuota
-      setVisibleProperties(houses);
+      console.error("[UPDATE_VISIBLE] Errore durante l'aggiornamento delle proprietà visibili:", error);
     }
+    
+    console.log("--------- FINE UPDATE VISIBLE PROPERTIES ---------");
   };
   
   // Hook per assicurare che gli eventi della mappa funzionino correttamente
@@ -401,7 +419,7 @@ const MapPage: React.FC = () => {
       window.removeEventListener('load', handleWindowLoad);
     };
   }, []);
-  
+
   // Funzione per inizializzare la mappa con tutti i marker e gli eventi
   const initializeMap = () => {
     // Rimuove immediatamente l'overlay di loading
@@ -428,7 +446,7 @@ const MapPage: React.FC = () => {
       setShowListOnly(true);
       return;
     }
-    
+
     try {
       console.log("[INIT_MAP] Creating map instance...");
       
@@ -501,62 +519,174 @@ const MapPage: React.FC = () => {
       let mapInitialized = false;
       
       // Funzione condivisa per completare l'inizializzazione della mappa
-      const completeMapInitialization = () => {
-        // Evita inizializzazioni duplicate
-        if (mapInitialized) {
-          console.log("[INIT_MAP] Map already initialized, skipping duplicate initialization");
-          return;
-        }
-        
-        mapInitialized = true;
-        console.log("[INIT_MAP] Completing map initialization");
-        
-        // Assicura che l'interazione sia possibile
-        if (mapRef.current) {
-          mapRef.current.style.pointerEvents = 'auto';
-        }
-        
-        console.log("[INIT_MAP] Map instance created successfully");
-        googleMapRef.current = map;
-        
-        // Crea una infoWindow per mostrare i dettagli della proprietà
-        const infoWindow = new window.google.maps.InfoWindow({
-          maxWidth: 320
-        });
-        
-        infoWindowRef.current = infoWindow;
-        
-        // Forza l'applicazione dello stile personalizzato
+      const completeMapInitialization = (map: google.maps.Map) => {
         try {
-          console.log("[INIT_MAP] Enforcing custom map style with ID e364d3818cec701");
-          map.setOptions({
-            mapId: "e364d3818cec701",
-            clickableIcons: false
-          });
+          console.log("[INIT] Completamento inizializzazione della mappa");
           
-          // Disabilita anche tutti i controlli non essenziali
-          map.setOptions({
-            disableDefaultUI: true,
-            zoomControl: true,
-            mapTypeControl: false, 
-            streetViewControl: false,
-            fullscreenControl: false
-          });
-        } catch (error) {
-          console.error("[INIT_MAP] Error applying custom map style:", error);
-        }
-        
-        // Segnala che la mappa è stata caricata
-        setMapLoaded(true);
-        
-        // Attendi un momento per assicurarsi che la mappa sia completamente renderizzata
-        // prima di aggiornare le proprietà visibili
-        setTimeout(() => {
-          if (googleMapRef.current) {
-            console.log("[INIT_MAP] Triggering initial updateVisibleProperties after initialization");
+          // Imposta il riferimento alla mappa
+          googleMapRef.current = map;
+          
+          // Aggiorna lo stato - mappa caricata
+          setMapLoaded(true);
+          mapInitialized = true;
+          
+          // Visualizza tutte le proprietà inizialmente
+          updateVisibleProperties();
+
+          // Aggiungi listener per gli eventi della mappa che filtreranno le proprietà visibili
+          // CAMBIO IMPORTANTE: aggiungiamo un debounce agli eventi della mappa
+          let updateTimeout: number | null = null;
+          
+          const handleMapChange = () => {
+            console.log("[MAP_CHANGE] Cambiamento nella mappa rilevato");
+            // Cancella il timer precedente se esiste
+            if (updateTimeout !== null) {
+              window.clearTimeout(updateTimeout);
+            }
+            
+            // Crea un nuovo timer che aggiorna le proprietà visibili dopo un breve ritardo
+            updateTimeout = window.setTimeout(() => {
+              console.log("[MAP_CHANGE] Aggiorno proprietà visibili dopo debounce");
+              updateVisibleProperties();
+              updateTimeout = null;
+            }, 300); // 300ms debounce
+          };
+          
+          // Aggiungi gli event listener con debounce
+          map.addListener('bounds_changed', handleMapChange);
+          map.addListener('zoom_changed', handleMapChange);
+          map.addListener('dragend', handleMapChange);
+          
+          // NUOVO: Aggiungi un handler separato per la fine del caricamento della mappa
+          map.addListener('idle', () => {
+            console.log("[MAP_IDLE] Mappa in stato idle, aggiorno proprietà");
+            // Forza l'aggiornamento delle proprietà visibili quando la mappa è completamente caricata e pronta
             updateVisibleProperties();
+          });
+
+          // Aggiungi i marker per tutte le proprietà
+          try {
+            // Rimosso console.log per l'aggiunta di marker
+            
+            // Aggiungi marker in batch per migliorare le performance
+            setTimeout(() => {
+              addMarkersInBatches(0, 20);
+            }, 200);
+          } catch (error) {
+            console.error("[INIT_MAP] Errore durante l'aggiunta dei marker:", error);
           }
-        }, 500);
+
+          // Funzione per aggiungere marker in batch per migliorare le performance
+          const addMarkersInBatches = (startIdx: number, batchSize: number) => {
+            const endIdx = Math.min(startIdx + batchSize, houses.length);
+            
+            for (let i = startIdx; i < endIdx; i++) {
+              const house = houses[i];
+              try {
+                // Verifica nuovamente che la mappa sia valida prima di ogni marker
+                if (!googleMapRef.current) continue;
+                
+                // Verifica se AdvancedMarkerElement è disponibile
+                let marker: GoogleMapMarker;
+                
+                if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
+                  // Usa AdvancedMarkerElement (metodo consigliato)
+                  console.log(`[MARKER] Using AdvancedMarkerElement for property ${house.id}`);
+                  
+                  // Crea un elemento personalizzato per il marker
+                  const markerElement = document.createElement('div');
+                  markerElement.innerHTML = `
+                    <div style="width: 40px; height: 50px; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.4));">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="40" height="50">
+                        <!-- Penombra dell'icona -->
+                        <ellipse cx="12" cy="30" rx="6" ry="2" fill="rgba(0,0,0,0.2)"/>
+                        
+                        <!-- Casa con tetto e dettagli -->
+                        <path d="M22,11L12,2L2,11v2h2v12c0,1.1,0.9,2,2,2h12c1.1,0,2-0.9,2-2V13h2V11z" fill="#2563eb"/>
+                        <path d="M12,4L4,11h2v12c0,0.55,0.45,1,1,1h10c0.55,0,1-0.45,1-1V11h2L12,4z" fill="#4285f4"/>
+                        
+                        <!-- Riflessi e ombre -->
+                        <path d="M12,4L4,11h2v12c0,0.55,0.45,1,1,1h10c0.55,0,1-0.45,1-1V11h2L12,4z" fill="url(#grad1)"/>
+                        
+                        <!-- Porta -->
+                        <rect x="9.5" y="16" width="5" height="9" rx="1" fill="#1e3a8a"/>
+                        
+                        <!-- Finestre -->
+                        <rect x="6" y="13" width="3" height="3" rx="0.5" fill="#bfdbfe"/>
+                        <rect x="15" y="13" width="3" height="3" rx="0.5" fill="#bfdbfe"/>
+                        <circle cx="12" cy="9" r="1.5" fill="#dbeafe"/>
+                        
+                        <!-- Definizione del gradiente per l'effetto di illuminazione -->
+                        <defs>
+                          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.7"/>
+                            <stop offset="100%" stop-color="#1e40af" stop-opacity="0.1"/>
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    </div>
+                  `;
+                  
+                  marker = new window.google.maps.marker.AdvancedMarkerElement({
+                    map: googleMapRef.current,
+                    position: { lat: house.location.lat, lng: house.location.lng },
+                    title: house.title,
+                    content: markerElement
+                  });
+                } else {
+                  // Fallback a Marker standard se AdvancedMarkerElement non è disponibile
+                  console.log(`[MARKER] Falling back to standard Marker for property ${house.id}`);
+                  marker = new window.google.maps.Marker({
+                    position: { lat: house.location.lat, lng: house.location.lng },
+                    map: googleMapRef.current,
+                    title: house.title,
+                    icon: {
+                      url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="40" height="50"><ellipse cx="12" cy="30" rx="6" ry="2" fill="rgba(0,0,0,0.2)"/><path d="M22,11L12,2L2,11v2h2v12c0,1.1,0.9,2,2,2h12c1.1,0,2-0.9,2-2V13h2V11z" fill="%232563eb"/><path d="M12,4L4,11h2v12c0,0.55,0.45,1,1,1h10c0.55,0,1-0.45,1-1V11h2L12,4z" fill="%234285f4"/><rect x="9.5" y="16" width="5" height="9" rx="1" fill="%231e3a8a"/><rect x="6" y="13" width="3" height="3" rx="0.5" fill="%23bfdbfe"/><rect x="15" y="13" width="3" height="3" rx="0.5" fill="%23bfdbfe"/><circle cx="12" cy="9" r="1.5" fill="%23dbeafe"/></svg>`,
+                      scaledSize: new window.google.maps.Size(40, 50),
+                      anchor: new window.google.maps.Point(20, 30)
+                    }
+                  });
+                }
+                
+                // Aggiungi l'event listener per il click
+                if (marker) {
+                  if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement && 
+                      marker instanceof window.google.maps.marker.AdvancedMarkerElement) {
+                    // AdvancedMarkerElement usa addEventListener invece di addListener
+                    marker.addEventListener('click', () => {
+                      console.log(`[MARKER] Advanced marker clicked for property ${house.id}`);
+                      showPropertyInfoWindow(house, marker);
+                    });
+                  } else {
+                    // Standard Marker usa addListener
+                    marker.addListener('click', () => {
+                      console.log(`[MARKER] Marker clicked for property ${house.id}`);
+                      showPropertyInfoWindow(house, marker);
+                    });
+                  }
+                  
+                  // Salva il riferimento
+                  markersRef.current[house.id] = marker;
+                }
+              } catch (err) {
+                console.error(`[BATCH_MARKER] Error adding marker for property ${house.id}:`, err);
+              }
+            }
+            
+            // Programma il prossimo batch
+            setTimeout(() => {
+              addMarkersInBatches(endIdx, batchSize);
+            }, 50);
+          };
+          
+          // Avvia l'aggiunta dei marker in batch di 20
+          addMarkersInBatches(0, 20);
+        } catch (error) {
+          // Catch block per gestire errori nell'inizializzazione
+          console.error("[INIT] Errore durante l'inizializzazione della mappa:", error);
+          setMapError(true);
+          setMapErrorMessage("Si è verificato un errore durante l'inizializzazione della mappa");
+        }
       };
       
       // Attendi che la mappa sia completamente caricata prima di procedere
@@ -567,7 +697,7 @@ const MapPage: React.FC = () => {
         window.google.maps.event.removeListener(idleListener);
         
         // Completa l'inizializzazione
-        completeMapInitialization();
+        completeMapInitialization(map);
         
         // Aggiungi i marker per tutte le proprietà con un ritardo per assicurare che la mappa sia pronta
         setTimeout(() => {
@@ -727,7 +857,7 @@ const MapPage: React.FC = () => {
           }
           
           // Forza l'inizializzazione
-          completeMapInitialization();
+          completeMapInitialization(map);
         }
       }, 8000); // Aumentato a 8 secondi per dare più tempo
       
@@ -857,7 +987,7 @@ const MapPage: React.FC = () => {
             setTimeout(() => {
               marker.setAnimation(null);
             }, 1500);
-          } else {
+      } else {
             console.warn("[LOCATE] Marker doesn't support animation");
           }
         } catch (error) {
@@ -877,19 +1007,81 @@ const MapPage: React.FC = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
   
+  // Funzione che trova la coordinata più vicina a un indirizzo tra le città note
+  const findNearestCityByName = (address: string) => {
+    const lowerAddress = address.toLowerCase();
+    
+    // Prima cerca corrispondenze esatte
+    for (const city of popularCities) {
+      if (lowerAddress.includes(city.name.toLowerCase())) {
+        console.log(`[SEARCH] Corrispondenza trovata per "${address}" con città: ${city.name}`);
+        return { lat: city.lat, lng: city.lng, name: city.name };
+      }
+    }
+    
+    // Cerca corrispondenze parziali (almeno 4 caratteri)
+    for (const city of popularCities) {
+      // Trova la parola più lunga nell'indirizzo
+      const words = lowerAddress.split(/\s+/);
+      const longestWord = words.reduce((longest, word) => word.length > longest.length ? word : longest, '');
+      
+      if (longestWord.length >= 4) {
+        if (city.name.toLowerCase().includes(longestWord) || 
+            longestWord.includes(city.name.toLowerCase())) {
+          console.log(`[SEARCH] Corrispondenza parziale per "${address}" con città: ${city.name}`);
+          return { lat: city.lat, lng: city.lng, name: city.name };
+        }
+      }
+    }
+    
+    // Se non troviamo nulla, usiamo Roma come default
+    console.log(`[SEARCH] Nessuna corrispondenza trovata per "${address}", usando Roma come default`);
+    return { lat: 41.9028, lng: 12.4964, name: 'Roma' };
+  };
+
+  // Array delle città popolari per la ricerca di fallback 
+  const popularCities = [
+    { name: 'Roma', lat: 41.9028, lng: 12.4964 },
+    { name: 'Milano', lat: 45.4642, lng: 9.1900 },
+    { name: 'Firenze', lat: 43.7696, lng: 11.2558 },
+    { name: 'Venezia', lat: 45.4408, lng: 12.3155 },
+    { name: 'Napoli', lat: 40.8518, lng: 14.2681 },
+    { name: 'Torino', lat: 45.0703, lng: 7.6869 },
+    { name: 'Bologna', lat: 44.4949, lng: 11.3426 },
+    { name: 'Palermo', lat: 38.1157, lng: 13.3615 }
+  ];
+
   // Funzione per gestire la ricerca
-  const handleSearch = async (params: SearchParams, coordinates?: [number, number]) => {
-    console.log("Ricerca avviata con parametri:", params);
+  const handleSearch = async (location: any) => {
+    console.log("[SEARCH] Ricerca avviata con parametri:", location);
     
-    // Non impostiamo isSearching a true
-    // setIsSearching(true);
+    setIsSearching(true);
+    setSearchTerm(location.address || '');
+    setSearchError(null);
     
-    setSearchTerm(params.location);
+    // Rimuovi eventuali marker di ricerca precedenti
+    if (searchMarkerRef.current) {
+      try {
+        console.log("[SEARCH] Rimozione marker precedente");
+        if (window.google && window.google.maps && window.google.maps.marker && 
+            window.google.maps.marker.AdvancedMarkerElement && 
+            searchMarkerRef.current instanceof window.google.maps.marker.AdvancedMarkerElement) {
+          searchMarkerRef.current.map = null;
+        } else if (searchMarkerRef.current.setMap && typeof searchMarkerRef.current.setMap === 'function') {
+          searchMarkerRef.current.setMap(null);
+        }
+      } catch (e) {
+        console.warn("[SEARCH] Errore nella rimozione del marker precedente:", e);
+      }
+      
+      searchMarkerRef.current = null;
+    }
     
     // Se sono fornite le coordinate, usa quelle direttamente
-    if (coordinates) {
-      const [lat, lng] = coordinates;
-      console.log(`Utilizzo coordinate fornite: [${lat}, ${lng}]`);
+    if (location.lat && location.lng && 
+        !isNaN(location.lat) && !isNaN(location.lng)) {
+      const { lat, lng } = location;
+      console.log(`[SEARCH] Utilizzo coordinate fornite: [${lat}, ${lng}]`);
       
       if (googleMapRef.current) {
         // Centra la mappa sulle coordinate
@@ -897,102 +1089,199 @@ const MapPage: React.FC = () => {
         googleMapRef.current.setZoom(13);
         
         // Aggiungi un marker per la posizione cercata
-        addSearchMarker({ lat, lng }, params.location);
+        addSearchMarker({ lat, lng }, location.address);
+        
+        // Aggiorna la lista delle proprietà visibili dopo il cambio di posizione
+        setTimeout(() => {
+          updateVisibleProperties();
+        }, 300);
+      } else {
+        console.error("[SEARCH] Mappa non ancora inizializzata");
+        setSearchError("Mappa non ancora pronta. Riprova tra qualche istante.");
       }
       
-      // Nascondi subito l'indicatore di caricamento
       setIsSearching(false);
       return;
     }
+
+    // Non abbiamo coordinate, quindi cerchiamo l'indirizzo
+    const address = location.address;
+    if (!address) {
+      setSearchError("Indirizzo non specificato");
+      setIsSearching(false);
+      return;
+    }
+
+    // Determina se la ricerca è un indirizzo specifico
+    const isSpecificAddress = /\d+/.test(address) || 
+                             /\b(via|viale|corso|piazza|largo|vicolo|galleria)\b/i.test(address);
     
     try {
-      console.log("[SEARCH] Searching for location:", params.location);
+      console.log("[SEARCH] Ricerca località:", address);
       
-      // Usa l'API di Nominatim per ottenere le coordinate dalla stringa di ricerca
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(params.location)}`
-      );
+      // Se sembra un indirizzo specifico, usa un termine di ricerca più preciso
+      const searchQuery = isSpecificAddress 
+        ? `${address}, italia` 
+        : address;
+      
+      console.log("[SEARCH] Query di ricerca modificata:", searchQuery);
+      
+      // Prima prova con Nominatim
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&addressdetails=1&countrycodes=it`
+        );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data && data.length > 0) {
-        const location = data[0];
-        const position = {
-          lat: parseFloat(location.lat),
-          lng: parseFloat(location.lon)
-        };
-        
-        console.log("[SEARCH] Found location:", location.display_name, position);
-        
-        if (googleMapRef.current) {
-          // Riapplica il mapId personalizzato prima di aggiungere il marker
-          googleMapRef.current.setOptions({
-            mapId: "e364d3818cec701",
-            clickableIcons: false
-          });
+        if (response.ok) {
+          const data = await response.json();
           
-          // Aggiungi il marker per la posizione cercata
-          addSearchMarker(position, location.display_name);
-          
-          // Imposta lo zoom appropriato
-          googleMapRef.current.setZoom(13);
-        } else {
-          console.error("[SEARCH] Google Map not initialized yet");
-          setSearchError("Mappa non inizializzata. Riprova tra qualche istante.");
+          if (data && data.length > 0) {
+            // Trovato risultato con Nominatim
+            let bestMatch = data[0];
+            
+            if (isSpecificAddress && data.length > 1) {
+              // Cerca di trovare il risultato più specifico (strada vs città)
+              const addressMatches = data.filter((item: any) => 
+                (item.address && (item.address.road || item.address.pedestrian || item.address.street))
+              );
+              
+              if (addressMatches.length > 0) {
+                bestMatch = addressMatches[0];
+                console.log("[SEARCH] Trovato indirizzo specifico:", bestMatch.display_name);
+              }
+            }
+            
+            const position = {
+              lat: parseFloat(bestMatch.lat),
+              lng: parseFloat(bestMatch.lon)
+            };
+            
+            console.log("[SEARCH] Località trovata:", bestMatch.display_name, position);
+            handleFoundLocation(position, bestMatch.display_name, isSpecificAddress);
+            return;
+          }
         }
-      } else {
-        console.warn("[SEARCH] No results found for:", params.location);
-        setSearchError(`Nessun risultato trovato per: ${params.location}`);
+      } catch (nominatimError) {
+        console.warn("[SEARCH] Errore durante la ricerca con Nominatim:", nominatimError);
+        // Continua con il fallback
       }
+      
+      // Fallback: usa le coordinate delle città conosciute
+      const nearestCity = findNearestCityByName(address);
+      const position = { lat: nearestCity.lat, lng: nearestCity.lng };
+      
+      console.log(`[SEARCH] Fallback a città conosciuta: ${nearestCity.name}`, position);
+      handleFoundLocation(position, nearestCity.name, false);
+      
     } catch (error) {
-      console.error("[SEARCH] Error during search:", error);
-      setSearchError("Errore durante la ricerca. Riprova più tardi.");
+      console.error("[SEARCH] Errore durante la ricerca:", error);
+      
+      // Fallback finale: usa le coordinate di una città nota
+      const fallbackCity = findNearestCityByName(address);
+      const position = { lat: fallbackCity.lat, lng: fallbackCity.lng };
+      
+      console.log(`[SEARCH] Fallback finale a città conosciuta: ${fallbackCity.name}`, position);
+      handleFoundLocation(position, fallbackCity.name, false);
+      
+      setSearchError(`Ricerca precisa non disponibile. Mostro risultati per ${fallbackCity.name}.`);
     } finally {
       setIsSearching(false);
     }
   };
   
-  // Funzione per aggiungere un marker per la posizione cercata
-  const addSearchMarker = (position: { lat: number; lng: number }, locationName: string = "Posizione cercata") => {
-    if (!googleMapRef.current || !window.google || !window.google.maps) {
-      console.error("[SEARCH_MARKER] Google Maps not initialized");
+  // Funzione per gestire una posizione trovata
+  const handleFoundLocation = (position: {lat: number, lng: number}, locationName: string, isSpecific: boolean) => {
+    if (!googleMapRef.current) {
+      console.error("[SEARCH] Mappa non ancora inizializzata");
+      setSearchError("Mappa non inizializzata. Riprova tra qualche istante.");
       return;
     }
     
+    // Centra la mappa sulle coordinate trovate
+    googleMapRef.current.setCenter(position);
+    
+    // Riapplica il mapId personalizzato prima di aggiungere il marker
     try {
-      // Rimuovi eventuali marker di ricerca precedenti
+      googleMapRef.current.setOptions({
+        mapId: "e364d3818cec701",
+        clickableIcons: false
+      });
+    } catch (e) {
+      console.warn("[SEARCH] Errore nell'impostazione delle opzioni della mappa:", e);
+    }
+    
+    // Aggiungi il marker per la posizione cercata
+    addSearchMarker(position, locationName);
+    
+    // Regola lo zoom in base al tipo di risultato
+    const zoomLevel = isSpecific ? 16 : 13;
+    googleMapRef.current.setZoom(zoomLevel);
+    
+    // Aggiorna la lista delle proprietà visibili dopo il cambio di posizione
+    setTimeout(() => {
+      updateVisibleProperties();
+    }, 300);
+    
+    // Aggiorna la lista delle proprietà visibili nelle vicinanze
+    const nearbyProperties = properties.filter(property => {
+      const distance = calculateDistance(
+        position.lat, position.lng,
+        property.location.lat, property.location.lng
+      );
+      return distance <= 10; // Proprietà nel raggio di 10 km
+    });
+    
+    console.log(`[SEARCH] Trovate ${nearbyProperties.length} proprietà nelle vicinanze`);
+  };
+  
+  // Funzione per calcolare la distanza tra due punti (formula di Haversine)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Raggio della Terra in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+  
+  // Funzione per aggiungere un marker di ricerca personalizzato sulla mappa
+  const addSearchMarker = (position: { lat: number; lng: number }, locationName: string = "Posizione cercata") => {
+    try {
+      // Rimuovo log non essenziale
+      
+      // Rimuovi il marker di ricerca precedente se esiste
       if (searchMarkerRef.current) {
         try {
-          if (window.google.maps.marker && 
-              window.google.maps.marker.AdvancedMarkerElement && 
-              searchMarkerRef.current instanceof window.google.maps.marker.AdvancedMarkerElement) {
-            searchMarkerRef.current.map = null;
-          } else if (searchMarkerRef.current.setMap && typeof searchMarkerRef.current.setMap === 'function') {
-            searchMarkerRef.current.setMap(null);
-          }
+          // Rimuovo log non essenziale
+          searchMarkerRef.current.map = null;
         } catch (e) {
-          console.warn("[SEARCH_MARKER] Error removing previous marker:", e);
+          console.warn("[SEARCH_MARKER] Errore nella rimozione del marker precedente:", e);
         }
-        
-        searchMarkerRef.current = null;
       }
       
       let newSearchMarker: GoogleMapMarker | null = null;
       
       // Verifica la disponibilità di AdvancedMarkerElement con controlli rigorosi
-      let useAdvancedMarkers = Boolean(
-        window.google && 
-        window.google.maps && 
-        window.google.maps.marker && 
-        window.google.maps.marker.AdvancedMarkerElement
-      );
+      let useAdvancedMarkers = false;
+      try {
+        useAdvancedMarkers = Boolean(
+          window.google && 
+          window.google.maps && 
+          window.google.maps.marker && 
+          window.google.maps.marker.AdvancedMarkerElement
+        );
+      } catch (e) {
+        console.warn("[SEARCH_MARKER] Errore nel verificare AdvancedMarkerElement:", e);
+        useAdvancedMarkers = false;
+      }
       
       if (useAdvancedMarkers) {
         try {
+          console.log("[SEARCH_MARKER] Tentativo di creazione di un AdvancedMarkerElement");
+          
           // Crea un elemento per il marker con l'aspetto di un pin
           const searchMarkerElement = document.createElement('div');
           searchMarkerElement.innerHTML = `
@@ -1010,13 +1299,16 @@ const MapPage: React.FC = () => {
             </div>
           `;
           
-          newSearchMarker = new window.google.maps.marker.AdvancedMarkerElement({
+          const AdvancedMarkerElement = window.google.maps.marker.AdvancedMarkerElement;
+          newSearchMarker = new AdvancedMarkerElement({
             map: googleMapRef.current,
             position: position,
             content: searchMarkerElement,
             zIndex: 1000, // Metti il search marker sopra gli altri
             title: locationName
           });
+          
+          console.log("[SEARCH_MARKER] AdvancedMarkerElement creato con successo");
           
           // Aggiungi click handler per mostrare un info window
           newSearchMarker.addEventListener('click', () => {
@@ -1040,64 +1332,82 @@ const MapPage: React.FC = () => {
             });
           });
         } catch (e) {
-          console.warn("[SEARCH_MARKER] Error creating AdvancedMarkerElement, falling back to standard marker:", e);
+          console.warn("[SEARCH_MARKER] Errore nella creazione di AdvancedMarkerElement, fallback al marker standard:", e);
           useAdvancedMarkers = false; // Forza il fallback al marker standard
         }
       }
       
       // Usa il marker standard come fallback se AdvancedMarkerElement non è disponibile o ha fallito
       if (!useAdvancedMarkers || !newSearchMarker) {
-        // Fallback al marker standard con un'icona personalizzata
-        newSearchMarker = new window.google.maps.Marker({
-          position: position,
-          map: googleMapRef.current,
-          icon: {
-            url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="42"><path d="M12 0C5.4 0 0 5.4 0 12c0 7.2 12 24 12 24s12-16.8 12-24c0-6.6-5.4-12-12-12z" fill="%23FF385C"/><circle cx="12" cy="12" r="4" fill="white"/></svg>`,
-            scaledSize: new window.google.maps.Size(32, 42),
-            anchor: new window.google.maps.Point(16, 42)
-          },
-          zIndex: 1000,
-          title: locationName
-        });
-        
-        // Aggiungi click handler per mostrare un info window
-        newSearchMarker.addListener('click', () => {
-          if (!googleMapRef.current) return;
+        try {
+          console.log("[SEARCH_MARKER] Creazione di un marker standard");
           
-          const infoWindow = new window.google.maps.InfoWindow({
-            content: `
-              <div style="padding: 10px; max-width: 200px;">
-                <h3 style="margin: 0 0 5px 0; font-size: 14px; font-weight: 600; color: #333;">${locationName}</h3>
-                <p style="margin: 0; font-size: 12px; color: #666;">
-                  Coordinate: ${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}
-                </p>
-              </div>
-            `
+          // Fallback al marker standard con un'icona personalizzata
+          newSearchMarker = new window.google.maps.Marker({
+            position: position,
+            map: googleMapRef.current,
+            icon: {
+              url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="32" height="42"><path d="M12 0C5.4 0 0 5.4 0 12c0 7.2 12 24 12 24s12-16.8 12-24c0-6.6-5.4-12-12-12z" fill="%23FF385C"/><circle cx="12" cy="12" r="4" fill="white"/></svg>`,
+              scaledSize: new window.google.maps.Size(32, 42),
+              anchor: new window.google.maps.Point(16, 42)
+            },
+            zIndex: 1000,
+            title: locationName,
+            animation: window.google.maps.Animation.DROP
           });
           
-          infoWindow.open(googleMapRef.current, newSearchMarker);
-        });
-      }
-      
-      // Anima il marker se possibile
-      try {
-        if (!useAdvancedMarkers && newSearchMarker instanceof window.google.maps.Marker) {
-          // Animazione per Marker standard
-          newSearchMarker.setAnimation(window.google.maps.Animation.DROP);
+          console.log("[SEARCH_MARKER] Marker standard creato con successo");
+          
+          // Aggiungi click handler per mostrare un info window
+          newSearchMarker.addListener('click', () => {
+            if (!googleMapRef.current) return;
+            
+            const infoWindow = new window.google.maps.InfoWindow({
+              content: `
+                <div style="padding: 10px; max-width: 200px;">
+                  <h3 style="margin: 0 0 5px 0; font-size: 14px; font-weight: 600; color: #333;">${locationName}</h3>
+                  <p style="margin: 0; font-size: 12px; color: #666;">
+                    Coordinate: ${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}
+                  </p>
+                </div>
+              `
+            });
+            
+            infoWindow.open({
+              anchor: newSearchMarker,
+              map: googleMapRef.current
+            });
+          });
+        } catch (e) {
+          console.error("[SEARCH_MARKER] Errore critico nella creazione del marker standard:", e);
+          return; // Non possiamo procedere senza marker
         }
-      } catch (e) {
-        console.warn("[SEARCH_MARKER] Could not animate marker:", e);
       }
       
-      // Salva il riferimento al nuovo marker di ricerca
-      searchMarkerRef.current = newSearchMarker;
-      console.log("[SEARCH_MARKER] Added search marker at:", position);
-      
-      // Centra la mappa sul marker
-      googleMapRef.current.panTo(position);
-      
+      // Salva il riferimento al marker
+      if (newSearchMarker) {
+        searchMarkerRef.current = newSearchMarker;
+        console.log("[SEARCH_MARKER] Marker di ricerca salvato nel riferimento");
+        
+        // Centra la mappa sulla posizione del marker
+        if (googleMapRef.current) {
+          googleMapRef.current.setCenter(position);
+        }
+        
+        // Prova ad animare il marker se possibile
+        try {
+          if (newSearchMarker.setAnimation && typeof newSearchMarker.setAnimation === 'function') {
+            console.log("[SEARCH_MARKER] Animazione del marker...");
+            newSearchMarker.setAnimation(window.google.maps.Animation.DROP);
+          }
+        } catch (e) {
+          console.warn("[SEARCH_MARKER] Non è stato possibile animare il marker:", e);
+        }
+      } else {
+        console.error("[SEARCH_MARKER] Impossibile creare il marker di ricerca");
+      }
     } catch (error) {
-      console.error("[SEARCH_MARKER] Error adding search marker:", error);
+      console.error("[SEARCH_MARKER] Errore durante l'aggiunta del marker di ricerca:", error);
     }
   };
   
@@ -1237,7 +1547,7 @@ const MapPage: React.FC = () => {
             markersRef.current[property.id] = simpleAdvancedMarker;
             return simpleAdvancedMarker;
           }
-        } else {
+      } else {
           // Fallback a marker standard come ultima risorsa
           const simpleMarker = new window.google.maps.Marker({
             position: property.location,
@@ -1263,287 +1573,226 @@ const MapPage: React.FC = () => {
   
   // Mostra l'infoWindow per una proprietà con contenuto migliorato
   const showPropertyInfoWindow = (property: Property, marker: any) => {
-    if (!infoWindowRef.current || !googleMapRef.current) return;
-    
-    // Chiudi qualsiasi infoWindow aperta
-    infoWindowRef.current.close();
-    
-    // Crea il contenuto dell'infoWindow con design migliorato
-    const content = `
-      <div style="max-width: 300px; font-family: 'Arial', sans-serif;">
-        <div style="position: relative;">
-          <img src="${property.image}" alt="${property.title}" 
-            style="width: 100%; height: 140px; object-fit: cover; border-radius: 8px 8px 0 0;" />
-          <div style="position: absolute; bottom: 8px; right: 8px; background-color: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
-            $${property.price}/notte
-          </div>
-        </div>
-        
-        <div style="padding: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <h3 style="font-weight: bold; margin: 0; font-size: 16px;">${property.title}</h3>
-            <span style="display: flex; align-items: center; font-size: 14px;">
-              <span style="color: #FFB400; margin-right: 4px;">★</span> 
-              ${property.rating.toFixed(1)} 
-              <span style="color: #666; margin-left: 4px;">(${property.reviews})</span>
-            </span>
-          </div>
-          
-          <p style="color: #444; font-size: 13px; margin: 8px 0; line-height: 1.4; max-height: 56px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
-            ${property.description}
-          </p>
-          
-          <button id="view-property-btn" 
-            style="background-color: #2563eb; color: white; border: none; border-radius: 8px; padding: 8px 16px; width: 100%; cursor: pointer; font-weight: bold; margin-top: 8px; transition: background-color 0.2s ease;">
-            Visualizza Dettagli
-          </button>
-        </div>
-      </div>
-    `;
-    
-    infoWindowRef.current.setContent(content);
-    
-    // Determina la posizione del marker e apri l'infoWindow
     try {
-      // Verifica il tipo di marker per gestirlo correttamente
-      if (window.google.maps.marker && 
-          window.google.maps.marker.AdvancedMarkerElement && 
-          marker instanceof window.google.maps.marker.AdvancedMarkerElement) {
-        // Per AdvancedMarkerElement, usiamo la proprietà position
-        console.log("[INFO_WINDOW] Opening for AdvancedMarkerElement");
-        const position = marker.position;
-        
-        if (position) {
-          infoWindowRef.current.setPosition(position);
-          infoWindowRef.current.open(googleMapRef.current);
-        } else {
-          console.error("[INFO_WINDOW] AdvancedMarkerElement position is undefined");
+      // Chiudi l'infoWindow precedente se esiste
+      if (infoWindowRef.current) {
+        infoWindowRef.current.close();
+      }
+      
+      // Verifica che la mappa esista prima di procedere
+      if (!googleMapRef.current) {
+        console.error("[INFO_WINDOW] Mappa non disponibile");
+        return;
+      }
+      
+      // Verifica che google.maps sia disponibile
+      if (!window.google || !window.google.maps) {
+        console.error("[INFO_WINDOW] Google Maps API non disponibile");
+        return;
+      }
+      
+      // Crea il contenuto HTML per la finestra informativa con maggiori dettagli
+      const content = `
+        <div class="property-popup" style="font-family: 'Roboto', sans-serif; max-width: 300px; padding: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+          <!-- Immagine con overlay e prezzo -->
+          <div style="position: relative; width: 100%;">
+            <img src="${property.image}" alt="${property.title}" style="width: 100%; height: 90px; object-fit: cover;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.3) 100%);"></div>
+            <div style="position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: flex-end;">
+              <div style="color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">
+                <div style="font-size: 18px; font-weight: 700;">€${property.price}</div>
+                <div style="font-size: 10px; font-weight: 500;">per notte</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.9); color: var(--color-primary, #3B82F6); padding: 3px 8px; border-radius: 16px; font-size: 12px; font-weight: 600; display: flex; align-items: center;">
+                <span style="margin-right: 3px;">★</span> ${property.rating.toFixed(1)}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Contenuto testuale -->
+          <div style="padding: 12px;">
+            <h3 style="margin: 0 0 4px 0; font-size: 15px; color: #222; font-weight: 600; line-height: 1.3;">${property.title}</h3>
+            
+            <!-- Recensioni -->
+            <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
+              ${property.reviews} recensioni
+            </div>
+            
+            <!-- Descrizione breve -->
+            <p style="margin: 0 0 8px; font-size: 12px; color: #444; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+              ${property.description}
+            </p>
+            
+            <!-- Caratteristiche (esempio) -->
+            <div style="display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap;">
+              <div style="background: #F5F5F5; padding: 3px 6px; border-radius: 12px; font-size: 10px; color: #555;">2 letti</div>
+              <div style="background: #F5F5F5; padding: 3px 6px; border-radius: 12px; font-size: 10px; color: #555;">1 bagno</div>
+              <div style="background: #F5F5F5; padding: 3px 6px; border-radius: 12px; font-size: 10px; color: #555;">Wi-Fi</div>
+            </div>
+            
+            <!-- Pulsanti azione -->
+            <div style="display: flex; gap: 5px;">
+              <button 
+                onclick="window.mapPropertyActions.locateProperty('${property.id}')" 
+                style="flex: 1; padding: 8px 0; background: #F8F8F8; border: none; border-radius: 6px; font-size: 12px; font-weight: 500; color: #444; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                <span style="margin-right: 4px;">📍</span>Centra
+              </button>
+              <button 
+                onclick="window.mapPropertyActions.viewDetails('${property.id}')" 
+                style="flex: 2; padding: 8px 0; background: var(--color-primary, #3B82F6); border: none; border-radius: 6px; font-size: 12px; font-weight: 600; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                <span style="margin-right: 4px;">👁️</span>Vedi dettagli
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Collega le azioni ai pulsanti della finestra informativa
+      // Questo oggetto verrà usato dal codice HTML per chiamare le funzioni di React
+      window.mapPropertyActions = {
+        locateProperty: (propertyId: string) => {
+          locateProperty(propertyId);
+          // Chiudi la finestra dopo l'azione
+          if (infoWindowRef.current) {
+            infoWindowRef.current.close();
+          }
+        },
+        viewDetails: (propertyId: string) => {
+          navigate(`/property/${propertyId}`);
+          // Chiudi la finestra dopo l'azione
+          if (infoWindowRef.current) {
+            infoWindowRef.current.close();
+          }
         }
-      } else if (marker && 'getPosition' in marker && typeof marker.getPosition === 'function') {
-        // Per marker standard con getPosition
-        console.log("[INFO_WINDOW] Opening for standard Marker with getPosition");
-        const position = marker.getPosition();
-        if (position) {
-          infoWindowRef.current.open(googleMapRef.current, marker);
-        } else {
-          console.error("[INFO_WINDOW] Standard marker position is undefined");
-          // Fallback alla posizione dalla proprietà
-          infoWindowRef.current.setPosition({ 
-            lat: property.location.lat, 
-            lng: property.location.lng 
-          });
-          infoWindowRef.current.open(googleMapRef.current);
-        }
-      } else if (marker && 'position' in marker) {
-        // Per marker con proprietà position diretta
-        console.log("[INFO_WINDOW] Opening for marker with direct position property");
-        infoWindowRef.current.setPosition(marker.position);
-        infoWindowRef.current.open(googleMapRef.current);
-      } else {
-        // Fallback alla posizione dalla proprietà
-        console.warn("[INFO_WINDOW] Unknown marker type, using property location");
-        infoWindowRef.current.setPosition({ 
-          lat: property.location.lat, 
-          lng: property.location.lng 
+      };
+      
+      // Crea una nuova finestra informativa se non esiste ancora
+      if (!infoWindowRef.current && window.google && window.google.maps) {
+        infoWindowRef.current = new window.google.maps.InfoWindow({
+          maxWidth: 300,
+          disableAutoPan: false,
+          pixelOffset: new window.google.maps.Size(0, -20)
         });
-        infoWindowRef.current.open(googleMapRef.current);
+      }
+      
+      // Verifica che la finestra informativa sia stata creata
+      if (!infoWindowRef.current) {
+        console.error("[INFO_WINDOW] Impossibile creare la finestra informativa");
+        return;
+      }
+      
+      // Imposta il contenuto
+      infoWindowRef.current.setContent(content);
+      
+      // Verifica esplicita che la mappa sia un'istanza valida di google.maps.Map
+      if (!googleMapRef.current || typeof googleMapRef.current.getBounds !== 'function') {
+        console.error("[INFO_WINDOW] Istanza della mappa non valida");
+        return;
+      }
+      
+      // Controllo che il marker esista
+      if (!marker) {
+        console.error("[INFO_WINDOW] Marker non disponibile");
+        return;
+      }
+
+      // Apri l'infoWindow in modo appropriato in base al tipo di marker
+      try {
+        // Per marker standard con getPosition
+        if (marker && typeof marker.getPosition === 'function') {
+          // Assicurati che la mappa sia visibile e pronta prima di aprire l'InfoWindow
+          setTimeout(() => {
+            try {
+              infoWindowRef.current.open({
+                map: googleMapRef.current,
+                anchor: marker
+              });
+            } catch (error) {
+              console.error("[INFO_WINDOW] Errore nell'apertura della finestra con marker standard:", error);
+              // Fallback
+              try {
+                infoWindowRef.current.setPosition(marker.getPosition());
+                infoWindowRef.current.open(googleMapRef.current);
+              } catch (e) {
+                console.error("[INFO_WINDOW] Anche il fallback ha fallito:", e);
+              }
+            }
+          }, 50);
+        } 
+        // Per advanced marker o marker con position
+        else if (marker && marker.position) {
+          setTimeout(() => {
+            try {
+              infoWindowRef.current.setPosition(marker.position);
+              infoWindowRef.current.open({
+                map: googleMapRef.current
+              });
+            } catch (error) {
+              console.error("[INFO_WINDOW] Errore nell'apertura della finestra con position:", error);
+            }
+          }, 50);
+        } 
+        // Fallback alla posizione della proprietà
+        else {
+          setTimeout(() => {
+            try {
+              infoWindowRef.current.setPosition({
+                lat: property.location.lat,
+                lng: property.location.lng
+              });
+              infoWindowRef.current.open({
+                map: googleMapRef.current
+              });
+            } catch (error) {
+              console.error("[INFO_WINDOW] Errore nel fallback alla posizione della proprietà:", error);
+            }
+          }, 50);
+        }
+      } catch (error) {
+        console.error("[INFO_WINDOW] Errore nell'apertura della finestra:", error);
+        
+        // Ultimo tentativo usando direttamente la posizione della proprietà
+        try {
+          setTimeout(() => {
+            infoWindowRef.current.setPosition({
+              lat: property.location.lat,
+              lng: property.location.lng
+            });
+            infoWindowRef.current.open({
+              map: googleMapRef.current
+            });
+          }, 100);
+        } catch (finalError) {
+          console.error("[INFO_WINDOW] Impossibile aprire la finestra informativa:", finalError);
+        }
       }
     } catch (error) {
-      console.error("[INFO_WINDOW] Error opening InfoWindow:", error);
-      // Fallback usando solo la posizione della proprietà
-      try {
-        infoWindowRef.current.setPosition({ 
-          lat: property.location.lat, 
-          lng: property.location.lng 
-        });
-        infoWindowRef.current.open(googleMapRef.current);
-      } catch (e) {
-        console.error("[INFO_WINDOW] Critical error opening InfoWindow:", e);
-      }
+      console.error("[INFO_WINDOW] Errore generale nella gestione della finestra:", error);
     }
-    
-    // Aggiungi event listener per il pulsante dopo un breve ritardo
-    setTimeout(() => {
-      const button = document.getElementById('view-property-btn');
-      if (button) {
-        button.addEventListener('click', () => {
-          navigate(`/property/${property.id}`);
-        });
-        
-        // Aggiungi effetto hover
-        button.addEventListener('mouseover', () => {
-          button.style.backgroundColor = '#1d4ed8';
-        });
-        button.addEventListener('mouseout', () => {
-          button.style.backgroundColor = '#2563eb';
-        });
-      }
-    }, 10);
   };
   
   // Funzione per caricare l'API di Google Maps
   const loadGoogleMaps = () => {
-    try {
-      // Verifica se Google Maps è già stato caricato
-      if (window.google && window.google.maps && window.google.maps.Map) {
-        console.log("[INIT] Google Maps already loaded and available, initializing map...");
-        
-        // Verifica anche se marker è disponibile
-        if (window.google.maps.Marker) {
-          console.log("[INIT] Google Maps Marker is available");
-        } else {
-          console.warn("[INIT] Google Maps Marker is NOT available!");
-        }
-        
-        // Inietta il polyfill per sostituire Marker con AdvancedMarkerElement se disponibile
-        if (window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
-          injectMarkerPolyfill();
-        }
-        
-        googleMapsScriptLoaded = true;
-        
-        // Prima di chiamare initializeMap, verifichiamo che tutte le componenti necessarie siano caricate
-        if (window.google.maps.InfoWindow && window.google.maps.LatLngBounds) {
-          console.log("[INIT] All required Google Maps components are available");
-          initializeMap();
-        } else {
-          console.warn("[INIT] Some Google Maps components are missing, retrying in 500ms");
-          setTimeout(initializeMap, 500);
-        }
-        
-        // Forza l'impostazione di Places API come pronta anche se non completamente caricata
-        // Questo permetterà alla SearchBar di inizializzare i propri servizi
-        console.log("[INIT] Force setting Places API as ready for SearchBar");
-        setPlacesApiReady(true);
-        
-        // Avvia la verifica delle API Places in background
-        setTimeout(() => {
-          try {
-            // Verifica se Places API è disponibile e completa
-            if (window.google && window.google.maps && window.google.maps.places) {
-              console.log("[INIT] Places API is available in background check");
-              // Anche se non tutte le componenti sono disponibili, permettiamo alla SearchBar di procedere
-              setPlacesApiReady(true);
-            }
-          } catch (e) {
-            console.warn("[INIT] Error in background Places API check:", e);
-          }
-        }, 1000);
-        
-        return;
-      }
-
-      // Verifica se lo script è già in caricamento
-      if (isGoogleMapsScriptLoading) {
-        console.log("[INIT] Google Maps script is already loading, skipping...");
-        return;
-      }
-      
-      if (googleMapsScriptLoaded) {
-        console.warn("[INIT] Google Maps script was loaded but Map is not available, this is strange...");
-        setMapError(true);
-        return;
-      }
-
-      // Marca lo script come in caricamento
-      isGoogleMapsScriptLoading = true;
-      
-      console.log("[INIT] Loading Google Maps API...");
-      
-      // Carica lo script di Google Maps
-      const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-      if (!googleMapsApiKey) {
-        console.error("[INIT] Google Maps API key not found in environment variables!");
-        throw new Error("Google Maps API key not found");
-      }
-      
-      console.log("[INIT] API key found:", googleMapsApiKey.substring(0, 8) + "..." + googleMapsApiKey.substring(googleMapsApiKey.length - 4));
-      
-      // Crea lo script
-      const script = document.createElement('script');
-      // Imposta un timeout di sicurezza per prevenire caricamenti indefiniti
-      const timeoutId = setTimeout(() => {
-        console.error("[INIT] Google Maps script loading timed out after 10 seconds");
-        isGoogleMapsScriptLoading = false;
-        setMapError(true);
-        
-        // Rimuovi lo script che non si è caricato
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-      }, 10000);
-      
-      // Versione più semplice e diretta dello script con parametri migliorati
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initGoogleCallback&loading=async&v=weekly`;
-      script.async = true;
-      script.defer = true;
-      
-      // Aggiungiamo ulteriori event handler per monitorare lo stato di caricamento
-      script.addEventListener('load', () => {
-        console.log("[INIT] Google Maps script 'load' event fired");
-        // Il callback si occuperà di inizializzare la mappa
-      });
-      
-      script.addEventListener('error', (event) => {
-        console.error("[INIT] Google Maps script error event:", event);
-        setMapError(true);
-        clearTimeout(timeoutId);
-        isGoogleMapsScriptLoading = false;
-      });
-      
-      // Definisco una funzione di callback globale
-      window.initGoogleCallback = () => {
-        console.log("[INIT] Google Maps initialized via callback");
-        clearTimeout(timeoutId);
-        isGoogleMapsScriptLoading = false;
-        googleMapsScriptLoaded = true;
-        
-        if (window.google && window.google.maps) {
-          console.log("[INIT] Verifico la disponibilità di tutti i componenti necessari...");
-          
-          // Controlla se l'ID dello stile è disponibile
-          try {
-            // Questo codice forza il caricamento dello stile personalizzato prima di procedere
-            console.log("[INIT] Verifica disponibilità dello stile personalizzato con ID: e364d3818cec701");
-            
-            // Tentativo di riferimento diretto allo stile che potrebbe forzare il caricamento anticipato
-            if (window.google.maps.mapTypes) {
-              console.log("[INIT] mapTypes è disponibile per il caricamento degli stili");
-            }
-            
-            // Riprova la chiamata di inizializzazione con un leggero ritardo
-            setTimeout(() => {
-              // Se googleMapRef.current è null, la mappa non è stata ancora inizializzata
-              if (!googleMapRef.current) {
-                console.log("[INIT] Inizializzazione della mappa dopo il caricamento dello stile");
-                initializeMap();
-              }
-            }, 200);
-          } catch (e) {
-            console.warn("[INIT] Errore durante la verifica dello stile:", e);
-            // Procedi comunque con l'inizializzazione
-            initializeMap();
-          }
-        } else {
-          console.error("[INIT] Google Maps not available after callback");
-          setMapError(true);
-        }
-      };
-      
-      // Gestisci il caricamento dello script
-      script.onload = () => {
-        console.log("[INIT] Google Maps script loaded successfully");
-        // Il callback si occuperà di inizializzare la mappa
-      };
-      
-      // Aggiungi lo script al DOM
-      console.log("[INIT] Appending script to document.head");
-      document.head.appendChild(script);
-    } catch (error) {
-      console.error("[INIT] Error initializing Google Maps:", error);
-      isGoogleMapsScriptLoading = false;
-      setMapError(true);
+    // Se Google Maps è già stato caricato, non fare nulla
+    if (isGoogleMapsLoaded()) {
+      console.log('[GOOGLE_MAPS] API già caricata, inizializzazione...');
+      initializeMap();
+      return;
     }
+
+    console.log('[GOOGLE_MAPS] Caricamento tramite servizio centralizzato...');
+    
+    // Carica l'API tramite il servizio centralizzato
+    loadGoogleMapsApi()
+      .then(() => {
+        console.log('[GOOGLE_MAPS] API caricata con successo');
+        initializeMap();
+      })
+      .catch(error => {
+        console.error('[GOOGLE_MAPS] Errore nel caricamento:', error);
+        setMapError(true);
+        setMapErrorMessage('Errore nel caricamento delle mappe. Verifica la connessione internet.');
+      });
   };
   
   // Inizializza Google Maps con tutti i marker delle case
@@ -1616,7 +1865,7 @@ const MapPage: React.FC = () => {
     if (googleMapRef.current) {
       googleMapRef.current.addListener('click', handleMapClick);
     }
-    
+
     return () => {
       if (googleMapRef.current && window.google && window.google.maps) {
         window.google.maps.event.clearListeners(googleMapRef.current, 'click');
@@ -1703,18 +1952,102 @@ const MapPage: React.FC = () => {
     // Imposta lo stato pronto
     setMapLoaded(true);
   };
+
+  // Effect per verificare il cambiamento delle proprietà visibili
+  useEffect(() => {
+    console.log(`[USE_EFFECT] visibleProperties è stato aggiornato: ${visibleProperties.length} proprietà`);
+    
+    // Se necessario, aggiorna i contatori UI
+    const countElement = document.getElementById('visible-property-count');
+    if (countElement) {
+      countElement.textContent = `${visibleProperties.length} di ${houses.length} proprietà`;
+    }
+    
+    const mapCounterElement = document.getElementById('map-visible-counter');
+    if (mapCounterElement) {
+      mapCounterElement.textContent = `${visibleProperties.length} di ${houses.length} proprietà visibili`;
+    }
+    
+    // Aggiungiamo un avviso visibile con il numero di proprietà visibili
+    console.log(`%c PROPRIETÀ VISIBILI: ${visibleProperties.length} di ${houses.length} `, 'background: #2563eb; color: white; font-size: 14px; padding: 4px 8px; border-radius: 4px;');
+    
+  }, [visibleProperties, houses.length]);
   
+  // Listener dedicato per il cambio di zoom
+  useEffect(() => {
+    if (!googleMapRef.current || !window.google || !window.google.maps) return;
+    
+    const zoomListener = googleMapRef.current.addListener('zoom_changed', () => {
+      // Removed zoom change logging
+      
+      // Aggiorna proprietà visibili dopo cambio zoom
+      updateVisibleProperties();
+      
+      // Timer di sicurezza: aggiorna le proprietà visibili dopo un breve ritardo
+      // per assicurarsi che la mappa abbia finito di renderizzare
+      setTimeout(() => {
+        if (googleMapRef.current) {
+          updateVisibleProperties();
+        }
+      }, 300);
+    });
+    
+    return () => {
+      if (window.google && window.google.maps && window.google.maps.event) {
+        window.google.maps.event.removeListener(zoomListener);
+      }
+    };
+  }, [mapLoaded, updateVisibleProperties]);
+  
+  useEffect(() => {
+    // Funzione per aggiornare le proprietà visibili dopo ogni cambio di posizione o zoom
+    const handleMapViewportChange = () => {
+      if (!googleMapRef.current || !window.google || !window.google.maps) return;
+      
+      // Rimosso console.log per i cambiamenti di viewport
+      updateVisibleProperties();
+    };
+    
+    // Assicuriamoci che l'effetto venga eseguito solo dopo che la mappa è stata caricata
+    if (googleMapRef.current && window.google && window.google.maps && mapLoaded) {
+      console.log('[MAP_EFFECT] Aggiungo event listeners alla mappa');
+      
+      // Aggiungi event listeners per i cambiamenti di viewport
+      const boundsChangedListener = googleMapRef.current.addListener('bounds_changed', handleMapViewportChange);
+      const zoomChangedListener = googleMapRef.current.addListener('zoom_changed', handleMapViewportChange);
+      const dragEndListener = googleMapRef.current.addListener('dragend', handleMapViewportChange);
+      const idleListener = googleMapRef.current.addListener('idle', handleMapViewportChange);
+      
+      // Esegui subito un aggiornamento per inizializzare la lista 
+      updateVisibleProperties();
+      
+      // Cleanup dei listeners quando il componente viene smontato
+      return () => {
+        if (window.google && window.google.maps && window.google.maps.event) {
+          window.google.maps.event.removeListener(boundsChangedListener);
+          window.google.maps.event.removeListener(zoomChangedListener);
+          window.google.maps.event.removeListener(dragEndListener);
+          window.google.maps.event.removeListener(idleListener);
+          console.log('[MAP_EFFECT] Rimossi event listeners dalla mappa');
+        }
+      };
+    }
+  }, [mapLoaded]);
+
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* Header - Solo per Desktop */}
       {!isMobile && (
         <div className="h-16 bg-white bg-opacity-95 border-b w-full shadow-md z-10">
-          <Header />
-        </div>
+        <Header />
+      </div>
       )}
       
       {/* Main Content Area */}
       <div className={`flex flex-row ${isMobile ? 'h-screen' : 'h-[calc(100vh-4rem)]'} relative w-full overflow-hidden`}>
+        {/* Indicatore proprietà visibili - solo desktop */}
+        {/* Indicator removed as requested */}
+      
         {/* Sidebar desktop - nascosta su mobile */}
         {!isMobile && (
           <div 
@@ -1737,18 +2070,36 @@ const MapPage: React.FC = () => {
               <h2 className="text-xl font-bold">
                 {searchTerm 
                   ? `Results for "${searchTerm}"` 
-                  : `${visibleProperties.length} Properties in View`}
+                  : visibleProperties.length === 0
+                    ? `Nessuna proprietà visibile`
+                    : `Proprietà Visibili (${visibleProperties.length})`}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                {visibleProperties.length < houses.length 
-                  ? `Showing ${visibleProperties.length} of ${houses.length} properties` 
-                  : `Showing all ${houses.length} properties`}
-              </p>
-            </div>
+              <div className="flex items-center mt-1">
+                <div className={`text-sm font-medium py-1 px-3 rounded-full ${
+                  visibleProperties.length === 0 
+                    ? 'bg-primary-50 text-primary-600' 
+                    : visibleProperties.length < houses.length / 2
+                      ? 'bg-yellow-50 text-yellow-700'
+                      : 'bg-primary-50 text-primary-600'
+                }`}>
+                  {visibleProperties.length} proprietà
+                </div>
+                {visibleProperties.length < houses.length && visibleProperties.length > 0 && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    Zoom o sposta la mappa per vedere altre proprietà
+                  </span>
+                )}
+              </div>
+              {visibleProperties.length === 0 && (
+                <div className="mt-2 p-2 bg-primary-50 border border-primary-200 rounded-md text-sm text-primary-700">
+                  Nessuna proprietà visibile in questa area. Zoom out o sposta la mappa per visualizzare le proprietà.
+                </div>
+              )}
+          </div>
 
             {/* Lista proprietà - occupa tutto lo spazio rimanente */}
             <div className="flex-1 overflow-auto">
-              <div className="p-4">
+            <div className="p-4">
                 {renderPropertyList()}
               </div>
             </div>
@@ -1800,22 +2151,25 @@ const MapPage: React.FC = () => {
               top: '12px',
               left: '50%',
               transform: 'translateX(-50%)',
-              width: '50%',
-              maxWidth: '600px',
+              width: '70%',
+              maxWidth: '800px',
               zIndex: 20,
-              padding: '0 10px'
+              padding: '0 10px',
+              border: 'none'
             }}>
               <div style={{
-                boxShadow: '0 3px 10px rgba(0, 0, 0, 0.15)',
+                boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
                 borderRadius: '30px', 
-                overflow: 'hidden',
+                overflow: 'visible', /* Modificato da 'hidden' a 'visible' per consentire la visualizzazione del dropdown */
                 background: 'white',
                 border: 'none',
-                padding: '2px',
-                width: '100%'
+                outline: 'none',
+                padding: '0',
+                width: '100%',
+                position: 'relative' /* Aggiunto per garantire il corretto positioning del dropdown */
               }}>
                 {placesApiReady ? (
-                  <SearchBar onSearch={handleSearch} isSearching={isSearching} isMobile={false} />
+                  <SearchBar onSearch={handleSearch} isSearching={isSearching} isMobile={false} onMapPage={true} />
                 ) : (
                   <div style={{ 
                     display: 'flex', 
@@ -1825,7 +2179,7 @@ const MapPage: React.FC = () => {
                     fontSize: '14px',
                     color: '#666'
                   }}>
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+                    <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mr-3"></div>
                     Loading search...
                   </div>
                 )}
@@ -1835,14 +2189,20 @@ const MapPage: React.FC = () => {
           
           {/* Search Bar - Mobile in alto */}
           {isMobile && (
-            <div style={mobileSearchBarContainerStyle}>
+            <div style={{ 
+              ...mobileSearchBarContainerStyle,
+              border: 'none',
+              boxShadow: 'none'
+            }}>
               <div style={{ 
                 width: '100%', 
                 background: 'white',
                 borderRadius: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                padding: '6px',
-                overflow: 'hidden'
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                padding: '0',
+                overflow: 'hidden',
+                border: 'none',
+                outline: 'none'
               }}>
                 {placesApiReady ? (
                   <SearchBar 
@@ -1859,7 +2219,7 @@ const MapPage: React.FC = () => {
                     fontSize: '14px',
                     color: '#666'
                   }}>
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+                    <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mr-3"></div>
                     Loading search...
                   </div>
                 )}
@@ -1872,7 +2232,7 @@ const MapPage: React.FC = () => {
                       top: '100%', 
                       left: 0, 
                       right: 0, 
-                      backgroundColor: 'rgba(239, 68, 68, 0.9)', 
+                      backgroundColor: 'rgba(59, 130, 246, 0.9)', // Colore primary invece di rosso
                       color: 'white',
                       padding: '8px 16px',
                       fontSize: '14px',
@@ -1897,16 +2257,16 @@ const MapPage: React.FC = () => {
                     >
                       ×
                     </button>
-                  </div>
-                )}
               </div>
+                )}
             </div>
+          </div>
           )}
-          
+
           {/* Usa il DraggableBottomSheet invece del drawer personalizzato */}
           {isMobile && mapLoaded && (
-            <DraggableBottomSheet
-              ref={bottomSheetRef}
+              <DraggableBottomSheet
+                ref={bottomSheetRef}
               houses={formatPropertiesForSheet}
               onViewDetails={handleViewDetails}
               onFindOnMap={handleFindOnMap}
@@ -1915,14 +2275,14 @@ const MapPage: React.FC = () => {
               onTabChange={handleTabChange}
             />
           )}
-        </div>
-      </div>
+            </div>
+          </div>
 
       {/* Overlay di errore o loading */}
       {mapError && !showListOnly && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(243, 244, 246, 0.9)', zIndex: 50 }}>
           <div className="text-center p-4 max-w-md bg-white rounded-lg shadow-lg">
-            <h2 className="text-xl font-bold text-red-500 mb-2">Errore di caricamento mappa</h2>
+            <h2 className="text-xl font-bold text-primary-500 mb-2">Errore di caricamento mappa</h2>
             <p className="text-gray-600 mb-4">
               Si è verificato un errore durante il caricamento della mappa Google Maps. Il problema potrebbe essere legato alla chiave API.
             </p>
@@ -1942,7 +2302,7 @@ const MapPage: React.FC = () => {
             </p>
             <div className="flex justify-center gap-2 mt-4">
               <button 
-                className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded"
+                className="bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded"
                 onClick={() => window.location.reload()}
               >
                 Riprova
@@ -1955,21 +2315,21 @@ const MapPage: React.FC = () => {
               >
                 Gestisci Chiave API
               </a>
-            </div>
+        </div>
             <button 
-              className="mt-4 text-blue-500 hover:text-blue-700 underline text-sm"
+              className="mt-4 text-primary-500 hover:text-primary-700 underline text-sm"
               onClick={() => setShowListOnly(true)}
             >
               Visualizza solo la lista proprietà
             </button>
-          </div>
+      </div>
         </div>
       )}
       
       {!mapLoaded && !mapError && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(243, 244, 246, 0.9)', zIndex: 50 }}>
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p className="mt-4 text-gray-600">Caricamento mappa...</p>
           </div>
         </div>
@@ -2019,6 +2379,9 @@ const MapPage: React.FC = () => {
   
   // Funzione per renderizzare la lista delle proprietà (usata sia in desktop che mobile)
   function renderPropertyList() {
+    // Log per debug del rendering
+    console.log(`[RENDER_LIST] Rendering della lista proprietà. Proprietà visibili: ${visibleProperties.length}`);
+    
     // Determina se usare layout specifico per mobile o desktop
     const cardStyle = isMobile 
       ? "bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all" 
@@ -2027,12 +2390,21 @@ const MapPage: React.FC = () => {
     const imageHeight = isMobile ? "h-36" : "h-48";
     const padding = isMobile ? "p-3" : "p-4";
     
-    return visibleProperties.length > 0 ? (
+    // Usa SOLO le proprietà visibili per la lista - NON mostriamo mai tutte le proprietà
+    const propertiesToShow = visibleProperties;
+    
+    // Log per debugging
+    console.log(`[RENDER_LIST] Mostro ${propertiesToShow.length} proprietà nella lista`);
+    if (propertiesToShow.length > 0) {
+      console.log(`[RENDER_LIST] Prima proprietà: id=${propertiesToShow[0].id}, titolo="${propertiesToShow[0].title}"`);
+    }
+    
+    return propertiesToShow.length > 0 ? (
       <div className={`grid grid-cols-1 ${isMobile ? 'gap-3 px-1' : 'gap-6'}`}>
-        {visibleProperties.map(property => (
+        {propertiesToShow.map(property => (
           <div 
             key={property.id}
-            className={`${cardStyle} ${selectedProperty === property.id ? 'ring-2 ring-blue-500' : ''}`}
+            className={`${cardStyle} ${selectedProperty === property.id ? 'ring-2 ring-primary-500' : ''}`}
             onClick={() => property.id && locateProperty(property.id)}
           >
             <div className="relative">
@@ -2041,9 +2413,9 @@ const MapPage: React.FC = () => {
                 alt={property.title} 
                 className={`w-full ${imageHeight} object-cover`}
               />
-              <div className={`absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-md ${isMobile ? 'text-xs' : ''}`}>
+              <div className={`absolute top-2 right-2 bg-primary-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-md ${isMobile ? 'text-xs' : ''}`}>
                 ${property.price}<span className="text-xs font-normal">/notte</span>
-              </div>
+        </div>
               
               {/* Badge per rating */}
               <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm text-gray-800 px-2 py-1 rounded-lg text-xs font-semibold shadow-sm flex items-center">
@@ -2070,7 +2442,7 @@ const MapPage: React.FC = () => {
                   title="Visualizza sulla mappa"
                   aria-label="Visualizza sulla mappa"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-blue-600`} viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-primary-600`} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                   </svg>
                 </button>
@@ -2086,7 +2458,7 @@ const MapPage: React.FC = () => {
                 {isMobile ? (
                   // Versione compatta per mobile
                   <div className="flex items-center text-xs text-gray-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-primary-600" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                     </svg>
                     {property.location.lat.toFixed(2)}, {property.location.lng.toFixed(2)}
@@ -2094,7 +2466,7 @@ const MapPage: React.FC = () => {
                 ) : (
                   // Versione completa per desktop
                   <button
-                    className="flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="flex items-center text-primary-600 hover:text-primary-800 text-sm font-medium"
                     onClick={(e) => {
                       e.stopPropagation();
                       locateProperty(property.id);
@@ -2111,7 +2483,7 @@ const MapPage: React.FC = () => {
                 )}
                 
                 <button 
-                  className={`bg-blue-600 hover:bg-blue-700 text-white text-sm ${isMobile ? 'py-1 px-3 text-xs' : 'py-2 px-4'} rounded-lg transition-colors font-medium`}
+                  className={`bg-primary-600 hover:bg-primary-700 text-white text-sm ${isMobile ? 'py-1 px-3 text-xs' : 'py-2 px-4'} rounded-lg transition-colors font-medium`}
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(`/property/${property.id}`);
@@ -2132,7 +2504,7 @@ const MapPage: React.FC = () => {
         <p className={`${isMobile ? 'text-base' : 'text-lg'} font-medium text-gray-700`}>Non ci sono proprietà in questa area</p>
         <p className="mt-1 text-gray-500 text-sm">Prova a spostare la mappa o cambiare il livello di zoom</p>
         <button 
-          className={`mt-4 bg-blue-600 hover:bg-blue-700 text-white ${isMobile ? 'py-1.5 px-4 text-sm' : 'py-2 px-6'} rounded-lg transition-colors shadow-sm`}
+          className={`mt-4 bg-primary-600 hover:bg-primary-700 text-white ${isMobile ? 'py-1.5 px-4 text-sm' : 'py-2 px-6'} rounded-lg transition-colors shadow-sm`}
           onClick={() => {
             if (googleMapRef.current) {
               console.log("[NO_PROPERTIES] Resetting map to show all properties");
@@ -2153,7 +2525,7 @@ const MapPage: React.FC = () => {
               
               // Imposta uno zoom ragionevole per vedere più proprietà
               setTimeout(() => {
-                if (googleMapRef.current.getZoom() > 10) {
+                if (googleMapRef.current && googleMapRef.current.getZoom() > 10) {
                   googleMapRef.current.setZoom(8);
                 }
                 // Aggiorna manualmente le proprietà visibili
@@ -2169,8 +2541,8 @@ const MapPage: React.FC = () => {
         >
           Mostra tutte le proprietà
         </button>
-      </div>
-    );
+    </div>
+  );
   }
 };
 

@@ -1,232 +1,843 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Icon } from '@iconify/react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import './SearchBar.css';
+import { loadGoogleMapsApi, isGooglePlacesLoaded, onGoogleMapsLoaded } from '../services/GoogleMapsService';
 
-// Interfaccia delle props
-interface SearchBarProps {
-  onSearch: (params: { location: string; checkIn: string; checkOut: string }, coordinates?: [number, number]) => void;
-  isSearching?: boolean;
-  isMobile?: boolean;
-}
-
-// Destinazioni preimpostate semplici
-const CITIES = [
-  { id: 1, name: "Roma", coords: [41.9028, 12.4964] as [number, number] },
-  { id: 2, name: "Milano", coords: [45.4642, 9.1900] as [number, number] },
-  { id: 3, name: "Firenze", coords: [43.7696, 11.2558] as [number, number] },
-  { id: 4, name: "Venezia", coords: [45.4408, 12.3155] as [number, number] },
-  { id: 5, name: "Napoli", coords: [40.8518, 14.2681] as [number, number] },
-  { id: 6, name: "Torino", coords: [45.0703, 7.6869] as [number, number] },
-  { id: 7, name: "Bologna", coords: [44.4949, 11.3426] as [number, number] },
-  { id: 8, name: "Palermo", coords: [38.1157, 13.3615] as [number, number] }
+// Mock data for popular cities with coordinates for Google Maps
+const popularCities = [
+  { id: 1, name: 'Roma', country: 'Italia', lat: 41.9028, lng: 12.4964 },
+  { id: 2, name: 'Milano', country: 'Italia', lat: 45.4642, lng: 9.1900 },
+  { id: 3, name: 'Firenze', country: 'Italia', lat: 43.7696, lng: 11.2558 },
+  { id: 4, name: 'Venezia', country: 'Italia', lat: 45.4408, lng: 12.3155 },
+  { id: 5, name: 'Napoli', country: 'Italia', lat: 40.8518, lng: 14.2681 },
+  { id: 6, name: 'Torino', country: 'Italia', lat: 45.0703, lng: 7.6869 },
+  { id: 7, name: 'Bologna', country: 'Italia', lat: 44.4949, lng: 11.3426 },
+  { id: 8, name: 'Palermo', country: 'Italia', lat: 38.1157, lng: 13.3615 },
+  // Aggiungiamo più città per migliorare la ricerca offline
+  { id: 9, name: 'Genova', country: 'Italia', lat: 44.4056, lng: 8.9463 },
+  { id: 10, name: 'Bari', country: 'Italia', lat: 41.1177, lng: 16.8512 },
+  { id: 11, name: 'Catania', country: 'Italia', lat: 37.5079, lng: 15.0830 },
+  { id: 12, name: 'Verona', country: 'Italia', lat: 45.4384, lng: 10.9916 }
 ];
 
-const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isSearching = false, isMobile = false }) => {
-  // Stati base
-  const [location, setLocation] = useState('');
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
+// Tipo per la proprietà location
+interface LocationType {
+  address: string;
+  lat?: number;
+  lng?: number;
+}
+
+// Interfaccia per le props del componente
+interface SearchBarProps {
+  className?: string;
+  onSearch?: (location: LocationType) => void;
+  useGooglePlaces?: boolean;
+  isSearching?: boolean;
+  isMobile?: boolean;
+  onMapPage?: boolean;
+}
+
+interface Prediction {
+  description: string;
+  place_id: string;
+  structured_formatting?: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
+const SearchBar: React.FC<SearchBarProps> = ({ 
+  className = '', 
+  onSearch,
+  useGooglePlaces = true,
+  isSearching = false,
+  isMobile = false,
+  onMapPage = false
+}) => {
+  // Stato per l'input di ricerca
+  const [location, setLocation] = useState<string>('');
+  const [date, setDate] = useState<string>('Quando?');
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [showCalendar, setShowCalendar] = useState<boolean>(false);
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [offlineMode, setOfflineMode] = useState<boolean>(false);
   
-  // Ref per il contenitore del componente
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Refs per i timeout e gli elementi del DOM
+  const searchFormRef = useRef<HTMLFormElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autoCompleteServiceRef = useRef<any>(null);
+  const placesServiceRef = useRef<any>(null);
+  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const requestTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Filtra le città in base all'input
-  const matchingCities = CITIES.filter(city => 
-    city.name.toLowerCase().includes(location.toLowerCase())
-  );
+  // Inizializzazione dei servizi Google Places
+  useEffect(() => {
+    // Verifichiamo se l'API è disponibile - con un timeout di sicurezza
+    const apiCheckTimeout = setTimeout(() => {
+      console.log('Google Places API check timeout - switching to offline mode');
+      setOfflineMode(true);
+      setErrorMessage('Modalità offline attiva. Utilizzando dati locali.');
+      setTimeout(() => setErrorMessage(''), 3000);
+    }, 5000);
+    
+    // Prova a inizializzare i servizi - se non ci riesce, passa alla modalità offline
+    if (useGooglePlaces && !offlineMode) {
+      // Verifica se l'API è già disponibile
+      if (isGooglePlacesLoaded()) {
+        console.log('Google Maps API già caricata, inizializzazione servizi');
+        if (initGooglePlacesServices()) {
+          clearTimeout(apiCheckTimeout);
+        } else {
+          setOfflineMode(true);
+        }
+      } else {
+        // L'API non è disponibile, usa il servizio centralizzato
+        console.log('Google Maps API non rilevata, utilizzo servizio centralizzato');
+        
+        // Carica l'API tramite il servizio
+        loadGoogleMapsApi()
+          .then(() => {
+            console.log('Google Maps API caricata tramite servizio centralizzato');
+            if (initGooglePlacesServices()) {
+              clearTimeout(apiCheckTimeout);
+              setOfflineMode(false);
+            } else {
+              setOfflineMode(true);
+            }
+          })
+          .catch(error => {
+            console.error('Errore nel caricamento dell\'API:', error);
+            setOfflineMode(true);
+            setErrorMessage('Impossibile caricare Google Maps API. Modalità offline attiva.');
+            setTimeout(() => setErrorMessage(''), 3000);
+          });
+      }
+    } else {
+      clearTimeout(apiCheckTimeout); 
+    }
+    
+    // Clean up
+    return () => {
+      clearTimeout(apiCheckTimeout);
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+      }
+      if (requestTimeoutRef.current) {
+        clearTimeout(requestTimeoutRef.current);
+      }
+    };
+  }, [useGooglePlaces, offlineMode]);
+
+  const initGooglePlacesServices = () => {
+    try {
+      // Verifica se l'API Google è disponibile
+      if (typeof window.google === 'undefined' || !window.google.maps || !window.google.maps.places) {
+        console.log('Google Places API not available');
+        return false;
+      }
+      
+      console.log('Inizializzazione Google Places API');
+      
+      // Verifica che l'oggetto AutocompleteService sia disponibile
+      if (!window.google.maps.places.AutocompleteService) {
+        console.error('AutocompleteService non disponibile');
+        return false;
+      }
+      
+      // Inizializza AutocompleteService
+      try {
+        autoCompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      } catch (error) {
+        console.error('Errore nell\'inizializzazione di AutocompleteService:', error);
+        return false;
+      }
+      
+      // Creiamo un elemento temporaneo per il PlacesService
+      try {
+        const placesDiv = document.createElement('div');
+        placesDiv.style.display = 'none';
+        document.body.appendChild(placesDiv);
+        placesServiceRef.current = new window.google.maps.places.PlacesService(placesDiv);
+      } catch (error) {
+        console.error('Errore nell\'inizializzazione di PlacesService:', error);
+        return false;
+      }
+      
+      // Verifica che i servizi siano stati inizializzati correttamente
+      if (!autoCompleteServiceRef.current || !placesServiceRef.current) {
+        console.error('I servizi non sono stati inizializzati correttamente');
+        return false;
+      }
+      
+      console.log('Google Places API initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('Error initializing Google Places API:', error);
+      return false;
+    }
+  };
+
+  // Effetto per gestire il click fuori dal dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        searchFormRef.current && 
+        !searchFormRef.current.contains(event.target as Node) &&
+        inputRef.current && 
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+        setShowCalendar(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Ottiene suggerimenti da Google Places o mock data
+  const fetchPredictions = useCallback((input: string) => {
+    if (!input.trim()) {
+      setPredictions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    
+    // In modalità offline o se l'API non è disponibile, usa i dati mockati
+    if (offlineMode || !autoCompleteServiceRef.current) {
+      console.log('Using mock data for predictions');
+      const filtered = popularCities
+        .filter(city => 
+          city.name.toLowerCase().includes(input.toLowerCase()) || 
+          city.country.toLowerCase().includes(input.toLowerCase())
+        )
+        .map(city => ({
+          description: `${city.name}, ${city.country}`,
+          place_id: `city-${city.id}`,
+          structured_formatting: {
+            main_text: city.name,
+            secondary_text: city.country
+          }
+        }));
+      
+      setPredictions(filtered);
+      setIsLoading(false);
+      return;
+    }
+
+    // Safety timeout to stop loading state after 2 seconds
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+    }
+    
+    safetyTimeoutRef.current = setTimeout(() => {
+      setIsLoading(false);
+      console.log('Safety timeout triggered - stopping loading state');
+      
+      // Fallback ai dati mockati se il timeout scatta
+      useMockPredictions(input);
+    }, 2000);
+
+    // Local request timeout
+    if (requestTimeoutRef.current) {
+      clearTimeout(requestTimeoutRef.current);
+    }
+
+    requestTimeoutRef.current = setTimeout(() => {
+      try {
+        // Verifica che l'API sia ancora disponibile
+        if (!autoCompleteServiceRef.current || !window.google || !window.google.maps || !window.google.maps.places) {
+          console.error('Google Places API non disponibile');
+          clearSafetyTimeout();
+          useMockPredictions(input);
+          return;
+        }
+        
+        // Più sicuro: verifica che il servizio abbia il metodo richiesto
+        if (typeof autoCompleteServiceRef.current.getPlacePredictions !== 'function') {
+          console.error('getPlacePredictions non è una funzione');
+          clearSafetyTimeout();
+          useMockPredictions(input);
+          return;
+        }
+        
+        autoCompleteServiceRef.current.getPlacePredictions(
+          {
+            input,
+            // Uso un formato minimale senza tipi specifici
+            // che permette di cercare qualsiasi tipo di luogo
+            componentRestrictions: { country: 'it' }
+          },
+          (predictions: any, status: any) => {
+            // Clear safety timeout since we got a response
+            clearSafetyTimeout();
+            
+            setIsLoading(false);
+            
+            if (!status || status !== (window.google?.maps?.places?.PlacesServiceStatus?.OK || 'OK') || !predictions) {
+              console.error('Google Places API error:', status);
+              
+              // Fallback ai dati mockati in caso di errore
+              useMockPredictions(input);
+              return;
+            }
+            
+            console.log('Got predictions:', predictions.length);
+            setPredictions(predictions);
+          }
+        );
+      } catch (error) {
+        console.error('Error fetching predictions:', error);
+        setIsLoading(false);
+        clearSafetyTimeout();
+        
+        // Fallback ai dati mockati in caso di errore
+        useMockPredictions(input);
+      }
+    }, 300); // Debounce time
+  }, [offlineMode]);
+
+  // Funzione di utilità per cancellare il safety timeout
+  const clearSafetyTimeout = () => {
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+  };
   
-  // Gestisce il submit del form
+  // Funzione di utilità per usare i dati mockati
+  const useMockPredictions = (input: string) => {
+    const filtered = popularCities
+      .filter(city => 
+        city.name.toLowerCase().includes(input.toLowerCase()) || 
+        city.country.toLowerCase().includes(input.toLowerCase())
+      )
+      .map(city => ({
+        description: `${city.name}, ${city.country}`,
+        place_id: `city-${city.id}`,
+        structured_formatting: {
+          main_text: city.name,
+          secondary_text: city.country
+        }
+      }));
+    
+    setPredictions(filtered);
+    setIsLoading(false);
+  };
+
+  // Gestisce il cambiamento nel campo di ricerca
+  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    setLocation(inputValue);
+    setShowSuggestions(true);
+    fetchPredictions(inputValue);
+  };
+
+  // Gestisce la selezione di un luogo
+  const handleSelectPlace = (prediction: Prediction) => {
+    setLocation(prediction.description);
+    setShowSuggestions(false);
+    
+    // Se è un ID di città mockato, gestisci direttamente
+    if (prediction.place_id.startsWith('city-')) {
+      const cityId = prediction.place_id.replace('city-', '');
+      const city = popularCities.find(c => c.id === parseInt(cityId));
+      
+      if (city && onSearch) {
+        const locationData: LocationType = {
+          address: `${city.name}, ${city.country}`,
+          lat: city.lat,
+          lng: city.lng
+        };
+        
+        console.log('Selected city from mock data:', locationData);
+        setIsLoading(false);
+        onSearch(locationData);
+      }
+      return;
+    }
+    
+    // Se stiamo usando Google Places e non siamo in modalità offline
+    if (!offlineMode && placesServiceRef.current) {
+      setIsLoading(true);
+      
+      // Safety timeout for place details request
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+      }
+      
+      safetyTimeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+        console.log('Safety timeout triggered for place details - using fallback');
+        
+        // Fallback alla ricerca tra i dati mockati
+        const cityMatch = findBestCityMatch(prediction.description);
+        if (cityMatch && onSearch) {
+          onSearch({
+            address: prediction.description,
+            lat: cityMatch.lat,
+            lng: cityMatch.lng
+          });
+        } else if (onSearch) {
+          onSearch({ address: prediction.description });
+        }
+      }, 2000);
+      
+      try {
+        // Verifica che l'API sia ancora disponibile
+        if (!placesServiceRef.current || !window.google || !window.google.maps || !window.google.maps.places) {
+          console.error('Google Places API non disponibile per i dettagli');
+          clearSafetyTimeout();
+          handleFallbackForPlace(prediction.description);
+          return;
+        }
+        
+        // Più sicuro: verifica che il servizio abbia il metodo richiesto
+        if (typeof placesServiceRef.current.getDetails !== 'function') {
+          console.error('getDetails non è una funzione');
+          clearSafetyTimeout();
+          handleFallbackForPlace(prediction.description);
+          return;
+        }
+        
+        placesServiceRef.current.getDetails(
+          { placeId: prediction.place_id, fields: ['geometry', 'formatted_address'] },
+          (place: any, status: any) => {
+            // Clear the safety timeout
+            clearSafetyTimeout();
+            
+            setIsLoading(false);
+            
+            if (!status || status !== (window.google?.maps?.places?.PlacesServiceStatus?.OK || 'OK') || !place) {
+              console.error('Error fetching place details:', status);
+              
+              // Fallback alla ricerca tra i dati mockati
+              handleFallbackForPlace(prediction.description);
+              return;
+            }
+            
+            const locationData: LocationType = {
+              address: place.formatted_address || prediction.description,
+              lat: place.geometry?.location?.lat(),
+              lng: place.geometry?.location?.lng()
+            };
+            
+            console.log('Selected place with coordinates:', locationData);
+            
+            if (onSearch) {
+              onSearch(locationData);
+            }
+          }
+        );
+      } catch (error) {
+        console.error('Error in getDetails:', error);
+        clearSafetyTimeout();
+        setIsLoading(false);
+        handleFallbackForPlace(prediction.description);
+      }
+    } else {
+      // In modalità offline, cerca tra i dati mockati
+      handleFallbackForPlace(prediction.description);
+    }
+  };
+  
+  // Funzione di utility per gestire il fallback quando si seleziona un luogo
+  const handleFallbackForPlace = (description: string) => {
+    // Cerca una corrispondenza nei dati mockati
+    const cityMatch = findBestCityMatch(description);
+    if (cityMatch && onSearch) {
+      console.log('Modalità offline/fallback: trovata corrispondenza con', cityMatch.name);
+      onSearch({
+        address: description,
+        lat: cityMatch.lat,
+        lng: cityMatch.lng
+      });
+    } else if (onSearch) {
+      console.log('Modalità offline/fallback: nessuna corrispondenza trovata per', description);
+      // Usa Roma come default se nessuna corrispondenza è trovata
+      onSearch({ 
+        address: description,
+        lat: popularCities[0].lat,
+        lng: popularCities[0].lng
+      });
+    }
+  };
+
+  // Trova la migliore corrispondenza tra le città mockate
+  const findBestCityMatch = (address: string): (typeof popularCities)[0] | null => {
+    const lowerAddress = address.toLowerCase();
+    
+    console.log('Cerco corrispondenza per:', lowerAddress);
+    
+    // Cerca corrispondenze esatte
+    for (const city of popularCities) {
+      if (lowerAddress.includes(city.name.toLowerCase())) {
+        console.log('Trovata corrispondenza esatta con:', city.name);
+        return city;
+      }
+    }
+    
+    // Cerca corrispondenze parziali
+    const words = lowerAddress.split(/[\s,]+/).filter(w => w.length > 2);
+    console.log('Parole per la ricerca:', words);
+    
+    for (const word of words) {
+      for (const city of popularCities) {
+        if (city.name.toLowerCase().includes(word) || 
+            word.includes(city.name.toLowerCase())) {
+          console.log('Trovata corrispondenza parziale con:', city.name, 'per la parola:', word);
+          return city;
+        }
+      }
+    }
+    
+    // Se non trova nulla, restituisce Roma come default
+    console.log('Nessuna corrispondenza trovata, restituisco Roma come default');
+    return popularCities[0];
+  };
+
+  // Gestisce l'invio del form
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Se c'è una corrispondenza con una città, usa le sue coordinate
-    const matchedCity = CITIES.find(
-      city => city.name.toLowerCase() === location.toLowerCase()
-    );
+    if (!location.trim()) return;
     
-    if (matchedCity) {
-      console.log("Città corrispondente:", matchedCity.name);
-      onSearch({ location: matchedCity.name, checkIn, checkOut }, matchedCity.coords);
-    } else if (location.trim()) {
-      // Altrimenti, se c'è un termine di ricerca, invialo senza coordinate
-      console.log("Ricerca generica:", location);
-      onSearch({ location, checkIn, checkOut });
+    setIsLoading(true);
+    
+    // In modalità offline, usa direttamente i dati mockati
+    if (offlineMode || !autoCompleteServiceRef.current) {
+      handleFallbackSearch();
+      return;
     }
     
-    setIsOpen(false);
-  };
-  
-  // Gestisce la selezione di una città
-  const handleSelectCity = (city: typeof CITIES[0]) => {
-    console.log("Città selezionata:", city.name);
-    setLocation(city.name);
-    onSearch({ location: city.name, checkIn, checkOut }, city.coords);
-    setIsOpen(false);
-  };
-  
-  // Effetto per chiudere il dropdown quando si clicca fuori
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+    // Safety timeout
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+    }
     
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  
-  return (
-    <div 
-      className="relative"
-      ref={containerRef}
-      style={{ 
-        zIndex: 9999,
-        position: 'relative',
-        width: '100%'
-      }}
-    >
-      {/* Form di ricerca */}
-      <form onSubmit={handleSubmit} className="relative z-20">
-        <div className="flex items-center bg-white rounded-full shadow-xl border border-gray-300 overflow-hidden">
-          {/* Campo di ricerca */}
-          <div className="flex-1 px-4 py-3">
-            <label className="block text-xs font-bold text-gray-700 mb-1">Dove</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              onFocus={() => setIsOpen(true)}
-              placeholder="Cerca città"
-              className="w-full bg-transparent border-none focus:outline-none text-gray-800"
-              autoComplete="off"
-            />
-          </div>
-          
-          {/* Separatore */}
-          <div className="h-10 border-r border-gray-300"></div>
-          
-          {/* Date (desktop) */}
-          {!isMobile && (
-            <div className="flex-1 px-4 py-3">
-              <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="date"
-                  value={checkIn}
-                  onChange={(e) => setCheckIn(e.target.value)}
-                  className="bg-transparent border-none focus:outline-none text-gray-800 w-24"
-                />
-                <span className="text-gray-400">→</span>
-                <input
-                  type="date"
-                  value={checkOut}
-                  onChange={(e) => setCheckOut(e.target.value)}
-                  className="bg-transparent border-none focus:outline-none text-gray-800 w-24"
-                />
-              </div>
-            </div>
-          )}
-          
-          {/* Date (mobile) */}
-          {isMobile && (
-            <div className="flex-1 px-3 py-3">
-              <div className="flex items-center justify-center">
-                <Icon icon="carbon:calendar" className="text-gray-500 mr-2" />
-                <span className="text-gray-800">{checkIn || "Seleziona date"}</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Pulsante di ricerca */}
-          <button
-            type="submit"
-            className="m-1 bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 transition-colors shadow-md"
-            disabled={isSearching}
-          >
-            <Icon 
-              icon={isSearching ? "eos-icons:loading" : "carbon:search"} 
-              className="w-5 h-5" 
-            />
-          </button>
-        </div>
-      </form>
+    safetyTimeoutRef.current = setTimeout(() => {
+      setIsLoading(false);
+      console.log('Safety timeout triggered for form submission - using fallback');
+      handleFallbackSearch();
+    }, 2000);
+    
+    try {
+      // Verifica che l'API sia ancora disponibile
+      if (!autoCompleteServiceRef.current || !window.google || !window.google.maps || !window.google.maps.places) {
+        console.error('Google Places API non disponibile per la ricerca');
+        clearSafetyTimeout();
+        handleFallbackSearch();
+        return;
+      }
       
-      {/* Dropdown dei risultati - slegato dal normale flusso del documento */}
-      {isOpen && (
-        <div 
-          className="absolute left-0 right-0 mt-1 bg-white rounded-lg shadow-2xl overflow-hidden border border-gray-300"
-          style={{ 
-            zIndex: 9999,
-            top: containerRef.current ? `${containerRef.current.getBoundingClientRect().height + 4}px` : '60px',
-            maxHeight: '300px',
-            overflowY: 'auto',
-            width: '100%'
-          }}
+      // Più sicuro: verifica che il servizio abbia il metodo richiesto
+      if (typeof autoCompleteServiceRef.current.getPlacePredictions !== 'function') {
+        console.error('getPlacePredictions non è una funzione per la ricerca');
+        clearSafetyTimeout();
+        handleFallbackSearch();
+        return;
+      }
+      
+      autoCompleteServiceRef.current.getPlacePredictions(
+        {
+          input: location,
+          // Uso un formato minimale senza tipi specifici
+          // che permette di cercare qualsiasi tipo di luogo
+          componentRestrictions: { country: 'it' }
+        },
+        (predictions: any, status: any) => {
+          clearSafetyTimeout();
+          
+          if (!status || status !== (window.google?.maps?.places?.PlacesServiceStatus?.OK || 'OK') || 
+              !predictions || predictions.length === 0) {
+            console.log('No predictions found, using fallback');
+            handleFallbackSearch();
+            return;
+          }
+          
+          // Usa la prima predizione
+          const bestMatch = predictions[0];
+          
+          if (!placesServiceRef.current) {
+            console.error('PlacesService non disponibile');
+            handleFallbackSearch();
+            return;
+          }
+          
+          // Verifica che il servizio abbia il metodo richiesto
+          if (typeof placesServiceRef.current.getDetails !== 'function') {
+            console.error('getDetails non è una funzione');
+            handleFallbackSearch();
+            return;
+          }
+          
+          try {
+            placesServiceRef.current.getDetails(
+              { placeId: bestMatch.place_id, fields: ['geometry', 'formatted_address'] },
+              (place: any, detailStatus: any) => {
+                setIsLoading(false);
+                
+                if (!detailStatus || detailStatus !== (window.google?.maps?.places?.PlacesServiceStatus?.OK || 'OK') || !place) {
+                  console.log('Error fetching place details, using fallback');
+                  handleFallbackSearch();
+                  return;
+                }
+                
+                const locationData: LocationType = {
+                  address: place.formatted_address || bestMatch.description,
+                  lat: place.geometry?.location?.lat(),
+                  lng: place.geometry?.location?.lng()
+                };
+                
+                if (onSearch) {
+                  onSearch(locationData);
+                }
+              }
+            );
+          } catch (detailError) {
+            console.error('Error in getDetails:', detailError);
+            handleFallbackSearch();
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error in form submission:', error);
+      setIsLoading(false);
+      clearSafetyTimeout();
+      handleFallbackSearch();
+    }
+  };
+  
+  // Funzione di fallback per la ricerca
+  const handleFallbackSearch = () => {
+    setIsLoading(false);
+    
+    console.log('Using fallback search for:', location);
+    
+    const cityMatch = findBestCityMatch(location);
+    
+    if (cityMatch && onSearch) {
+      const locationData: LocationType = {
+        address: location,
+        lat: cityMatch.lat,
+        lng: cityMatch.lng
+      };
+      
+      console.log('Found city match for fallback:', cityMatch.name);
+      onSearch(locationData);
+    } else if (onSearch) {
+      // Nessuna corrispondenza trovata, invia solo il testo
+      onSearch({ address: location });
+    }
+  };
+
+  // Gestisce i tasti nelle date (per il calendario)
+  const handleDateSelect = (date: string) => {
+    setDate(date);
+    setShowCalendar(false);
+  };
+
+  // Rendering del componente
+  return (
+    <div className={`w-full max-w-3xl mx-auto relative z-10 font-sans ${className}`}>
+      <form ref={searchFormRef} className="flex items-center bg-white rounded-full shadow-lg overflow-visible relative p-1.5" onSubmit={handleSubmit}>
+        <div className="flex-1 relative min-w-0">
+          <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-primary-500 text-lg z-10">
+            📍
+          </span>
+          <input
+            ref={inputRef}
+            type="text"
+            className="w-full py-4 pl-10 pr-4 border-none outline-none text-base text-gray-800 bg-transparent"
+            placeholder="Dove vuoi andare?"
+            value={location}
+            onChange={handleLocationChange}
+            onFocus={() => setShowSuggestions(true)}
+            aria-label="Cerca una destinazione"
+          />
+        </div>
+        
+        {/* Ripristino la sezione date */}
+        <div className="py-3 px-5 border-l border-r border-gray-100 cursor-pointer whitespace-nowrap text-sm text-gray-600 flex items-center" onClick={() => setShowCalendar(!showCalendar)}>
+          <span className="mr-2 flex items-center">📅</span>
+          {date}
+        </div>
+        
+        <button 
+          type="submit" 
+          className="bg-primary-500 hover:bg-primary-600 disabled:bg-primary-300 text-white rounded-full w-12 h-12 flex items-center justify-center mx-1.5 cursor-pointer transition-colors duration-200 flex-shrink-0 disabled:cursor-not-allowed"
+          disabled={isLoading}
+          aria-label="Cerca"
         >
-          {location.trim() === '' ? (
-            // Mostra tutte le città quando non c'è testo
-            <div className="p-3">
-              <div className="px-3 py-2 text-xs font-bold text-gray-500 border-b border-gray-200 mb-2">
-                DESTINAZIONI POPOLARI
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {CITIES.map(city => (
-                  <button
-                    key={city.id}
-                    type="button"
-                    onClick={() => handleSelectCity(city)}
-                    className="flex items-center px-3 py-2 hover:bg-gray-100 rounded-md text-left transition-colors"
-                  >
-                    <div className="bg-blue-100 p-2 rounded-full mr-2">
-                      <Icon icon="carbon:location" className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <span className="text-sm text-gray-800">{city.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : matchingCities.length > 0 ? (
-            // Mostra le città che corrispondono al testo
-            <div className="p-3">
-              <div className="px-3 py-2 text-xs font-bold text-gray-500 border-b border-gray-200 mb-2">
-                RISULTATI PER "{location}"
-              </div>
-              {matchingCities.map(city => (
-                <button
-                  key={city.id}
-                  type="button"
-                  onClick={() => handleSelectCity(city)}
-                  className="w-full flex items-center px-3 py-3 hover:bg-gray-100 rounded-md text-left transition-colors"
-                >
-                  <div className="bg-blue-100 p-2 rounded-full mr-3 flex-shrink-0">
-                    <Icon icon="carbon:location" className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-800 block">{city.name}</span>
-                    <span className="text-xs text-gray-500 block">Italia</span>
-                  </div>
-                </button>
-              ))}
+          {isLoading ? (
+            <div className="animate-spin">
+              ➤
             </div>
           ) : (
-            // Nessun risultato
-            <div className="p-4 text-center">
-              <p className="text-gray-500 mb-1">Nessun risultato per "{location}"</p>
-              <p className="text-xs text-gray-400">Premi Invio per cercare comunque</p>
-            </div>
+            "➤"
           )}
-          
-          {/* Pulsante per chiudere */}
-          <div className="sticky bottom-0 p-2 border-t border-gray-200 bg-white text-center">
-            <button
-              type="button"
-              className="text-blue-600 text-sm font-medium hover:text-blue-800 px-4 py-1 rounded-full hover:bg-blue-50 transition-colors"
-              onClick={() => setIsOpen(false)}
-            >
-              Chiudi
-            </button>
+        </button>
+        
+        {/* Dropdown suggerimenti - migliorato per mobile */}
+        {showSuggestions && (
+          <div className={`${isMobile ? 'fixed inset-x-0 top-20 mx-2' : 'absolute top-full left-0 w-full mt-2.5'} bg-white rounded-xl shadow-lg overflow-y-auto z-50 animate-fadeIn block pointer-events-auto opacity-100 ${isMobile ? 'max-h-[35vh]' : 'max-h-[450px]'} border border-gray-100`}>
+            {/* Sezione suggerimenti popolari */}
+            {location.trim() === '' && (
+              <div className={`${isMobile ? 'py-1.5' : 'py-2.5'}`}>
+                <div className={`flex items-center ${isMobile ? 'px-3 py-1' : 'px-4 py-2'} font-semibold text-gray-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                  <span className="mr-2 text-base">🌎</span>
+                  Destinazioni popolari
+                </div>
+                <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2'} gap-1 ${isMobile ? 'p-1' : 'p-2'}`}>
+                  {popularCities.map((city) => (
+                    <div 
+                      key={city.id} 
+                      className={`flex items-center ${isMobile ? 'p-2' : 'p-3'} cursor-pointer transition-colors duration-200 rounded-lg hover:bg-gray-100 relative`}
+                      onClick={() => handleSelectPlace({
+                        description: `${city.name}, ${city.country}`,
+                        place_id: `city-${city.id}`,
+                        structured_formatting: {
+                          main_text: city.name,
+                          secondary_text: city.country
+                        }
+                      })}
+                    >
+                      <div className="mr-3 text-base flex items-center justify-center w-6 text-primary-500">
+                        📍
+                      </div>
+                      <div className="flex-1 flex flex-col">
+                        <div className={`font-medium text-gray-800 ${isMobile ? 'text-sm' : ''}`}>{city.name}</div>
+                        <div className="text-xs text-gray-600 mt-0.5">{city.country}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Sezione risultati di ricerca */}
+            {location.trim() !== '' && (
+              <div className={`${isMobile ? 'py-1.5' : 'py-2.5'}`}>
+                <div className={`flex items-center ${isMobile ? 'px-3 py-1' : 'px-4 py-2'} font-semibold text-gray-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                  <span className="mr-2 text-base">🔍</span>
+                  Risultati della ricerca
+                </div>
+                <div className={`${isMobile ? 'max-h-[30vh]' : 'max-h-[300px]'} overflow-y-auto`}>
+                  {isLoading ? (
+                    <div className={`${isMobile ? 'py-3' : 'py-5'} px-4 text-center text-gray-600 ${isMobile ? 'text-sm' : ''}`}>
+                      Ricerca in corso...
+                    </div>
+                  ) : predictions.length > 0 ? (
+                    predictions.map((prediction, index) => (
+                      <div 
+                        key={`${prediction.place_id}-${index}`} 
+                        className={`flex items-center ${isMobile ? 'p-2' : 'p-3'} cursor-pointer transition-colors duration-200 hover:bg-gray-100 rounded-lg`}
+                        onClick={() => handleSelectPlace(prediction)}
+                      >
+                        <div className="mr-3 text-base flex items-center justify-center w-6 text-primary-500">
+                          📍
+                        </div>
+                        <div className="flex-1 flex flex-col">
+                          <div className={`font-medium text-gray-800 ${isMobile ? 'text-sm' : ''}`}>
+                            {prediction.structured_formatting?.main_text || 
+                             prediction.description.split(',')[0]}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-0.5">
+                            {prediction.structured_formatting?.secondary_text || 
+                             prediction.description.split(',').slice(1).join(',')}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className={`${isMobile ? 'py-3' : 'py-5'} px-4 text-center text-gray-600 ${isMobile ? 'text-sm' : ''}`}>
+                      Nessun risultato trovato
+                      <div className="text-xs text-gray-400 mt-2">
+                        Prova con un'altra località o verifica l'ortografia
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Footer del dropdown */}
+            <div className={`${isMobile ? 'p-1.5' : 'p-2.5'} flex justify-center border-t border-gray-100 bg-gray-50`}>
+              <button 
+                type="button" 
+                className={`bg-transparent border-none text-primary-500 ${isMobile ? 'text-xs' : 'text-sm'} cursor-pointer ${isMobile ? 'py-0.5 px-3' : 'py-1 px-4'} rounded-full transition-colors duration-200 hover:bg-gray-100`}
+                onClick={() => setShowSuggestions(false)}
+              >
+                Chiudi
+              </button>
+            </div>
           </div>
+        )}
+        
+        {/* Calendario (implementazione semplificata) */}
+        {showCalendar && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="flex justify-between items-center p-4 border-b border-gray-100">
+                <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">&lt;</button>
+                <div className="font-medium">Luglio 2024</div>
+                <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">&gt;</button>
+              </div>
+              
+              <div className="grid grid-cols-7 gap-1 py-3 px-3 bg-gray-50">
+                <div className="text-center text-sm font-medium text-gray-500">D</div>
+                <div className="text-center text-sm font-medium text-gray-500">L</div>
+                <div className="text-center text-sm font-medium text-gray-500">M</div>
+                <div className="text-center text-sm font-medium text-gray-500">M</div>
+                <div className="text-center text-sm font-medium text-gray-500">G</div>
+                <div className="text-center text-sm font-medium text-gray-500">V</div>
+                <div className="text-center text-sm font-medium text-gray-500">S</div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 p-3">
+                {/* Spazio vuoto */}
+                <div className="w-10 h-10"></div>
+                {Array.from({ length: 31 }, (_, i) => (
+                  <div 
+                    key={i + 1} 
+                    className={`w-10 h-10 flex items-center justify-center rounded-full text-sm cursor-pointer hover:bg-gray-100 ${i + 1 === 15 ? 'bg-primary-500 text-white' : ''}`}
+                    onClick={() => handleDateSelect(`${i + 1} Luglio`)}
+                  >
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="p-3 flex justify-center border-t border-gray-100 bg-gray-50">
+                <button
+                  type="button"
+                  className="bg-transparent border-none text-primary-500 text-sm cursor-pointer py-1 px-4 rounded-full transition-colors duration-200 hover:bg-gray-100"
+                  onClick={() => setShowCalendar(false)}
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </form>
+      
+      {/* Messaggio di errore o indicatore di modalità offline */}
+      {errorMessage && (
+        <div className="text-primary-500 mt-2.5 text-center text-sm">
+          {errorMessage}
+        </div>
+      )}
+      
+      {/* Indicatore della modalità offline */}
+      {offlineMode && !errorMessage && (
+        <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md text-xs bg-gray-100 text-gray-600 border border-gray-200">
+          offline
         </div>
       )}
     </div>

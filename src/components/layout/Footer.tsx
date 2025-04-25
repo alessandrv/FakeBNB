@@ -14,7 +14,7 @@ export const Footer: React.FC<FooterProps> = ({ className = '' }) => {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Icon icon="lucide:home" className="text-2xl text-primary" />
-              <span className="font-bold text-xl">FakeBNB</span>
+              <span className="font-bold text-xl">ConnectLivin</span>
             </div>
             <p className="text-default-500">
               Find your perfect stay with our curated selection of properties worldwide.
@@ -85,7 +85,7 @@ export const Footer: React.FC<FooterProps> = ({ className = '' }) => {
         </div>
         
         <div className="border-t border-default-200 mt-8 pt-6 text-center text-default-500">
-          <p>&copy; {new Date().getFullYear()} FakeBNB, Inc. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} ConnectLivin, Inc. All rights reserved.</p>
         </div>
       </div>
     </footer>

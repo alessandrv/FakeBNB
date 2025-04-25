@@ -82,7 +82,7 @@ export const VerifyEmail: React.FC = () => {
               </div>
               <p className="text-center text-lg font-medium mb-2">Email Verified Successfully!</p>
               <p className="text-center text-default-500 mb-4">
-                Your email has been verified. You can now enjoy all features of FakeBNB.
+                Your email has been verified. You can now enjoy all features of ConnectLivin.
               </p>
             </div>
           ) : (

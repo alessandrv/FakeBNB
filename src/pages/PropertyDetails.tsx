@@ -582,7 +582,7 @@ export const PropertyDetails = () => {
               
               <div className="flex justify-center items-center text-sm text-default-500 mt-4">
                 <Icon icon="lucide:shield" className="mr-2" />
-                <span>Your booking is protected by FakeBNB</span>
+                <span>Your booking is protected by ConnectLivin</span>
               </div>
             </CardBody>
           </Card>
