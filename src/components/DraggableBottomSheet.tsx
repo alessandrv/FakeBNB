@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
-import { Button, Card, CardBody, Badge, Chip } from '@heroui/react';
+import { Button, Card, CardBody, Badge, Chip, ScrollShadow } from '@heroui/react';
 
 interface House {
   id: string;
@@ -85,8 +85,8 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
     const viewportHeight = window.innerHeight;
     const searchBarHeight = 82;
     
-    // Reduce the maximum height to show less content
-    return (viewportHeight - searchBarHeight - BOTTOM_NAV_HEIGHT) * 0.7; // 70% of available space
+    // Calculate the maximum height to go up to the searchbar, but with a margin
+    return (viewportHeight - searchBarHeight - BOTTOM_NAV_HEIGHT) * 0.85; // 85% of available space
   }, []);
   
   // Recalculate max height and update sheet position if expanded
@@ -243,7 +243,7 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
     >
       {/* Drag Handle */}
       <div
-        className="absolute top-0 left-0 right-0 h-12 cursor-grab active:cursor-grabbing touch-none bg-white/80 backdrop-blur-lg border-b border-gray-200"
+        className="absolute top-0 left-0 right-0 h-12 cursor-grab active:cursor-grabbing touch-none bg-white/80 backdrop-blur-lg border-b border-gray-200 z-10"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -278,57 +278,75 @@ export const DraggableBottomSheet = forwardRef<DraggableBottomSheetHandle, Dragg
       </div>
 
       {/* Content */}
-      <div className="h-full pt-12 pb-20 overflow-y-auto overscroll-contain touch-auto bg-white">
+      <ScrollShadow className="h-full pt-12 pb-20 overflow-y-auto overscroll-contain touch-auto bg-white">
         {/* Property List */}
-        <div className="px-4 py-2 space-y-3 bg-white">
+        <div className="px-4 py-4 space-y-6 bg-white">
           {sortedHouses.map((house) => (
-            <div key={house.id} className="bg-white p-4">
-              <div className="flex gap-4 items-start mb-3">
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900 mb-1">{house.address}</h3>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="flex items-center">
-                      {house.rating} <span className="text-yellow-400 ml-1">★</span>
-                    </span>
-                    {house.reviews && (
-                      <>
-                        <span className="mx-1">·</span>
-                        <span>{house.reviews} reviews</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="w-32 h-32 flex-shrink-0">
-                  <img 
-                    src={house.image} 
-                    alt={house.address}
-                    className="w-full h-full object-cover rounded-lg"
-                  />
-                </div>
-              </div>
-              <div className="text-lg font-semibold text-gray-900 mb-3">
-                ${house.price}/night
-              </div>
-              <div className="flex gap-2">
-                {house.location && (
-                  <button
-                    onClick={() => onFindOnMap?.(house.location!)}
-                    className="flex-1 flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-                  >
-                    Map
-                  </button>
-                )}
-                <button
-                  onClick={() => onViewDetails?.(house.id)}
-                  className="flex-1 flex items-center justify-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
-                >
-                  Details
+            <Card key={house.id} className="w-full shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
+              <div className="relative">
+                {/* Image */}
+                <img 
+                  src={house.image} 
+                  alt={house.address}
+                  className="w-full h-64 object-cover"
+                />
+                
+                {/* Favorite Icon */}
+                <button className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm hover:bg-white transition-colors">
+                  <Icon icon="lucide:heart" className="w-5 h-5 text-gray-600" />
                 </button>
+                
+                {/* Rating */}
+                <div className="absolute top-3 left-3 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm flex items-center">
+                  <span className="text-yellow-400 mr-1">★</span>
+                  <span className="font-medium">{house.rating}</span>
+                </div>
+                
+                {/* Price */}
+                <div className="absolute bottom-3 left-3 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm">
+                  <span className="font-semibold">${house.price}</span>
+                  <span className="text-sm text-gray-600">/month</span>
+                </div>
               </div>
-            </div>
+              
+              <CardBody className="p-4">
+                {/* House Name */}
+                <h3 className="font-medium text-gray-900 mb-2 text-lg">{house.address}</h3>
+                
+                {/* Beds and Baths */}
+                <div className="flex items-center text-sm text-gray-600 mb-4">
+                  <span className="flex items-center mr-4">
+                    <Icon icon="lucide:bed" className="w-4 h-4 mr-1" />
+                    {house.beds} beds
+                  </span>
+                  <span className="flex items-center">
+                    <Icon icon="lucide:bath" className="w-4 h-4 mr-1" />
+                    {house.baths} baths
+                  </span>
+                </div>
+                
+                {/* Buttons */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => onViewDetails?.(house.id)}
+                    className="flex-1 flex items-center justify-center px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                  >
+                    View Details
+                  </button>
+                  {house.location && (
+                    <button
+                      onClick={() => onFindOnMap?.(house.location!)}
+                      className="flex items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                    >
+                      <Icon icon="lucide:map-pin" className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
           ))}
         </div>
-      </div>
+      </ScrollShadow>
     </div>
   );
 }); 

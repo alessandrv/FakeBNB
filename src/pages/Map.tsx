@@ -1635,12 +1635,12 @@ const MapPage: React.FC = () => {
               <button 
                 onclick="window.mapPropertyActions.locateProperty('${property.id}')" 
                 style="flex: 1; padding: 8px 0; background: #F8F8F8; border: none; border-radius: 6px; font-size: 12px; font-weight: 500; color: #444; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                <span style="margin-right: 4px;">📍</span>Centra
+                <span style="margin-right: 4px;"></span>Centra
               </button>
               <button 
                 onclick="window.mapPropertyActions.viewDetails('${property.id}')" 
                 style="flex: 2; padding: 8px 0; background: var(--color-primary, #3B82F6); border: none; border-radius: 6px; font-size: 12px; font-weight: 600; color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                <span style="margin-right: 4px;">👁️</span>Vedi dettagli
+                <span style="margin-right: 4px;"></span>Vedi dettagli
               </button>
             </div>
           </div>
@@ -2077,10 +2077,10 @@ const MapPage: React.FC = () => {
               <div className="flex items-center mt-1">
                 <div className={`text-sm font-medium py-1 px-3 rounded-full ${
                   visibleProperties.length === 0 
-                    ? 'bg-primary-50 text-primary-600' 
+                    ? 'bg-primary-50 text-primary' 
                     : visibleProperties.length < houses.length / 2
                       ? 'bg-yellow-50 text-yellow-700'
-                      : 'bg-primary-50 text-primary-600'
+                      : 'bg-primary-50 text-primary'
                 }`}>
                   {visibleProperties.length} proprietà
                 </div>
@@ -2157,17 +2157,7 @@ const MapPage: React.FC = () => {
               padding: '0 10px',
               border: 'none'
             }}>
-              <div style={{
-                boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
-                borderRadius: '30px', 
-                overflow: 'visible', /* Modificato da 'hidden' a 'visible' per consentire la visualizzazione del dropdown */
-                background: 'white',
-                border: 'none',
-                outline: 'none',
-                padding: '0',
-                width: '100%',
-                position: 'relative' /* Aggiunto per garantire il corretto positioning del dropdown */
-              }}>
+             
                 {placesApiReady ? (
                   <SearchBar onSearch={handleSearch} isSearching={isSearching} isMobile={false} onMapPage={true} />
                 ) : (
@@ -2184,7 +2174,7 @@ const MapPage: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
+            
           )}
           
           {/* Search Bar - Mobile in alto */}
@@ -2302,7 +2292,7 @@ const MapPage: React.FC = () => {
             </p>
             <div className="flex justify-center gap-2 mt-4">
               <button 
-                className="bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded"
+                className="bg-primary-500 hover:bg-primary text-white font-medium py-2 px-4 rounded"
                 onClick={() => window.location.reload()}
               >
                 Riprova
@@ -2413,7 +2403,7 @@ const MapPage: React.FC = () => {
                 alt={property.title} 
                 className={`w-full ${imageHeight} object-cover`}
               />
-              <div className={`absolute top-2 right-2 bg-primary-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-md ${isMobile ? 'text-xs' : ''}`}>
+              <div className={`absolute top-2 right-2 bg-primary text-white px-2 py-1 rounded-full text-xs font-bold shadow-md ${isMobile ? 'text-xs' : ''}`}>
                 ${property.price}<span className="text-xs font-normal">/notte</span>
         </div>
               
@@ -2442,7 +2432,7 @@ const MapPage: React.FC = () => {
                   title="Visualizza sulla mappa"
                   aria-label="Visualizza sulla mappa"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-primary-600`} viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-primary`} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                   </svg>
                 </button>
@@ -2458,7 +2448,7 @@ const MapPage: React.FC = () => {
                 {isMobile ? (
                   // Versione compatta per mobile
                   <div className="flex items-center text-xs text-gray-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-primary-600" viewBox="0 0 20 20" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-primary" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                     </svg>
                     {property.location.lat.toFixed(2)}, {property.location.lng.toFixed(2)}
@@ -2466,7 +2456,7 @@ const MapPage: React.FC = () => {
                 ) : (
                   // Versione completa per desktop
                   <button
-                    className="flex items-center text-primary-600 hover:text-primary-800 text-sm font-medium"
+                    className="flex items-center text-primary hover:text-primary-800 text-sm font-medium"
                     onClick={(e) => {
                       e.stopPropagation();
                       locateProperty(property.id);
@@ -2483,7 +2473,7 @@ const MapPage: React.FC = () => {
                 )}
                 
                 <button 
-                  className={`bg-primary-600 hover:bg-primary-700 text-white text-sm ${isMobile ? 'py-1 px-3 text-xs' : 'py-2 px-4'} rounded-lg transition-colors font-medium`}
+                  className={`bg-primary hover:bg-primary-700 text-white text-sm ${isMobile ? 'py-1 px-3 text-xs' : 'py-2 px-4'} rounded-lg transition-colors font-medium`}
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(`/property/${property.id}`);
@@ -2504,7 +2494,7 @@ const MapPage: React.FC = () => {
         <p className={`${isMobile ? 'text-base' : 'text-lg'} font-medium text-gray-700`}>Non ci sono proprietà in questa area</p>
         <p className="mt-1 text-gray-500 text-sm">Prova a spostare la mappa o cambiare il livello di zoom</p>
         <button 
-          className={`mt-4 bg-primary-600 hover:bg-primary-700 text-white ${isMobile ? 'py-1.5 px-4 text-sm' : 'py-2 px-6'} rounded-lg transition-colors shadow-sm`}
+          className={`mt-4 bg-primary hover:bg-primary-700 text-white ${isMobile ? 'py-1.5 px-4 text-sm' : 'py-2 px-6'} rounded-lg transition-colors shadow-sm`}
           onClick={() => {
             if (googleMapRef.current) {
               console.log("[NO_PROPERTIES] Resetting map to show all properties");
